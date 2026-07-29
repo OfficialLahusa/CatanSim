@@ -317,12 +317,15 @@ def encode_players(players: List[Dict[str, Any]]) -> List[float]:
     return feats
 
 
-def encode_extra_history_features(root: Dict[str, Any]) -> List[float]:
-    """Optional scalar summaries derived from the (variable-length) action
-    log, kept separate from the fixed board/player encoding above. Safe to
-    call even if PlayedActions are absent from `root`."""
-    played_actions = root.get("PlayedActions") or []
-    return [float(len(played_actions))]
+def encode_extra_history_features(
+    played_actions_count: int
+) -> List[float]:
+    """Optional scalar summary derived from the (variable-length) action
+    log, kept separate from the fixed board/player encoding above.
+    Counts are passed in directly (see `load_state_yaml_fast`) rather than
+    from a fully-parsed log, since the log itself is never otherwise used."""
+    return [float(played_actions_count)]
+
 
 
 # --------------------------------------------------------------------------
@@ -330,23 +333,25 @@ def encode_extra_history_features(root: Dict[str, Any]) -> List[float]:
 # --------------------------------------------------------------------------
 
 def state_to_feature_vector(
-    root: Dict[str, Any], num_players: int = 4
+    state: Dict[str, Any],
+    num_players: int = 4,
+    played_actions_count: int = 0,
+    undo_history_count: int = 0,
 ) -> List[float]:
-    """Convert a full parsed YAML document (with `GameState`,
-    `PlayedActions` top-level keys) into a flat feature
-    vector."""
-    state = root["GameState"]
-
+    """Convert a parsed `GameState` dict (as returned by
+    `load_state_yaml_fast`, i.e. NOT the full root document) into a flat
+    feature vector."""
+ 
     # Adjacency is a constant function of the fixed board layout, not
     # per-state info -- drop it if present.
     state["Board"].pop("Adjacency", None)
-
+ 
     assert len(state["Players"]) == num_players, (
         f"Expected {num_players} players, found {len(state['Players'])}. "
         "This script assumes a fixed player count across the dataset; "
         "pass the correct num_players if your games vary."
     )
-
+ 
     feats: List[float] = []
     feats.extend(encode_settings(state["Settings"]))
     feats.extend(encode_turn(state["Turn"], num_players))
@@ -354,19 +359,81 @@ def state_to_feature_vector(
     feats.extend(encode_resource_bank(state["ResourceBank"]))
     feats.extend(encode_development_bank(state["DevelopmentBank"]))
     feats.extend(encode_players(state["Players"]))
-    feats.extend(encode_extra_history_features(root))
+    feats.extend(
+        encode_extra_history_features(played_actions_count)
+    )
     return feats
+
 
 
 def load_state_yaml(path: str) -> Dict[str, Any]:
     with open(path) as stream:
         return yaml.load(stream, Loader=yaml.CSafeLoader)
 
+def load_state_yaml_fast(path: str):
+    """Parses only the `GameState` subtree, skipping full parsing of
+    `PlayedActions` / `UndoHistory`. Those logs can be an order of
+    magnitude larger than GameState itself and are only ever used for
+    their length here, so this avoids building throwaway Python objects
+    for potentially thousands of logged actions per file.
+ 
+    Relies on the root document having exactly three top-level keys in a
+    fixed order -- `GameState`, `PlayedActions`, `UndoHistory` -- each
+    starting at column 0, and PlayedActions/UndoHistory being YAML block
+    sequences whose top-level items are lines starting with "- " at
+    column 0 (both true for this simulator's output format). If a file
+    doesn't match this shape, falls back to a full parse automatically.
+ 
+    Returns (game_state_dict, played_actions_count, undo_history_count).
+    """
+    with open(path) as stream:
+        lines = stream.readlines()
+ 
+    played_start = None
+    undo_start = None
+    for i, line in enumerate(lines):
+        if played_start is None and line.startswith("PlayedActions:"):
+            played_start = i
+        elif (
+            played_start is not None
+            and undo_start is None
+            and line.startswith("UndoHistory:")
+        ):
+            undo_start = i
+            break
+ 
+    if played_start is None:
+        # Doesn't match the expected shape -- fall back to a full parse.
+        root = yaml.load("".join(lines), Loader=yaml.CSafeLoader)
+        game_state = root["GameState"]
+        played_count = len(root.get("PlayedActions") or [])
+        undo_count = len(root.get("UndoHistory") or [])
+        return game_state, played_count, undo_count
+ 
+    gamestate_text = "".join(lines[:played_start])
+    played_end = undo_start if undo_start is not None else len(lines)
+    played_count = sum(1 for l in lines[played_start:played_end] if l.startswith("- "))
+    undo_count = (
+        sum(1 for l in lines[undo_start:] if l.startswith("- "))
+        if undo_start is not None
+        else 0
+    )
+ 
+    root = yaml.load(gamestate_text, Loader=yaml.CSafeLoader)
+    return root["GameState"], played_count, undo_count
+
+
 
 def yaml_to_numpy(path: str, num_players: int = 4) -> np.ndarray:
-    root = load_state_yaml(path)
-    feats = state_to_feature_vector(root, num_players=num_players)
+    game_state, played_count, undo_count = load_state_yaml_fast(path)
+    feats = state_to_feature_vector(
+        game_state,
+        num_players=num_players,
+        played_actions_count=played_count,
+        undo_history_count=undo_count,
+    )
     return np.asarray(feats, dtype=np.float16)
+
 
 
 if __name__ == "__main__":
