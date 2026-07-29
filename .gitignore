@@ -401,3 +401,6 @@ FodyWeavers.xsd
 /DatasetProcessing/env
 /DatasetProcessing/input
 /DatasetProcessing/sample_dataset
+DatasetProcessing/groups.npy
+DatasetProcessing/states.npy
+DatasetProcessing/win_rates.npy
