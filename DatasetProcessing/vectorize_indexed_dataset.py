@@ -1,8 +1,18 @@
 import os
 import numpy as np
 from datetime import datetime
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from rich.progress import track
+from rich.progress import (
+    track,
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 from state_to_vector import yaml_to_numpy, FEATURE_DIM
     
 def load_index_file(index_path: str):
@@ -24,27 +34,53 @@ def load_index_file(index_path: str):
 
     return index
 
-def vectorize_states(base_path: Path, index):
-    # State YAMLs vektorisieren
+
+def _process_entry(args):
+    # Worker Process: YAML Datei laden und vektorisieren
+    entry_idx, base_path, subdir_name, entry_name = args
+    yaml_file_path = base_path / subdir_name / "input" / f"{entry_name}.yaml"
+    vec = yaml_to_numpy(str(yaml_file_path))  # float16
+    return entry_idx, vec
+
+
+def vectorize_states(base_path: Path, index, max_workers=None, chunksize=64):
+    # State YAMLs multi-processed vektorisieren
+    tasks = [
+        (entry_idx, base_path, subdir_name, entry_name)
+        for entry_idx, group_idx, subdir_name, entry_name in index
+    ]
+ 
     # NP Array erstellen: f16 <Index Length>,<Feature vector length>
     state_matrix = np.zeros((len(index), FEATURE_DIM), dtype=np.float16)
-
-    # Einmal durch den ganzen Index gehen
-    for entry in track(index, description="Processing Game States"):
-        entry_idx, group_idx, subdir_name, entry_name = entry
-        # Dateipfad zusammensetzen: base_path / subdir_name / input / entry_name + .yaml
-        yaml_file_path = base_path / subdir_name / "input" / (entry_name + ".yaml")
-        # YAML Datei laden und vektorisieren
-        feature_vec = yaml_to_numpy(yaml_file_path)
-        # Vektor in Matrix schreiben
-        state_matrix[entry_idx, :] = feature_vec
-    
+ 
+    progress_columns = [
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TextColumn("•"),
+        TimeElapsedColumn(),
+        TextColumn("•"),
+        TimeRemainingColumn(),
+    ]
+ 
+    # Einmal parallel durch den ganzen Index gehen
+    with Progress(*progress_columns) as progress:
+        task_id = progress.add_task("Processing Game States", total=len(tasks))
+ 
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            for entry_idx, vec in executor.map(_process_entry, tasks, chunksize=chunksize):
+                # Vektor in Matrix schreiben
+                state_matrix[entry_idx, :] = vec
+                progress.advance(task_id)
+ 
     # Array der State-Matrix als Datei speichern
     output_path = Path(".") / "states.npy"
     np.save(output_path, state_matrix)
     # Speicherbestätigung ausgeben
     print(f"Saved state matrix as \"{output_path}\".")
     return
+
 
 def vectorize_win_rates(base_path: Path, index):
     # Win Percentages vektorisieren
@@ -54,8 +90,8 @@ def vectorize_win_rates(base_path: Path, index):
     # Einmal durch den ganzen Index gehen
     for entry in track(index, description="Processing Win Probabilities"):
         entry_idx, group_idx, subdir_name, entry_name = entry
-        # Dateipfad zusammensetzen: base_path / subdir_name / output / entry_name + .txt
         txt_file_path = base_path / subdir_name / "output" / (entry_name + ".txt")
+
         # TXT Datei laden und vektorisieren
         win_rates = None
         with txt_file_path.open("r") as txt_file:
@@ -70,6 +106,7 @@ def vectorize_win_rates(base_path: Path, index):
     # Speicherbestätigung ausgeben
     print(f"Saved win rate matrix as \"{output_path}\".")
     return
+
 
 def vectorize_groups(base_path: Path, index):
     # Groups vektorisieren
@@ -89,8 +126,9 @@ def vectorize_groups(base_path: Path, index):
     print(f"Saved group labels as \"{output_path}\".")
     return
 
-def vectorize_dataset(base_path: Path, index):
-    vectorize_states(base_path, index)
+
+def vectorize_dataset(base_path: Path, index, max_workers=None, chunksize=64):
+    vectorize_states(base_path, index, max_workers, chunksize)
     vectorize_win_rates(base_path, index)
     vectorize_groups(base_path, index)
 
@@ -112,7 +150,7 @@ if __name__ == "__main__":
         if subdir_name not in subdirectories:
             subdirectories.append(subdir_name)
 
-    print(f"Loaded index file containing {len(index)} entries across {num_groups} groups and {len(subdirectories)} subdirectories.")
+    print(f"Loaded index file containing {len(index)} entries across {num_groups} groups and {len(subdirectories)} subdirectories.\n")
 
     # Show which subdirectories are expected
     print("Dataset subdirectories expected by the index:")
@@ -125,10 +163,17 @@ if __name__ == "__main__":
         base_path = "."
     base_path = Path(base_path)
 
-    input(f"Processing dataset at \"{os.path.abspath(base_path)}\" for vectorization. Press [Enter] to continue.")
-    vectorize_dataset(base_path, index)
+    # Determine worker count
+    worker_count = input("Worker count? Default: 8\n").strip()
+    if worker_count == "":
+        worker_count = 8
+    else:
+        worker_count = int(worker_count)
 
-    input("Output file verification: [Enter]\n")
+    input(f"Processing dataset at \"{os.path.abspath(base_path)}\" for vectorization. Press [Enter] to continue.\n")
+    vectorize_dataset(base_path, index, worker_count)
+
+    input("Output file verification:  Press [Enter] to continue.\n")
     state_matrix = np.load(Path(".") / "states.npy")
     print(f"State matrix: shape {state_matrix.shape}, dtype {state_matrix.dtype}")
     print(state_matrix)
