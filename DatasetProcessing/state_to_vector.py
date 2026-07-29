@@ -36,6 +36,8 @@ from typing import Any, Dict, Iterable, List, Sequence
 import numpy as np
 import yaml
 
+# Total size of the final GameState feature vector
+FEATURE_DIM = 1611
 
 # --------------------------------------------------------------------------
 # Vocabularies for categorical fields.

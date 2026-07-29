@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from rich.progress import track
-from state_to_vector import yaml_to_numpy
+from state_to_vector import yaml_to_numpy, FEATURE_DIM
     
 def load_index_file(index_path: str):
     print(f"Loading index from \"{os.path.realpath(index_path)}\".")
@@ -26,8 +26,8 @@ def load_index_file(index_path: str):
 
 def vectorize_states(base_path: Path, index):
     # State YAMLs vektorisieren
-    # NP Array erstellen: f16 <Index Length>,<Feature vector length = 1611>
-    state_matrix = np.zeros((len(index), 1611), dtype=np.float16)
+    # NP Array erstellen: f16 <Index Length>,<Feature vector length>
+    state_matrix = np.zeros((len(index), FEATURE_DIM), dtype=np.float16)
 
     # Einmal durch den ganzen Index gehen
     for entry in track(index, description="Processing Game States"):
