@@ -400,3 +400,4 @@ FodyWeavers.xsd
 /Client/res/Swoshes
 /DatasetProcessing/env
 /DatasetProcessing/input
+/DatasetProcessing/sample_dataset
