@@ -358,13 +358,13 @@ def state_to_feature_vector(
 
 def load_state_yaml(path: str) -> Dict[str, Any]:
     with open(path) as stream:
-        return yaml.safe_load(stream)
+        return yaml.load(stream, Loader=yaml.CSafeLoader)
 
 
 def yaml_to_numpy(path: str, num_players: int = 4) -> np.ndarray:
     root = load_state_yaml(path)
     feats = state_to_feature_vector(root, num_players=num_players)
-    return np.asarray(feats, dtype=np.float32)
+    return np.asarray(feats, dtype=np.float16)
 
 
 if __name__ == "__main__":
