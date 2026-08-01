@@ -75,7 +75,7 @@ def vectorize_states(base_path: Path, index, max_workers=None, chunksize=64):
                 progress.advance(task_id)
  
     # Array der State-Matrix als Datei speichern
-    output_path = Path(".") / "states.npy"
+    output_path = Path("states.npy")
     np.save(output_path, state_matrix)
     # Speicherbestätigung ausgeben
     print(f"Saved state matrix as \"{output_path}\".")
@@ -101,7 +101,7 @@ def vectorize_win_rates(base_path: Path, index):
         win_rate_matrix[entry_idx, :] = win_rates
 
     # Array der Win-Percentage-Matrix als Datei speichern
-    output_path = Path(".") / "win_rates.npy"
+    output_path = Path("win_rates.npy")
     np.save(output_path, win_rate_matrix)
     # Speicherbestätigung ausgeben
     print(f"Saved win rate matrix as \"{output_path}\".")
@@ -120,7 +120,7 @@ def vectorize_groups(base_path: Path, index):
         group_vector[entry_idx] = group_idx
     
     # Array des Group-Vektors als Datei speichern
-    output_path = Path(".") / "groups.npy"
+    output_path = Path("groups.npy")
     np.save(output_path, group_vector)
     # Speicherbestätigung ausgeben
     print(f"Saved group labels as \"{output_path}\".")
@@ -174,17 +174,17 @@ if __name__ == "__main__":
     vectorize_dataset(base_path, index, worker_count)
 
     input("Output file verification:  Press [Enter] to continue.\n")
-    state_matrix = np.load(Path(".") / "states.npy")
+    state_matrix = np.load(Path("states.npy"))
     print(f"State matrix: shape {state_matrix.shape}, dtype {state_matrix.dtype}")
     print(state_matrix)
     print()
 
-    win_rate_matrix = np.load(Path(".") / "win_rates.npy")
+    win_rate_matrix = np.load(Path("win_rates.npy"))
     print(f"Win rate matrix: shape {win_rate_matrix.shape}, dtype {win_rate_matrix.dtype}")
     print(win_rate_matrix)
     print()
 
-    groups_vector = np.load(Path(".") / "groups.npy")
+    groups_vector = np.load(Path("groups.npy"))
     print(f"Group label vector: shape {groups_vector.shape}, dtype {groups_vector.dtype}")
     print(groups_vector)
     print()
