@@ -407,3 +407,4 @@ DatasetProcessing/win_rates.npy
 DatasetProcessing/compressed_dataset/groups.npy
 DatasetProcessing/compressed_dataset/states.npy
 DatasetProcessing/compressed_dataset/win_rates.npy
+/DatasetProcessing/split_dataset
