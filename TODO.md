@@ -10,6 +10,7 @@
 	- Tiles, Edges und Intersections als Struktur statisch speichern und teilen
 	- Playstate (Roads, Settlements, Cities) als Byte-Arrays mit gleichen Indizes abbilden
 - Action für variable Domestic Trades
+- State Vectorizer ohne YAML-Export in C# implementieren
 - State Value Network ONNX in Engine für Eval Bar nutzen
 - Testen, ob alle Actions genutzt werden
 - Testen, ob Bank immer Gesamtsumme behält
