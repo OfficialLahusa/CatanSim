@@ -10,9 +10,7 @@
 	- Tiles, Edges und Intersections als Struktur statisch speichern und teilen
 	- Playstate (Roads, Settlements, Cities) als Byte-Arrays mit gleichen Indizes abbilden
 - Action für variable Domestic Trades
-- Datensatz für einfaches State Value Network generieren
-- State Value Network in PyTorch bauen
-    - Dann als ONNX exportieren und in C# ausführen für gute Performance
+- State Value Network ONNX in Engine für Eval Bar nutzen
 - Testen, ob alle Actions genutzt werden
 - Testen, ob Bank immer Gesamtsumme behält
 - RandomAgent
@@ -42,7 +40,7 @@
 	- Variable Baumtiefe?
 - AlphaBetaAgent
 - MCTSAgent
-	- Netzwerkarchitektur für State Value: Papadam, Chalkiadakis: "Adversarial Search and Deep Learning for Strategic Settlement Placement in the “Settlers of Catan”"
+	- Netzwerkarchitektur für State Value: Papadam, Chalkiadakis: "Adversarial Search and Deep Learning for Strategic Settlement Placement in the “Settlers of Catan”" https://dl.acm.org/doi/10.1007/978-3-031-93930-3_4
 	- NN für Bewertung von Intersections und Discards als Zusatz
     - nn.Embedding für kategorische Inputs (jeweils eins pro Art)
     - Data Loading Implementation: https://docs.pytorch.org/tutorials/beginner/data_loading_tutorial.html
