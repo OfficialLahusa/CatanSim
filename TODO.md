@@ -71,6 +71,8 @@
 
 Quellen lesen:
 - Catan MCTS => https://www.researchgate.net/publication/220716999_Monte-Carlo_Tree_Search_in_Settlers_of_Catan
+- Besseres Catan MCTS => https://www.reddit.com/r/rust/comments/1sz304o/introducing_monte_catano_the_worlds_strongest/?show=original
+- Catan RL => https://settlers-rl.github.io/
 - Catanatron => https://github.com/bcollazo/catanatron
 - JSettlers => https://nand.net/jsettlers/
 - MCTS Variant Review => https://www.researchgate.net/publication/362115589_Monte_Carlo_Tree_Search_a_review_of_recent_modifications_and_applications
