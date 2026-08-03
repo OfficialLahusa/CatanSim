@@ -1,18 +1,26 @@
 - StateValueNet ONNX mit Build ausliefern
+- Spezialisierten Datensatz für Initial Placements anlegen
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
 - Branching Factor Histogramm aus Playouts generieren
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
 - RoadAction.GetActionsForState optimieren (derzeit sehr ineffizient)
     - Caching von Intersection/Edge Ownership (maybe in PlayerState?)
 - Observation Filter (Agents nur die für sie sichtbaren Informationen geben)
+	- "StateView"?
 	- Von Robber gestohlene Karten
 	- Gezogene Development Cards
+	- Discards sind public Info, also nicht nötig!
 - GameState in Static und Dynamic unterteilen?
 	- Tiles, Edges und Intersections als Struktur statisch speichern und teilen
 	- Playstate (Roads, Settlements, Cities) als Byte-Arrays mit gleichen Indizes abbilden
 - Action für variable Domestic Trades
 - Testen, ob alle Actions genutzt werden
 - Testen, ob Bank immer Gesamtsumme behält
+- StateValueNetv2
+	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
+	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
+	- Data Augmentation basierend auf Spielerposition (alle Spieler random rotieren)
+    - Data Augmentation basierend auf Reduktion der Sichtbarkeit (alle Karten ausser die eines Spielers unknown machen, zufällig Karten unknown machen)
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - SimpleAgent
@@ -36,15 +44,14 @@
 	- Heuristiken anhand von Genom (z.B. Multiplikation von Yield Scores und Action Weights)
 	- Durch Playouts und Mutation trainieren
 - GreedyAgent
-	- State Value Function (basierend auf VPs, Yield, ...) maximieren
 	- Variable Baumtiefe?
 - AlphaBetaAgent
 - MCTSAgent
+	- Nodes enthalten nur Actions und nicht States, um Speicherverbrauch und Rechenzeit zu reduzieren
+		- Keine State Deep Copy nötig
+		- State Hashes zusätzlich für Validation und Caching
+		- Leichterer Umgang mit Nichtdeterministik (z.B. Development Cards)
 	- Netzwerkarchitektur für State Value: Papadam, Chalkiadakis: "Adversarial Search and Deep Learning for Strategic Settlement Placement in the “Settlers of Catan”" https://dl.acm.org/doi/10.1007/978-3-031-93930-3_4
-	- NN für Bewertung von Intersections und Discards als Zusatz
-    - nn.Embedding für kategorische Inputs (jeweils eins pro Art)
-    - Data Loading Implementation: https://docs.pytorch.org/tutorials/beginner/data_loading_tutorial.html
-    - Data Augmentation basierend auf Reduktion der Sichtbarkeit (alle Karten ausser die eines Spielers unknown machen, zufällig Karten unknown machen)
 - PPO RL Agent
 - PlayerAgent
 	- Besseres Interface für Bank/Port Trades implementieren (Dropdown für Zielressource)
@@ -60,7 +67,7 @@
 	- Zusätzlich zu Value Functions von einem Basisbot
 	- Self-Hosted oder API?
 	- Playouts gegeneinander ohne Supervision
-	- Gängige Metagame-Varianten (German/American) ausprobieren
+	- Gängige Metagame-Varianten (German/American) ausprobieren (Insurances, Nonaggression Pacts, etc.)
 - Szenarien und Varianten
 	- Basisspiel hat erstmal höchste Priorität
 	- Mainstream-Erweiterungen
