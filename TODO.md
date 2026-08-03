@@ -1,3 +1,4 @@
+- StateValueNet ONNX mit Build ausliefern
 - Early Return in Action Validation Checks einbauen, um so früh wie möglich zu failen
 - Branching Factor Histogramm aus Playouts generieren
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
@@ -10,7 +11,6 @@
 	- Tiles, Edges und Intersections als Struktur statisch speichern und teilen
 	- Playstate (Roads, Settlements, Cities) als Byte-Arrays mit gleichen Indizes abbilden
 - Action für variable Domestic Trades
-- State Value Network ONNX in Engine für Eval Bar nutzen
 - Testen, ob alle Actions genutzt werden
 - Testen, ob Bank immer Gesamtsumme behält
 - RandomAgent
