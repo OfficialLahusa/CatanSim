@@ -17,7 +17,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Projektmappenelemente", "Pr
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DatasetCollector", "DatasetCollector\DatasetCollector.csproj", "{B9451C83-85A2-4402-83D5-10FF1DD8D4CC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Models", "Models\Models.csproj", "{B61A886E-1AC6-402A-B71F-BCA785EA8C27}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Agents", "Agents\Agents.csproj", "{750BBDC2-0787-E4F7-AA1A-EA84D7EAD4BE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -41,10 +41,10 @@ Global
 		{B9451C83-85A2-4402-83D5-10FF1DD8D4CC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B9451C83-85A2-4402-83D5-10FF1DD8D4CC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B9451C83-85A2-4402-83D5-10FF1DD8D4CC}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B61A886E-1AC6-402A-B71F-BCA785EA8C27}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B61A886E-1AC6-402A-B71F-BCA785EA8C27}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B61A886E-1AC6-402A-B71F-BCA785EA8C27}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B61A886E-1AC6-402A-B71F-BCA785EA8C27}.Release|Any CPU.Build.0 = Release|Any CPU
+		{750BBDC2-0787-E4F7-AA1A-EA84D7EAD4BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{750BBDC2-0787-E4F7-AA1A-EA84D7EAD4BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{750BBDC2-0787-E4F7-AA1A-EA84D7EAD4BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{750BBDC2-0787-E4F7-AA1A-EA84D7EAD4BE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

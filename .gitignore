@@ -409,7 +409,7 @@ DatasetProcessing/compressed_dataset/states.npy
 DatasetProcessing/compressed_dataset/win_rates.npy
 /DatasetProcessing/split_dataset
 /DatasetProcessing/dataset
-/Models/env
-/Models/Training/colonysim
-/Models/Training/wandb
-/Models/Training/dataset
+/Agents/env
+/Agents/Training/colonysim
+/Agents/Training/wandb
+/Agents/Training/dataset
