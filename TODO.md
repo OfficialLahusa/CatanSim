@@ -1,4 +1,5 @@
 - StateValueNet ONNX mit Build ausliefern
+- Nochmal schauen ob irgendwo getracked wird, welche Dev Cards ein Spieler in der Vergangenheit gespielt hat
 - Early Return in Action Validation Checks einbauen, um so früh wie möglich zu failen
 - Branching Factor Histogramm aus Playouts generieren
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
