@@ -1,4 +1,5 @@
-﻿using Common.Actions;
+﻿using Common;
+using Common.Actions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Action = Common.Actions.Action;
 
-namespace Common.Agents
+namespace Agents
 {
     public class SimpleAgent : Agent
     {

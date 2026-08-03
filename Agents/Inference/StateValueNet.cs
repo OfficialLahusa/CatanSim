@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace Models.Inference
+namespace Agents.Inference
 {
     public class StateValueNet
     {

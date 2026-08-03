@@ -1,11 +1,10 @@
 ﻿using Client.Logging;
 using Common;
 using Common.Actions;
-using Common.Agents;
 using Common.Serialization;
 using ImGuiNET;
-using Models;
-using Models.Inference;
+using Agents;
+using Agents.Inference;
 using SFML.Audio;
 using SFML.Graphics;
 using SFML.System;

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Common;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,7 +7,7 @@ using System.Threading.Tasks;
 using Action = Common.Actions.Action;
 
 
-namespace Common.Agents
+namespace Agents
 {
     public abstract class Agent
     {

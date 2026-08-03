@@ -9,7 +9,7 @@ using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Models
+namespace Agents
 {
     public class StateVectorizer
     {
