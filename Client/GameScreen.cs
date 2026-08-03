@@ -4,6 +4,7 @@ using Common.Actions;
 using Common.Agents;
 using Common.Serialization;
 using ImGuiNET;
+using Models;
 using SFML.Audio;
 using SFML.Graphics;
 using SFML.System;
@@ -74,6 +75,9 @@ namespace Client
         private int[] _selectedAgentTypes;
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
+
+        // TODO: Remove this once ONNX Evaluation is fully implemented
+        private StateVectorizer _stateVectorizer = new StateVectorizer();
 
         static GameScreen()
         {
@@ -534,6 +538,11 @@ namespace Client
                 {
                     Console.WriteLine("YAML Serialization Test Succeeded!");
                 }
+            }
+            // GameState Vectorization Test
+            if (Keyboard.IsKeyPressed(Keyboard.Key.Enter))
+            {
+                _stateVectorizer.Vectorize(_state, (uint)_playedActions.Count);
             }
         }
 
