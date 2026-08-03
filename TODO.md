@@ -1,5 +1,7 @@
 - StateValueNet ONNX mit Build ausliefern
 - Spezialisierten Datensatz für Initial Placements anlegen
+	- Mehr Playouts
+	- Nach jedem einzelnen Move speichern
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
 - Branching Factor Histogramm aus Playouts generieren
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
@@ -62,6 +64,7 @@
     - https://github.com/EbTech/Elo-MMR
     - https://github.com/moserware/Skills/blob/master/Skills/Team.cs
 	- https://trueskill.org/
+	- Sequential Probability Ratio Test
 - Tabletalking über LLMs
 	- Source: Martinenghi et al.: "LLMs of Catan: Exploring Pragmatic Capabilities of Generative Chatbots Through Prediction and Classification of Dialogue Acts in Boardgames’ Multi-party Dialogues"
 	- Zusätzlich zu Value Functions von einem Basisbot
