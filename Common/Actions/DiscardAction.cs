@@ -96,6 +96,7 @@ namespace Common.Actions
             if (excessCards <= 0) return actions;
 
             // Generate all discardable subsets
+            // TODO: Optimize this, since the order of the cards doesn't matter, and we can just generate combinations instead of permutations
             ReadOnlySpan<ResourceCardType> heldResources = CardSet<ResourceCardType>.Values
                 .SelectMany(
                     resourceType => Enumerable.Repeat(resourceType, (int)playerCards.Get(resourceType))
