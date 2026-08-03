@@ -43,11 +43,7 @@ namespace Agents
 
             if (DiscardAction.IsTurnValid(state.Turn, PlayerIndex))
             {
-                // TODO: Refine once subset generation is more efficient
-                if (state.Players[PlayerIndex].ResourceCards.Count() <= 9)
-                    return GreedySelectAction(DiscardAction.GetActionsForState(state, PlayerIndex), state, playedActionsCount);
-                else
-                    return DiscardAction.GetRandomDiscard(state, PlayerIndex);
+                return GreedySelectAction(DiscardAction.GetActionsForState(state, PlayerIndex), state, playedActionsCount);
             }
 
             List<Action> actions = [
