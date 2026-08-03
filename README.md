@@ -1,5 +1,5 @@
 # CatanSim
-Online multiplayer colonization game and AI playground.
+Settlers of Catan simulator and AI agent sandbox featuring ML-based and handcrafted agents, a parallelized dataset generator, and save file serialization
 
 # Credits
 Programming by Lasse Huber-Saffer.
