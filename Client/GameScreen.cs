@@ -5,6 +5,7 @@ using Common.Agents;
 using Common.Serialization;
 using ImGuiNET;
 using Models;
+using Models.Inference;
 using SFML.Audio;
 using SFML.Graphics;
 using SFML.System;
@@ -76,8 +77,12 @@ namespace Client
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
 
-        // TODO: Remove this once ONNX Evaluation is fully implemented
+        // State value network for win rate evaluation
+        private StateValueNet _stateValueNet = new StateValueNet("state_value_net-0mw2c1bh.onnx");
         private StateVectorizer _stateVectorizer = new StateVectorizer();
+        private readonly string[] _valuationTypes = ["State Value Network", "Simple Agent"];
+        private int _selectedValuationType = 0;
+        private float[] _valuation = new float[PLAYER_COUNT];
 
         static GameScreen()
         {
@@ -96,6 +101,9 @@ namespace Client
             _cardWidget = new CardWidget(window, _state.Players[_playerIndex]);
             _diceWidget = new DiceWidget(window);
             _diceWidget.Active = true;
+
+            // Recalculate valuation
+            UpdateValuation();
 
             _eventLog = new EventLog();
             _actionLogger = new ActionLogger(_eventLog);
@@ -159,8 +167,7 @@ namespace Client
             // Evaluation bar
             if(_showEvaluationBar)
             {
-                float[] valuation = SimpleAgent.StateValueFunc(_state);
-                var sortedValuation = valuation.Select((val, idx) => (val, idx)).OrderByDescending(x => (x.val, x.idx));
+                var sortedValuation = _valuation.Select((val, idx) => (val, idx)).OrderByDescending(x => (x.val, x.idx));
 
                 // Draw outline
                 RectangleShape valuationBar = new RectangleShape();
@@ -334,6 +341,13 @@ namespace Client
             if (ImGui.TreeNode("Analytics"))
             {
                 ImGui.Checkbox("Show Evaluation Bar", ref _showEvaluationBar);
+                if (ImGui.Combo("##Evaluation Type", ref _selectedValuationType, _valuationTypes, _valuationTypes.Length))
+                {
+                    UpdateValuation();
+                }
+
+                ImGui.Separator();
+
                 ImGui.TextUnformatted("Roll Result Distribution:");
                 ImGui.PlotHistogram(string.Empty, ref _rollDistribution[0], _rollDistribution.Length, 0, string.Empty, 0, _rollDistribution.Max(), new System.Numerics.Vector2(225, 100));
 
@@ -427,6 +441,7 @@ namespace Client
                     action.Apply(_state);
                     _legalActions = LegalActionProvider.GetActionsForState(_state);
                     _renderer.Update();
+                    UpdateValuation();
                 }
             }*/
 
@@ -539,10 +554,11 @@ namespace Client
                     Console.WriteLine("YAML Serialization Test Succeeded!");
                 }
             }
-            // GameState Vectorization Test
+            // Print state valuation network output
             if (Keyboard.IsKeyPressed(Keyboard.Key.Enter))
             {
-                _stateVectorizer.Vectorize(_state, (uint)_playedActions.Count);
+                float[] winProbabilities = _stateValueNet.Run(_stateVectorizer.Vectorize(_state, (uint)_playedActions.Count));
+                Console.WriteLine("Win Probabilities: " + string.Join(", ", winProbabilities.Select(p => p.ToString("P5"))));
             }
         }
 
@@ -645,6 +661,9 @@ namespace Client
             _renderer.Board = _state.Board;
             _renderer.Update();
 
+            // Recalculate valuation
+            UpdateValuation();
+
             _playerIndex = _state.Turn.PlayerIndex;
             _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
 
@@ -705,6 +724,9 @@ namespace Client
             // Update visuals
             _renderer.Update();
 
+            // Recalculate valuation
+            UpdateValuation();
+
             _playerIndex = _state.Turn.PlayerIndex;
             _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
 
@@ -759,6 +781,9 @@ namespace Client
             // Update visuals
             _renderer.Update();
 
+            // Recalculate valuation
+            UpdateValuation();
+
             _playerIndex = _state.Turn.PlayerIndex;
             _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
 
@@ -792,6 +817,9 @@ namespace Client
 
             // Update visuals
             _renderer.Update();
+
+            // Recalculate valuation
+            UpdateValuation();
 
             _playerIndex = _state.Turn.PlayerIndex;
             _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
@@ -831,6 +859,9 @@ namespace Client
 
             // Update visuals
             _renderer.Update();
+
+            // Recalculate valuation
+            UpdateValuation();
 
             _playerIndex = _state.Turn.PlayerIndex;
             _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
@@ -986,6 +1017,9 @@ namespace Client
             _renderer.Board = _state.Board;
             _renderer.Update();
 
+            // Recalculate valuation
+            UpdateValuation();
+
             _playerIndex = 0;
             _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
 
@@ -1010,12 +1044,25 @@ namespace Client
             _renderer.Board = _state.Board;
             _renderer.Update();
 
+            // Recalculate valuation
+            UpdateValuation();
+
             _playerIndex = 0;
             _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
 
             _diceWidget.Active = _state.Turn.MustRoll;
             _diceWidget.RollResult = _state.Turn.LastRoll;
             _diceWidget.UpdateSprites();
+        }
+
+        private void UpdateValuation()
+        {
+            _valuation = _selectedValuationType switch
+            {
+                0 => _stateValueNet.Run(_stateVectorizer.Vectorize(_state, (uint)_playedActions.Count)),
+                1 => SimpleAgent.StateValueFunc(_state),
+                _ => throw new NotImplementedException()
+            };
         }
 
         private void Window_MouseWheelScrolled(object? sender, MouseWheelScrollEventArgs e)
@@ -1114,6 +1161,9 @@ namespace Client
                     // Rebuild geometry
                     _renderer.Update();
 
+                    // Recalculate valuation
+                    UpdateValuation();
+
                     return;
                 }
             }
@@ -1169,6 +1219,9 @@ namespace Client
 
                     // Rebuild geometry
                     _renderer.Update();
+
+                    // Recalculate valuation
+                    UpdateValuation();
 
                     return;
                 }
@@ -1232,6 +1285,9 @@ namespace Client
             _renderer.Board = _state.Board;
             _renderer.Update();
 
+            // Recalculate valuation
+            UpdateValuation();
+
             _playerIndex = _state.Turn.PlayerIndex;
             _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
 
@@ -1259,6 +1315,9 @@ namespace Client
             // Update visuals
             _renderer.Board = _state.Board;
             _renderer.Update();
+
+            // Recalculate valuation
+            UpdateValuation();
 
             _playerIndex = _state.Turn.PlayerIndex;
             _cardWidget.SetPlayerState(_state.Players[_playerIndex]);

@@ -43,9 +43,8 @@ namespace Models
 
             DenseTensor<float> tensor = new DenseTensor<float>(features.ToArray(), new int[] { 1, features.Count });
 
-            // TODO: Remove debug output
-            Console.WriteLine(tensor);
-            Console.WriteLine("Tensor shape: " + tensor.Dimensions[0] + " x " + tensor.Dimensions[1]);
+            //Console.WriteLine(tensor);
+            //Console.WriteLine("Tensor shape: " + tensor.Dimensions[0] + " x " + tensor.Dimensions[1]);
 
             return tensor;
         }
