@@ -1,5 +1,7 @@
 # CatanSim
-Settlers of Catan simulator and AI agent sandbox featuring ML-based and handcrafted agents, a parallelized dataset generator, and save file serialization
+Settlers of Catan simulator and AI agent sandbox featuring ML-based and handcrafted agents, a parallelized dataset generator, and save file serialization.
+
+![Screenshot showing the simulator client.](screenshot-client.png)
 
 # Credits
 Programming by Lasse Huber-Saffer.
