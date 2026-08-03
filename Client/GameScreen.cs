@@ -71,7 +71,7 @@ namespace Client
 
         // Player Agents
         private Agent[] _agents;
-        private readonly string[] _agentTypes = ["RandomAgent", "SimpleAgent"];
+        private readonly string[] _agentTypes = ["RandomAgent", "SimpleAgent", "GreedyAgent"];
         private int[] _selectedAgentTypes;
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
@@ -319,6 +319,7 @@ namespace Client
                         {
                             0 => new RandomAgent(agentIdx),
                             1 => new SimpleAgent(agentIdx),
+                            2 => new GreedyAgent(agentIdx),
                             _ => throw new InvalidOperationException()
                         };
                     }
@@ -611,7 +612,7 @@ namespace Client
                     if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
                     // Query agent for current state
-                    Action playedAction = _agents[actingPlayerIdx.Value].Act(_state);
+                    Action playedAction = _agents[actingPlayerIdx.Value].Act(_state, (uint)_playedActions.Count);
 
                     if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
 
@@ -695,7 +696,7 @@ namespace Client
                 if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
                 // Query agent for current state
-                Action playedAction = _agents[actingPlayerIdx.Value].Act(_state);
+                Action playedAction = _agents[actingPlayerIdx.Value].Act(_state, (uint)_playedActions.Count);
 
                 if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
 
@@ -754,7 +755,7 @@ namespace Client
             if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
             // Query agent for current state
-            Action playedAction = _agents[actingPlayerIdx.Value].Act(_state);
+            Action playedAction = _agents[actingPlayerIdx.Value].Act(_state, (uint)_playedActions.Count);
 
             if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
 
@@ -943,6 +944,7 @@ namespace Client
                 while (runs.TryDequeue(out int runIdx))
                 {
                     GameState simState = new GameState(_state);
+                    uint playedActionCount = 0;
                     while (!simState.HasEnded)
                     {
                         // Find first player that is allowed to act on state
@@ -959,10 +961,11 @@ namespace Client
                         if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
                         // Pick action
-                        Action playedAction = _agents[actingPlayerIdx.Value].Act(simState);
+                        Action playedAction = _agents[actingPlayerIdx.Value].Act(simState, playedActionCount);
 
                         // Apply action to state
                         playedAction.Apply(simState);
+                        playedActionCount++;
                     }
 
                     // Since players can only win on their own turn, the winner is the current turn player

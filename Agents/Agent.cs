@@ -18,6 +18,6 @@ namespace Agents
             PlayerIndex = playerIndex;
         }
 
-        public abstract Action Act(GameState state);
+        public abstract Action Act(GameState state, uint playedActionsCount);
     }
 }

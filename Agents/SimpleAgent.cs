@@ -17,7 +17,7 @@ namespace Agents
 
         }
 
-        public override Action Act(GameState state)
+        public override Action Act(GameState state, uint playedActionsCount)
         {
             List<Action> firstInitialSettlementActions = FirstInitialSettlementAction.GetActionsForState(state, PlayerIndex);
             if (firstInitialSettlementActions.Count > 0)

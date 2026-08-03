@@ -17,7 +17,7 @@ namespace Agents
 
         }
 
-        public override Action Act(GameState state)
+        public override Action Act(GameState state, uint playedActionsCount)
         {
             List<Action> actions = [
                 .. EndTurnAction.GetActionsForState(state, PlayerIndex),
