@@ -8,7 +8,7 @@ The codebase is divided into several projects:
 - **Agents:** Implementation of various game playing agents/bots and their underlying models.
 - **Client:** Simulator GUI frontend enabling manual and automatic playouts, detailed game analysis, configuration and saving/loading.
 - **Common:** Simulator library containing game data structures, transactional action system, move legality validation, YAML serialization, and map generation.
-- **DatasetCollector:** High-performance CLI simulation interface for the generation of large-scale Catan datasets.
+- **DatasetCollector:** High-performance dataset generator CLI for large-scale Catan simulation datasets.
 - **DatasetProcessing:** Formatting tool for the conversion of simulator save files into feature vectors and grouped train/val/test splitting.
 - **Server:** Simulator server for online multiplayer (future work).
 
