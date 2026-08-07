@@ -1,4 +1,5 @@
-﻿using Common;
+﻿using Agents;
+using Common;
 using Common.Actions;
 using Common.Agents;
 using Common.Serialization;
@@ -107,7 +108,7 @@ namespace DatasetCollector
                 if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
                 // Query agent for current state
-                Action playedAction = _agents[actingPlayerIdx.Value].Act(playState);
+                Action playedAction = _agents[actingPlayerIdx.Value].Act(playState, (uint)_playedActions.Count);
 
                 if (!playedAction.IsValidFor(playState)) throw new InvalidOperationException();
 
@@ -188,6 +189,7 @@ namespace DatasetCollector
                     try
                     {
                         GameState simState = new GameState(sampleState);
+                        uint actionsPlayedSinceFork = 0;
 
                         // Play until game has ended or unwinnable round threshold is reached
                         while (!simState.HasEnded && simState.Turn.RoundCounter < UNWINNABLE_ROUND_THRESHOLD)
@@ -206,10 +208,11 @@ namespace DatasetCollector
                             if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
                             // Pick action
-                            Action playedAction = _agents[actingPlayerIdx.Value].Act(simState);
+                            Action playedAction = _agents[actingPlayerIdx.Value].Act(simState, (uint)previousActions.Count + actionsPlayedSinceFork);
 
                             // Apply action to state
                             playedAction.Apply(simState);
+                            actionsPlayedSinceFork++;
                         }
 
                         // If the playout was aborted due to timeout, don't collect a result
