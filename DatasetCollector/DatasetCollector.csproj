@@ -8,6 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Agents\Agents.csproj" />
     <ProjectReference Include="..\Common\Common.csproj" />
   </ItemGroup>
 

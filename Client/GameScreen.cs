@@ -12,6 +12,7 @@ using SFML.Window;
 using System.Collections.Concurrent;
 using Action = Common.Actions.Action;
 using Edge = Common.Edge;
+using Agents.MCTS;
 
 namespace Client
 {
@@ -71,7 +72,7 @@ namespace Client
 
         // Player Agents
         private Agent[] _agents;
-        private readonly string[] _agentTypes = ["RandomAgent", "SimpleAgent", "GreedyAgent"];
+        private readonly string[] _agentTypes = ["RandomAgent", "SimpleAgent", "GreedyAgent", "MCTSAgent"];
         private int[] _selectedAgentTypes;
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
@@ -320,6 +321,7 @@ namespace Client
                             0 => new RandomAgent(agentIdx),
                             1 => new SimpleAgent(agentIdx),
                             2 => new GreedyAgent(agentIdx),
+                            3 => new MCTSAgent(agentIdx),
                             _ => throw new InvalidOperationException()
                         };
                     }
