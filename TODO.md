@@ -1,3 +1,7 @@
+- Nichtdeterministische Actions (Roll, BuyDevelopmentCard, Knight, ...) im GreedyAgent und MCTSAgent
+	- Keine freie Wahl des Outcomes ermöglichen
+	- Unterschiedliche History-Ergebnisse auch bei der Legal Move Generation berücksichtigen (ggf. neue GetActionsForState-Variante nötig)
+- Update(Action), ForceUpdate(GameState) ins Agent-Interface integrieren, um MCTS-Baumupdates zu ermöglichen
 - StateValueNet ONNX mit Build ausliefern
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Mehr Playouts
@@ -15,9 +19,6 @@
 - GameState in Static und Dynamic unterteilen?
 	- Tiles, Edges und Intersections als Struktur statisch speichern und teilen
 	- Playstate (Roads, Settlements, Cities) als Byte-Arrays mit gleichen Indizes abbilden
-- Action für variable Domestic Trades
-- Testen, ob alle Actions genutzt werden
-- Testen, ob Bank immer Gesamtsumme behält
 - StateValueNetv2
 	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
 	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
@@ -25,6 +26,13 @@
     - Data Augmentation basierend auf Reduktion der Sichtbarkeit (alle Karten ausser die eines Spielers unknown machen, zufällig Karten unknown machen)
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
+- MCTSAgent
+	- Discard-Reihenfolge auf Index Order festlegen (wie bei übrigen Random Rollouts), da Reihenfolge egal ist und damit der Branching Factor reduziert wird
+	- State Hashes zusätzlich für Validation und Caching?
+	- Parallelisieren
+	- Netzwerkarchitektur für State Value: Papadam, Chalkiadakis: "Adversarial Search and Deep Learning for Strategic Settlement Placement in the “Settlers of Catan”" https://dl.acm.org/doi/10.1007/978-3-031-93930-3_4
+- GreedyAgent
+	- Variable Baumtiefe?
 - SimpleAgent
 	- Immer die Spots mit den höchsten Yields bebauen
 	- Trades ausschließen, die günstiger mit Port möglich wären (z.B. kein 4:1 wenn 2:1 mit gleichem IO möglich ist)
@@ -45,15 +53,7 @@
 - EvolutionaryAgent
 	- Heuristiken anhand von Genom (z.B. Multiplikation von Yield Scores und Action Weights)
 	- Durch Playouts und Mutation trainieren
-- GreedyAgent
-	- Variable Baumtiefe?
 - AlphaBetaAgent
-- MCTSAgent
-	- Nodes enthalten nur Actions und nicht States, um Speicherverbrauch und Rechenzeit zu reduzieren
-		- Keine State Deep Copy nötig
-		- State Hashes zusätzlich für Validation und Caching
-		- Leichterer Umgang mit Nichtdeterministik (z.B. Development Cards)
-	- Netzwerkarchitektur für State Value: Papadam, Chalkiadakis: "Adversarial Search and Deep Learning for Strategic Settlement Placement in the “Settlers of Catan”" https://dl.acm.org/doi/10.1007/978-3-031-93930-3_4
 - PPO RL Agent
 - PlayerAgent
 	- Besseres Interface für Bank/Port Trades implementieren (Dropdown für Zielressource)
@@ -76,6 +76,9 @@
 	- Mainstream-Erweiterungen
 	- 1v1
 	- Map Layout
+- Action für variable Domestic Trades
+- Testen, ob alle Actions genutzt werden
+- Testen, ob Bank immer Gesamtsumme behält
 
 Quellen lesen:
 - Catan MCTS => https://www.researchgate.net/publication/220716999_Monte-Carlo_Tree_Search_in_Settlers_of_Catan
