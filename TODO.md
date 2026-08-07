@@ -4,6 +4,7 @@
 	- Maybe einen false-defaulted Parameter "Force Split Output Randomness" zu GetActionsForState hinzufügen und History (außer bei Roll) damit vorbelegen
 	- RollAction maybe generell auf parameterlosen Zustand reworken? Schwierig
 - Update(Action), ForceUpdate(GameState) ins Agent-Interface integrieren, um MCTS-Baumupdates zu ermöglichen
+	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
 - StateValueNet ONNX mit Build ausliefern
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Mehr Playouts
