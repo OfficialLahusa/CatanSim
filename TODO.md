@@ -2,6 +2,7 @@
 	- Keine freie Wahl des Outcomes ermöglichen
 	- Unterschiedliche History-Ergebnisse auch bei der Legal Move Generation berücksichtigen (ggf. neue GetActionsForState-Variante nötig)
 	- Maybe einen false-defaulted Parameter "Force Split Output Randomness" zu GetActionsForState hinzufügen und History (außer bei Roll) damit vorbelegen
+	- Gruppierter Knoten im MCTS Tree nach Output Randomness?
 	- RollAction maybe generell auf parameterlosen Zustand reworken?
 		- Schwierig. Lieber so lassen und dafür dann in der Client-Server-Struktur ein authoritatives System bauen
 		- Client schlägt Action vor, Server returned tatsächliches Ergebnis (Action mit History und Observation Filter)
