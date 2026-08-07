@@ -2,6 +2,7 @@
 	- Keine freie Wahl des Outcomes ermöglichen
 	- Unterschiedliche History-Ergebnisse auch bei der Legal Move Generation berücksichtigen (ggf. neue GetActionsForState-Variante nötig)
 	- Maybe einen false-defaulted Parameter "Force Split Output Randomness" zu GetActionsForState hinzufügen und History (außer bei Roll) damit vorbelegen
+	- RollAction maybe generell auf parameterlosen Zustand reworken? Schwierig
 - Update(Action), ForceUpdate(GameState) ins Agent-Interface integrieren, um MCTS-Baumupdates zu ermöglichen
 - StateValueNet ONNX mit Build ausliefern
 - Spezialisierten Datensatz für Initial Placements anlegen
