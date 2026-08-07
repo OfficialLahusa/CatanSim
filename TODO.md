@@ -29,6 +29,9 @@
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
 	- Discard-Reihenfolge auf Index Order festlegen (wie bei übrigen Random Rollouts), da Reihenfolge egal ist und damit der Branching Factor reduziert wird
+	- Gleichwertige Roll Results zusammenfassen und beim Tree State Update berücksichtigen
+		- Deutlich niedrigerer Branching Factor
+		- Updaten auf eine Roll Action mit gleichem Total aber anderem First/Second leicht möglich, da ja nicht die States sondern nur die Actions im Tree hinterlegt sind
 	- State Hashes zusätzlich für Validation und Caching?
 	- Parallelisieren
 	- Netzwerkarchitektur für State Value: Papadam, Chalkiadakis: "Adversarial Search and Deep Learning for Strategic Settlement Placement in the “Settlers of Catan”" https://dl.acm.org/doi/10.1007/978-3-031-93930-3_4
