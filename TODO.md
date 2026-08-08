@@ -1,12 +1,3 @@
-- Nichtdeterministische Actions (Roll [was wurde gewürfelt], BuyDevelopmentCard [was wurde gezogen], Robber [was wurde gezogen], ...) im GreedyAgent und MCTSAgent
-	- Keine freie Wahl des Outcomes ermöglichen
-	- Unterschiedliche History-Ergebnisse auch bei der Legal Move Generation berücksichtigen (ggf. neue GetActionsForState-Variante nötig)
-	- Maybe einen false-defaulted Parameter "Force Split Output Randomness" zu GetActionsForState hinzufügen und History (außer bei Roll) damit vorbelegen
-	- Gruppierter Knoten im MCTS Tree nach Output Randomness?
-	- RollAction maybe generell auf parameterlosen Zustand reworken?
-		- Schwierig. Lieber so lassen und dafür dann in der Client-Server-Struktur ein authoritatives System bauen
-		- Client schlägt Action vor, Server returned tatsächliches Ergebnis (Action mit History und Observation Filter)
-		- Dort dann die Parameter der geschickten Roll-Action ignorieren und auf dem Server erst festlegen, dann mit History zurückschicken
 - Update(Action), ForceUpdate(GameState) ins Agent-Interface integrieren, um MCTS-Baumupdates zu ermöglichen
 	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
 - StateValueNet ONNX mit Build ausliefern
@@ -68,6 +59,10 @@
 - PPO RL Agent
 - PlayerAgent
 	- Besseres Interface für Bank/Port Trades implementieren (Dropdown für Zielressource)
+- Simulation Server
+	- Zeitlimit für Agents
+	- Client schlägt Action vor, Server returned tatsächliches Ergebnis (Action mit History und Observation Filter)
+	- Dort dann die Parameter der geschickten Roll-Action ignorieren und auf dem Server erst Roll Result festlegen, dann mit History zurückschicken
 - Serialization
 	- Packets über Netzwerk
 - Static Analysis und Visualization Inspo: https://www.reddit.com/r/Catan/s/0WyS2UbGAX
