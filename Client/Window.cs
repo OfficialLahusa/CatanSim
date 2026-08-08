@@ -21,7 +21,7 @@ namespace Client
 
         public Window()
         {
-            window = new RenderWindow(VideoMode.DesktopMode, "Cettlers of Satan", Styles.Default, new ContextSettings() { AntialiasingLevel = 8 });
+            window = new RenderWindow(VideoMode.DesktopMode, "CatanSim", Styles.Default, new ContextSettings() { AntialiasingLevel = 8 });
 
             // Maximize window
             ShowWindow(window.SystemHandle, 3);
