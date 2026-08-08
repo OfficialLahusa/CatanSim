@@ -4,10 +4,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using YamlDotNet.Serialization;
+using static Common.Actions.BuyDevelopmentCardAction;
 
 namespace Common.Actions
 {
-    public class RollAction : Action, IReplayAction, IActionProvider
+    public class RollAction : Action, IReplayAction, IActionProvider, IOutputRandomnessAction
     {
         public record RollActionHistory
         {
@@ -274,24 +275,35 @@ namespace Common.Actions
             RollAction randomRollAction = new RollAction(playerIdx, null);
             if(randomRollAction.IsValidFor(state)) actions.Add(randomRollAction);
 
-            // TODO: Remove for exploration
             return actions;
+        }
 
-            for(byte first = 1; first <= 6; first++)
+        public List<Action> GetOutcomeVariants(GameState state, sbyte playerIdx)
+        {
+            if (HasHistory())
+                throw new InvalidOperationException("The output randomness of this action was already resolved.");
+
+            List<Action> variants = new List<Action>();
+
+            if (!IsTurnValid(state.Turn, playerIdx)) return variants;
+
+            // Output randomness: What is the dice roll result?
+            // This action is an exception from the other output randomness actions, since the initial parameters of the RollResult have to be disregarded.
+            for (byte first = 1; first <= 6; first++)
             {
                 for (byte second = 1; second <= 6; second++)
                 {
                     RollResult roll = new() { First = first, Second = second };
                     RollAction action = new((sbyte)state.Turn.PlayerIndex, roll);
 
-                    if(action.IsValidFor(state))
+                    if (action.IsValidFor(state))
                     {
-                        actions.Add(action);
+                        variants.Add(action);
                     }
                 }
             }
 
-            return actions;
+            return variants;
         }
 
         public override string ToString()

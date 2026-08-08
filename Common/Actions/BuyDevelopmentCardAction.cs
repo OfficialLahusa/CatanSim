@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static Common.Actions.RobberAction;
 
 namespace Common.Actions
 {
-    public class BuyDevelopmentCardAction : Action, IReplayAction, IActionProvider
+    public class BuyDevelopmentCardAction : Action, IReplayAction, IActionProvider, IOutputRandomnessAction
     {
         public record BuyDevelopmentCardActionHistory(DevelopmentCardType DrawnType)
         {
@@ -155,6 +156,31 @@ namespace Common.Actions
         {
             BuyDevelopmentCardAction action = new(playerIdx);
             return action.IsValidFor(state) ? [action] : [];
+        }
+
+        public List<Action> GetOutcomeVariants(GameState state, sbyte playerIdx)
+        {
+            if (HasHistory())
+                throw new InvalidOperationException("The output randomness of this action was already resolved.");
+
+            List<Action> variants = new List<Action>();
+
+            if (!IsTurnValid(state.Turn, playerIdx)) return variants;
+
+            // Output randomness: Which development card was drawn from the bank
+            foreach (DevelopmentCardType receivedCard in CardSet<DevelopmentCardType>.Values)
+            {
+                BuyDevelopmentCardAction actionCopy = new BuyDevelopmentCardAction(PlayerIndex);
+                BuyDevelopmentCardActionHistory outcome = new BuyDevelopmentCardActionHistory(receivedCard);
+                actionCopy.History = outcome;
+
+                if (actionCopy.IsBoardValid(state))
+                {
+                    variants.Add(actionCopy);
+                }
+            }
+
+            return variants;
         }
     }
 }

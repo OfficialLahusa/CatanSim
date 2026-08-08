@@ -16,15 +16,17 @@ namespace Agents.MCTS
         public uint VisitCount { get; set; } = 0;
         public uint WinCount { get; set; } = 0;
         public sbyte ActivePlayerIndex { get; set; }
+        public bool IsOutputRandomnessGroup { get; set; }
 
         public List<MCTSNode> Children { get; set; } = new List<MCTSNode>();
 
-        public MCTSNode(sbyte activePlayerIndex, MCTSNode? parent = null, Action? lastAction = null, bool isTerminal = false)
+        public MCTSNode(sbyte activePlayerIndex, MCTSNode? parent = null, Action? lastAction = null, bool isTerminal = false, bool isOutputRandomnessGroup = false)
         {
             ActivePlayerIndex = activePlayerIndex;
             Parent = parent;
             LastAction = lastAction;
             IsTerminal = isTerminal;
+            IsOutputRandomnessGroup = isOutputRandomnessGroup;
         }
 
         public double GetUCT(double explorationParameter)

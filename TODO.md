@@ -23,6 +23,7 @@
 	- Von Robber gestohlene Karten
 	- Gezogene Development Cards
 	- Discards sind public Info, also nicht nötig!
+	- Bei Game-Tree-Aufbau dafür sorgen, dass die Output Randomness Resolution nicht spoilen kann, was für Dev Cards noch in der Bank sind und was für Karten ein beraubter Spieler hat
 - GameState in Static und Dynamic unterteilen?
 	- Tiles, Edges und Intersections als Struktur statisch speichern und teilen
 	- Playstate (Roads, Settlements, Cities) als Byte-Arrays mit gleichen Indizes abbilden

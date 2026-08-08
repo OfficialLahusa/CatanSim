@@ -84,6 +84,24 @@ namespace Agents
 
         protected float PredictValue(Action action, GameState currentState, uint playedActionsCount)
         {
+            // If action is an output randomness action, average the value over all outcomes
+            if (action is IOutputRandomnessAction randomAction)
+            {
+                List<Action> outcomeVariants = randomAction.GetOutcomeVariants(currentState, PlayerIndex);
+
+                float scoreSum = 0;
+
+                foreach (Action actionVariant in outcomeVariants)
+                {
+                    GameState variantStateCopy = new GameState(currentState);
+                    actionVariant.Apply(variantStateCopy);
+                    scoreSum += ValuationToScore(StateValueFunc(variantStateCopy, playedActionsCount + 1));
+                }
+
+                return scoreSum / outcomeVariants.Count;
+            }
+            
+            // Otherwise evaluate the result of the individual action directly
             GameState stateCopy = new GameState(currentState);
             action.Apply(stateCopy);
             return ValuationToScore(StateValueFunc(stateCopy, playedActionsCount + 1));

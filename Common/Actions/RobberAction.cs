@@ -7,7 +7,7 @@ using static Common.Actions.RollAction;
 
 namespace Common.Actions
 {
-    public class RobberAction : Action, IReplayAction, IActionProvider
+    public class RobberAction : Action, IReplayAction, IActionProvider, IOutputRandomnessAction
     {
         public record RobberActionHistory(Tile? PrevRobber, ResourceCardType? StolenCard = null)
         {
@@ -157,8 +157,8 @@ namespace Common.Actions
 
             // If stored history exists, ensure it is valid
             bool historyValid = !HasHistory()
-                || !History!.StolenCard.HasValue && (!TargetPlayerIndex.HasValue || state.Players[TargetPlayerIndex.Value].ResourceCards.Count() == 0)
-                || History.StolenCard.HasValue && TargetPlayerIndex.HasValue && state.Players[TargetPlayerIndex.Value].ResourceCards.Count() > 0;
+                || !History!.StolenCard.HasValue && (!TargetPlayerIndex.HasValue || TargetPlayerIndex.Value == PlayerIndex || state.Players[TargetPlayerIndex.Value].ResourceCards.Count() == 0)
+                || History.StolenCard.HasValue && TargetPlayerIndex.HasValue && TargetPlayerIndex != PlayerIndex && state.Players[TargetPlayerIndex.Value].ResourceCards.Get(History.StolenCard.Value) > 0;
 
             return hasValidTarget && historyValid;
         }
@@ -193,6 +193,34 @@ namespace Common.Actions
             }
 
             return actions;
+        }
+
+        public List<Action> GetOutcomeVariants(GameState state, sbyte playerIdx)
+        {
+            if (HasHistory())
+                throw new InvalidOperationException("The output randomness of this action was already resolved.");
+
+            List<Action> variants = new List<Action>();
+
+            if (!IsTurnValid(state.Turn, playerIdx)) return variants;
+
+            // Output randomness: Which resource card was drawn from the target player
+            // It is possible to not draw a card at all, hence the nullability
+            ResourceCardType?[] stolenCardOptions = [null, .. CardSet<ResourceCardType>.Values];
+
+            foreach (ResourceCardType? stolenCard in stolenCardOptions)
+            {
+                RobberAction actionCopy = new RobberAction(PlayerIndex, TargetTileIndex, TargetPlayerIndex);
+                RobberActionHistory outcome = new RobberActionHistory(state.Board.Robber, stolenCard);
+                actionCopy.History = outcome;
+
+                if (actionCopy.IsBoardValid(state))
+                {
+                    variants.Add(actionCopy);
+                }
+            }
+
+            return variants;
         }
 
         public override string ToString()

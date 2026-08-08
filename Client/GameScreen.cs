@@ -490,7 +490,8 @@ namespace Client
                 ClearMap();
             }
 
-            if (Keyboard.IsKeyPressed(Keyboard.Key.R))
+            if (Keyboard.IsKeyPressed(Keyboard.Key.R)
+                || Keyboard.IsKeyPressed(Keyboard.Key.Right))
             {
                 PlayAgentAction(!_muteQuickPlayouts);
             }

@@ -31,6 +31,7 @@ namespace Agents.MCTS
         {
             // Return the child with the highest visit count
             MCTSNode bestChild = _rootNode.Children.OrderByDescending(c => c.VisitCount).First();
+
             return bestChild.LastAction!;
         }
 
@@ -80,7 +81,9 @@ namespace Agents.MCTS
             while (node.Children.Count > 0)
             {
                 node = SelectChild(node);
-                if (node.LastAction != null)
+
+                // Don't execute empty actions and actions leading into a randomness group (since their direct children are variations of that same action)
+                if (node.LastAction != null && !node.IsOutputRandomnessGroup)
                 {
                     node.LastAction!.Apply(state);
                 }
@@ -93,14 +96,38 @@ namespace Agents.MCTS
                 List<Action> actions = GetValidActions(state);
                 foreach (var action in actions)
                 {
-                    // Check if node is terminal
-                    action.Apply(state);
-                    bool isTerminal = state.HasEnded;
-                    sbyte nextActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
-                    action.Revert(state);
+                    // If action has output randomness, get all possible outcomes and group them into a subtree
+                    if (action is IOutputRandomnessAction randomAction)
+                    {
+                        MCTSNode groupNode = new MCTSNode((sbyte)state.Turn.PlayerIndex, node, action, false, true);
+                        node.Children.Add(groupNode);
 
-                    MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, node, action, isTerminal);
-                    node.Children.Add(childNode);
+                        List<Action> variants = randomAction.GetOutcomeVariants(state, (sbyte)state.Turn.PlayerIndex);
+
+                        foreach (Action variant in variants)
+                        {
+                            // Check if node is terminal and who the active player is after the action
+                            variant.Apply(state);
+                            bool isTerminal = state.HasEnded;
+                            sbyte nextActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
+                            variant.Revert(state);
+
+                            MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, groupNode, variant, isTerminal);
+                            groupNode.Children.Add(childNode);
+                        }
+                    }
+                    // Otherwise just add the node directly as a child
+                    else
+                    {
+                        // Check if node is terminal and who the active player is after the action
+                        action.Apply(state);
+                        bool isTerminal = state.HasEnded;
+                        sbyte nextActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
+                        action.Revert(state);
+
+                        MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, node, action, isTerminal);
+                        node.Children.Add(childNode);
+                    }
                 }
             }
 
@@ -110,7 +137,18 @@ namespace Agents.MCTS
             if(!node.IsTerminal)
             {
                 nodeToSimulate = SelectChild(node);
-                nodeToSimulate.LastAction!.Apply(state);
+
+                // Grouped output randomness node => Select child of child
+                if (nodeToSimulate.IsOutputRandomnessGroup)
+                {
+                    nodeToSimulate = SelectChild(nodeToSimulate);
+                    nodeToSimulate.LastAction!.Apply(state);
+                }
+                // Normal node => Select child
+                else
+                {
+                    nodeToSimulate.LastAction!.Apply(state);
+                }
             }
             else
             {
@@ -127,11 +165,21 @@ namespace Agents.MCTS
 
         protected MCTSNode SelectChild(MCTSNode node)
         {
-            // Determine if the active player this tree is modeling currently has deciding power over the next action
+            // If the node is a grouped output randomness action, choose a child node with uniform random distribution
+            if (node.IsOutputRandomnessGroup)
+            {
+                return node.Children[_random.Next(node.Children.Count)];
+            }
+
+            // Otherwise, determine if the active player this tree is modeling currently has deciding power over the next action
+            // A player has deciding power if one of the following is true:
+            // - It's the player's turn and nobody has to discard
+            // - The player has to discard and nobody with a lower playerIndex has to discard
             bool isOwnersTurn = node.ActivePlayerIndex == _ownerIdx;
-            bool ownerHasToDiscard = node.Children.Any(x => x.LastAction! is DiscardAction discardAction && discardAction.PlayerIndex == _ownerIdx);
-            bool otherHasToDiscard = node.Children.Any(x => x.LastAction! is DiscardAction discardAction && discardAction.PlayerIndex != _ownerIdx);
-            bool hasDecidingPower = (isOwnersTurn || ownerHasToDiscard) && !otherHasToDiscard;
+            bool discardRequired      = node.Children.Any(x => x.LastAction != null && x.LastAction is DiscardAction);
+            bool ownerHasToDiscard    = node.Children.Any(x => x.LastAction != null && x.LastAction is DiscardAction discardAction && discardAction.PlayerIndex == _ownerIdx);
+            bool previousHasToDiscard = node.Children.Any(x => x.LastAction != null && x.LastAction is DiscardAction discardAction && discardAction.PlayerIndex < _ownerIdx);
+            bool hasDecidingPower = isOwnersTurn && !discardRequired || ownerHasToDiscard && !previousHasToDiscard;
 
             // Only select best move if the player has deciding power, otherwise select random move.
             // This is to avoid the AI from making bad moves on other players' turns.
@@ -157,24 +205,18 @@ namespace Agents.MCTS
             if (secondInitialSettlementActions.Count > 0)
                 return secondInitialSettlementActions;
 
-            // Always assume the active player has to discard first
-            if (DiscardAction.IsTurnValid(state.Turn, activePlayerIdx))
-                return DiscardAction.GetActionsForState(state, activePlayerIdx);
-
-            // Only show other players' discard actions if the active player is done
-            List<Action> otherPlayersDiscardActions = new(); 
+            // Discards are assumed to be in player index order, since the outcome is order-invariant
+            // Therefore only the discards of the next player in order are shown
             for (int playerToDiscardIdx = 0; playerToDiscardIdx < state.Players.Length; playerToDiscardIdx++)
             {
-                if (playerToDiscardIdx == activePlayerIdx)
-                    continue;
-
                 if (DiscardAction.IsTurnValid(state.Turn, playerToDiscardIdx))
-                    otherPlayersDiscardActions.AddRange(DiscardAction.GetActionsForState(state, (sbyte)playerToDiscardIdx));
+                {
+                    List<Action> discardActions = DiscardAction.GetActionsForState(state, (sbyte)playerToDiscardIdx);
+
+                    if (discardActions.Count > 0)
+                        return discardActions;
+                }
             }
-
-            if (otherPlayersDiscardActions.Count > 0)
-                return otherPlayersDiscardActions;
-
 
             List<Action> actions = [
                 .. EndTurnAction.GetActionsForState(state, activePlayerIdx),
