@@ -1,6 +1,6 @@
 - Update(Action), ForceUpdate(GameState) ins Agent-Interface integrieren, um MCTS-Baumupdates zu ermöglichen
 	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
-- StateValueNet ONNX mit Build ausliefern
+- StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Mehr Playouts
 	- Nach jedem einzelnen Move speichern
