@@ -1,12 +1,7 @@
-- Update(Action), ForceUpdate(GameState) ins Agent-Interface integrieren, um MCTS-Baumupdates zu ermöglichen
-	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
-- StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
-- Spezialisierten Datensatz für Initial Placements anlegen
-	- Mehr Playouts
-	- Nach jedem einzelnen Move speichern
-- Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
-- Branching Factor Histogramm aus Playouts generieren
+## Simulator
+- UI für manuelles Spielen überarbeiten
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
+- Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
 - RoadAction.GetActionsForState optimieren (derzeit sehr ineffizient)
     - Caching von Intersection/Edge Ownership (maybe in PlayerState?)
 - Observation Filter (Agents nur die für sie sichtbaren Informationen geben)
@@ -18,6 +13,23 @@
 - GameState in Static und Dynamic unterteilen?
 	- Tiles, Edges und Intersections als Struktur statisch speichern und teilen
 	- Playstate (Roads, Settlements, Cities) als Byte-Arrays mit gleichen Indizes abbilden
+- Action für variable Player Trades
+- Testen, ob alle Actions genutzt werden
+- Testen, ob Bank immer Gesamtsumme behält
+
+## Agents
+- Spezialisierten Datensatz für Initial Placements anlegen
+	- Mehr Playouts
+	- Nach jedem einzelnen Move speichern um Impact gut lernbar zu machen
+	- Komplett Random ohne Heuristik um unvorteilhafte Positionen nicht unterzurepräsentieren
+- Agent Game Tree Viewer
+	- State Eval Bar und Node Properties jeweils für den sichtbaren Teil des Baums berechnen
+	- Click auf Node lädt dortiges State
+	- Color Coding nach Anzahl Visits
+- Branching Factor Histogramm aus Playouts generieren
+- Update(Action), ForceUpdate(GameState) ins Agent-Interface integrieren, um MCTS-Baumupdates zu ermöglichen
+	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
+- StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
 - StateValueNetv2
 	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
 	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
@@ -26,13 +38,12 @@
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
-	- Discard-Reihenfolge auf Index Order festlegen (wie bei übrigen Random Rollouts), da Reihenfolge egal ist und damit der Branching Factor reduziert wird
 	- Gleichwertige Roll Results zusammenfassen und beim Tree State Update berücksichtigen
 		- Deutlich niedrigerer Branching Factor
 		- Updaten auf eine Roll Action mit gleichem Total aber anderem First/Second leicht möglich, da ja nicht die States sondern nur die Actions im Tree hinterlegt sind
-	- State Hashes zusätzlich für Validation und Caching?
 	- Parallelisieren
-	- Netzwerkarchitektur für State Value: Papadam, Chalkiadakis: "Adversarial Search and Deep Learning for Strategic Settlement Placement in the “Settlers of Catan”" https://dl.acm.org/doi/10.1007/978-3-031-93930-3_4
+	- State Value Netzwerkarchitekturen aus Initial Placement Paper prüfen
+	- State Hashes zusätzlich für Validation und Caching?
 - GreedyAgent
 	- Variable Baumtiefe?
 - SimpleAgent
@@ -59,20 +70,16 @@
 - PPO RL Agent
 - PlayerAgent
 	- Besseres Interface für Bank/Port Trades implementieren (Dropdown für Zielressource)
+
+## Future Enhancements
 - Simulation Server
 	- Zeitlimit für Agents
 	- Client schlägt Action vor, Server returned tatsächliches Ergebnis (Action mit History und Observation Filter)
 	- Dort dann die Parameter der geschickten Roll-Action ignorieren und auf dem Server erst Roll Result festlegen, dann mit History zurückschicken
+- Interface für JSettlers Agents/Server
 - Serialization
 	- Packets über Netzwerk
-- Static Analysis und Visualization Inspo: https://www.reddit.com/r/Catan/s/0WyS2UbGAX
-- Ranking System
-    - https://github.com/EbTech/Elo-MMR
-    - https://github.com/moserware/Skills/blob/master/Skills/Team.cs
-	- https://trueskill.org/
-	- Sequential Probability Ratio Test
 - Tabletalking über LLMs
-	- Source: Martinenghi et al.: "LLMs of Catan: Exploring Pragmatic Capabilities of Generative Chatbots Through Prediction and Classification of Dialogue Acts in Boardgames’ Multi-party Dialogues"
 	- Zusätzlich zu Value Functions von einem Basisbot
 	- Self-Hosted oder API?
 	- Playouts gegeneinander ohne Supervision
@@ -82,18 +89,24 @@
 	- Mainstream-Erweiterungen
 	- 1v1
 	- Map Layout
-- Action für variable Domestic Trades
-- Testen, ob alle Actions genutzt werden
-- Testen, ob Bank immer Gesamtsumme behält
 
-Quellen lesen:
+## Related Work
 - Catan MCTS => https://www.researchgate.net/publication/220716999_Monte-Carlo_Tree_Search_in_Settlers_of_Catan
-- Besseres Catan MCTS => https://www.reddit.com/r/rust/comments/1sz304o/introducing_monte_catano_the_worlds_strongest/?show=original
+- Monte Catano (Rust MCTS) => https://www.reddit.com/r/rust/comments/1sz304o/introducing_monte_catano_the_worlds_strongest/?show=original
+- Catan MCTS mit Trades und interessantem Evaluationsansatz => Monte Carlo Tree Search in the "Settlers of Catan" Strategy Game https://dias.library.tuc.gr/entities/publication/8c6bab5f-58f8-4eb7-9687-0de7e500b65d
+- Initial Placements + Architecture => Papadam, Chalkiadakis: "Adversarial Search and Deep Learning for Strategic Settlement Placement in the “Settlers of Catan”" https://dl.acm.org/doi/10.1007/978-3-031-93930-3_4 
 - Catan RL => https://settlers-rl.github.io/
 - Catanatron => https://github.com/bcollazo/catanatron
 - JSettlers => https://nand.net/jsettlers/
+- LLMs für Tabletalking => Martinenghi et al.: "LLMs of Catan: Exploring Pragmatic Capabilities of Generative Chatbots Through Prediction and Classification of Dialogue Acts in Boardgames’ Multi-party Dialogues"
 - MCTS Variant Review => https://www.researchgate.net/publication/362115589_Monte_Carlo_Tree_Search_a_review_of_recent_modifications_and_applications
 - MCTS Tree State Hashes => https://github.com/uranium62/xxHash
 - Interfacing => https://github.com/dnmfarrell/Settlers-Game-Notation
 - Interfacing => https://en.wikipedia.org/wiki/Universal_Chess_Interface
-- Multiplayer Rating => https://light-and-code.com/?p=122, https://github.com/FigBug/Multiplayer-ELO
+- Static Analysis und Visualization Inspo => https://www.reddit.com/r/Catan/s/0WyS2UbGAX
+- Ranking System
+    - https://github.com/EbTech/Elo-MMR
+    - https://github.com/moserware/Skills/blob/master/Skills/Team.cs
+	- https://trueskill.org/
+	- Sequential Probability Ratio Test
+	- Multiplayer Rating => https://light-and-code.com/?p=122, https://github.com/FigBug/Multiplayer-ELO
