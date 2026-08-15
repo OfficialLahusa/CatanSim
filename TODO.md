@@ -35,6 +35,27 @@
 	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
 	- Data Augmentation basierend auf Spielerposition (alle Spieler random rotieren)
     - Data Augmentation basierend auf Reduktion der Sichtbarkeit (alle Karten ausser die eines Spielers unknown machen, zufällig Karten unknown machen)
+- PolicyNet
+	- Wahrscheinlichkeitsverteilung darüber welche Moves aus einem State wie erkundenswert sind
+	- Action Space explodiert kombinatorisch, deshalb nicht über ein finite fixed-size Action Space die Verteilung berechnen
+	- Stattdessen ein NN was State und eine Action als Input bekommt und einen Score ausgibt
+	- Dann über alle Legal Moves aus dem State batched berechnen und Softmax über die Scores berechnen um eine Verteilung zu erhalten
+	- Output dann über PUCT (Predictor UCT) für Exploration benutzen
+	- Action Encoding
+		- Categorical Embedding für Type der Action
+		- Dann geteilte bedeutungsgleiche Dimensionen für die Parameter, damit jede Dimension immer das gleiche Konzept abbildet
+		- Alle Parameter in dieses geteilte Space abbilden
+		- Beispiel: "Intersection Index" für SettlementAction, CityAction, FirstInitialSettlementAction, SecondInitialSettlementAction teilen
+		- Roll Result Parameter ignorieren und Output Randomness generell als eine Candidate Action zusammenfassen (wie es im MCTS Tree schon implementiert ist)
+	- State Encoding
+		- Evtl den Rumpf des StateValueNets übernehmen und dann nur einmal für den State berechnen und für alle Candidate Actions wiederverwenden
+	- Training
+		- Supervised Target: Visit Counts der aktuellen MCTS-Variante
+		- Dann neue MCTS-Variante mit dem verfeinerten Policy Network erhalten und wiederholen um iterativ besser zu werden
+	- StateValueNet und PolicyNet in einem Modell kombinieren, welches den Trunk und einen Value- sowie Policy-Head enthält
+		- Für ONNX dynamic_axis nutzen, damit mehrere Actions gleichzeitig gebatched verarbeitet werden können
+		- Man kann auswählen welche der Outputs man berechnen möchte und der jeweils andere wird dann gar nicht berechnet
+		- Joint Training/Finetuning möglich
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
