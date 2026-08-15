@@ -14,7 +14,8 @@ namespace Agents.MCTS
 
         public bool IsTerminal { get; protected set; }
         public uint VisitCount { get; set; } = 0;
-        public uint WinCount { get; set; } = 0;
+        // Sum of binary (1 for win, 0 for loss) or double (win percentage) results
+        public double TotalScore { get; set; } = 0f;
         public sbyte ActivePlayerIndex { get; set; }
         public bool IsOutputRandomnessGroup { get; set; }
 
@@ -35,9 +36,9 @@ namespace Agents.MCTS
                 return double.PositiveInfinity;
 
             if (Parent == null)
-                return (double)WinCount / VisitCount;
+                return TotalScore / VisitCount;
 
-            return (double)WinCount / VisitCount + explorationParameter * Math.Sqrt(Math.Log(Parent.VisitCount) / VisitCount);
+            return TotalScore / VisitCount + explorationParameter * Math.Sqrt(Math.Log(Parent.VisitCount) / VisitCount);
         }
     }
 }

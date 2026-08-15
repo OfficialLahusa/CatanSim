@@ -1,4 +1,5 @@
-﻿using Common;
+﻿using Agents.Inference;
+using Common;
 using Common.Actions;
 using Common.Serialization;
 using System;
@@ -19,12 +20,20 @@ namespace Agents.MCTS
         protected sbyte _ownerIdx;
         protected Random _random = new Random();
 
+        protected static StateValueNet _stateValueNet;
+        protected static StateVectorizer _stateVectorizer;
+
         public MCTSTree(GameState rootState, sbyte ownerIdx, double explorationParameter = 1.414)
         {
             _rootState = rootState;
             _rootNode = new MCTSNode((sbyte)rootState.Turn.PlayerIndex, null, null, false);
             _explorationParameter = explorationParameter;
             _ownerIdx = ownerIdx;
+        }
+
+        static MCTSTree() {
+            _stateValueNet = new StateValueNet("state_value_net-0mw2c1bh.onnx");
+            _stateVectorizer = new StateVectorizer();
         }
 
         public Action GetMostPromisingMove()
@@ -155,11 +164,11 @@ namespace Agents.MCTS
                 nodeToSimulate = node;
             }
 
-            // Run simulation and get result (1 for win, 0 for loss)
-            int result = Simulate(state);
+            // Run simulation and get result (win percentage)
+            double result = SimulateML(state);
 
             // Backpropagation
-            // Update the win and visit counts for all nodes in the path from the simulated node back to the root
+            // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root
             Backpropagate(nodeToSimulate, result);
         }
 
@@ -245,7 +254,7 @@ namespace Agents.MCTS
             return actions;
         }
 
-        protected int Simulate(GameState state)
+        protected double SimulatePlayout(GameState state)
         {
             //Console.WriteLine("Sim state hash: " + state.GetHashCode());
 
@@ -270,19 +279,31 @@ namespace Agents.MCTS
             return state.Turn.PlayerIndex == _ownerIdx ? 1 : 0;
         }
 
-        protected void Backpropagate(MCTSNode node, int result)
+        protected double SimulateML(GameState state)
+        {
+            return ValuationToScore(StateValueFunc(state, 0));
+        }
+
+        protected float ValuationToScore(float[] valuation)
+        {
+            return valuation[_ownerIdx] / valuation.Sum();
+        }
+
+        protected static float[] StateValueFunc(GameState state, uint playedActionsCount)
+        {
+            var inputTensor = _stateVectorizer.Vectorize(state, playedActionsCount);
+            return _stateValueNet.Run(inputTensor);
+        }
+
+        protected void Backpropagate(MCTSNode node, double result)
         {
             MCTSNode? currentNode = node;
 
+            // Go up in tree until root is reached and add new result to each passed node
             while (currentNode != null)
             {
                 currentNode.VisitCount++;
-
-                if (result == 1)
-                {
-                    currentNode.WinCount++;
-                }
-
+                currentNode.TotalScore += result;
                 currentNode = currentNode.Parent;
             }
         }

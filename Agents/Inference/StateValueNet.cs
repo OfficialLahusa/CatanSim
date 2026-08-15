@@ -44,13 +44,33 @@ namespace Agents.Inference
             return winProbabilities;
         }
 
+        public float[] RunOnlyLogits(DenseTensor<float> inputTensor)
+        {
+            var inputs = new List<NamedOnnxValue>
+            {
+                NamedOnnxValue.CreateFromTensor("state", inputTensor)
+            };
+
+            float[] logits;
+            int batchSize;
+
+            using (var results = _session.Run(inputs))
+            {
+                var outputTensor = results.First().AsTensor<float>();
+                batchSize = outputTensor.Dimensions[0]; // works for batch=1 or batched leaf-eval
+                logits = outputTensor.ToArray(); // row-major flat: [batch * NumPlayers]
+            }
+
+            return logits;
+        }
+
         /// <summary>
         /// Batchable numerically stable softmax implementation for row-major flat arrays.
         /// </summary>
         /// <param name="flat">Row-major flat array of shape [batchSize * numClasses]</param>
         /// <param name="batchSize">Batch size</param>
         /// <param name="numClasses">Number of classes </param>
-        /// <returns></returns>
+        /// <returns>Row-major flat array of shape [batchSize * numClasses] with softmax distributed outputs</returns>
         private static float[] SoftmaxPerRow(float[] flat, int batchSize, int numClasses)
         {
             var result = new float[flat.Length];
