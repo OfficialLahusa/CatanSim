@@ -31,6 +31,7 @@
 	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
 - StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
 - StateValueNetv2
+	- PlayedActionsCount entfernen
 	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
 	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
 	- Data Augmentation basierend auf Spielerposition (alle Spieler random rotieren)
@@ -59,6 +60,7 @@
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
+	- Refactoring um die Logik aus dem MCTSTree in den Agent zu verlegen
 	- Variante mit NN für Simulation Phase
 	- Gleichwertige Roll Results zusammenfassen und beim Tree State Update berücksichtigen
 		- Deutlich niedrigerer Branching Factor
