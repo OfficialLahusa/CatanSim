@@ -62,6 +62,11 @@
 - MCTSAgent
 	- Refactoring um die Logik aus dem MCTSTree in den Agent zu verlegen
 	- Variante mit NN für Simulation Phase
+	- Time Budget statt Node Budget
+		- Limit pro Turn
+		- Discards kriegen eigene Extrazeit
+		- Initial Placements kriegen eigene Extrazeit
+		- Dann immer das ganze Budget nutzen um seinen Initiativabschnitt fertigzurechnen und dann diesen Pfad auch instantly fertig spielen
 	- Gleichwertige Roll Results zusammenfassen und beim Tree State Update berücksichtigen
 		- Deutlich niedrigerer Branching Factor
 		- Updaten auf eine Roll Action mit gleichem Total aber anderem First/Second leicht möglich, da ja nicht die States sondern nur die Actions im Tree hinterlegt sind
