@@ -63,9 +63,9 @@
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
 	- Refactoring um die Logik aus dem MCTSTree in den Agent zu verlegen
-	- Variante mit NN für Simulation Phase
-	- Time Budget statt Node Budget
-		- Limit pro Turn
+	- Wenn gerolled werden muss, direkt die Roll Action zurückgeben und nicht weiterrechnen, um Rechenzeit danach auf weniger Branches zu verteilen
+	- Compute Budget
+		- Zeitlimit pro Turn
 		- Discards kriegen eigene Extrazeit
 		- Initial Placements kriegen eigene Extrazeit
 		- Dann immer das ganze Budget nutzen um seinen Initiativabschnitt fertigzurechnen und dann diesen Pfad auch instantly fertig spielen

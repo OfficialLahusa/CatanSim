@@ -57,7 +57,23 @@ namespace Agents.MCTS
 
             TimeSpan runtime = stopwatch.Elapsed;
 
-            Console.WriteLine($"Simulation took {runtime.TotalMilliseconds} ms");
+            Console.WriteLine($"Simulation took {runtime.TotalSeconds}s.");
+        }
+
+        public void RunForTime(double timeLimitSeconds)
+        {
+            Console.WriteLine($"Running MCTS for {timeLimitSeconds}s:");
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            uint iterationCounter = 0;
+            do
+            {
+                RunOneIteration();
+                iterationCounter++;
+            }
+            while (stopwatch.Elapsed.TotalSeconds < timeLimitSeconds);
+
+            Console.WriteLine($"Simulation ran for {iterationCounter} iterations.");
         }
 
         public int GetTreeSize()

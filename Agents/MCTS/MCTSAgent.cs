@@ -12,8 +12,7 @@ namespace Agents.MCTS
 {
     public class MCTSAgent : Agent
     {
-        // TODO: Erstmal non-ML MCTS implementieren, dann ML einbauen
-        private const int ITERATION_COUNT = 1000;
+        private const double TIME_LIMIT_SECONDS = 5;
 
         public MCTSAgent(sbyte playerIndex)
             : base(playerIndex)
@@ -30,7 +29,7 @@ namespace Agents.MCTS
         {
             MCTSTree tree = new MCTSTree(state, PlayerIndex);
 
-            tree.RunIterations(ITERATION_COUNT);
+            tree.RunForTime(TIME_LIMIT_SECONDS);
 
             return tree.GetMostPromisingMove();
         }
