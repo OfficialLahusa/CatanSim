@@ -32,6 +32,8 @@
 - StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
 - StateValueNetv2
 	- PlayedActionsCount entfernen
+	- Unzuverlässige Outputs für sehr weit zurückliegende Spieler addressieren
+		- Durch zusätzlichen paarweisen Hinge/Logistic Loss Term auf richtige Reihenfolge zwischen Spieler-Winrates
 	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
 	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
 	- Data Augmentation basierend auf Spielerposition (alle Spieler random rotieren)
