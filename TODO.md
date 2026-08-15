@@ -62,7 +62,8 @@
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
-	- Refactoring um die Logik aus dem MCTSTree in den Agent zu verlegen
+	- Virtual Loss Leaf Batching
+	- Update und ForceUpdate zum Wiederverwenden von Subtrees nutzen
 	- Wenn gerolled werden muss, direkt die Roll Action zurückgeben und nicht weiterrechnen, um Rechenzeit danach auf weniger Branches zu verteilen
 	- Compute Budget
 		- Zeitlimit pro Turn
