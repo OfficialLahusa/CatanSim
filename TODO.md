@@ -49,13 +49,13 @@
 		- Roll Result Parameter ignorieren und Output Randomness generell als eine Candidate Action zusammenfassen (wie es im MCTS Tree schon implementiert ist)
 	- State Encoding
 		- Evtl den Rumpf des StateValueNets übernehmen und dann nur einmal für den State berechnen und für alle Candidate Actions wiederverwenden
-	- Training
-		- Supervised Target: Visit Counts der aktuellen MCTS-Variante
-		- Dann neue MCTS-Variante mit dem verfeinerten Policy Network erhalten und wiederholen um iterativ besser zu werden
 	- StateValueNet und PolicyNet in einem Modell kombinieren, welches den Trunk und einen Value- sowie Policy-Head enthält
 		- Für ONNX dynamic_axis nutzen, damit mehrere Actions gleichzeitig gebatched verarbeitet werden können
 		- Man kann auswählen welche der Outputs man berechnen möchte und der jeweils andere wird dann gar nicht berechnet
-		- Joint Training/Finetuning möglich
+	- Training
+		- Joint Training oder Finetuning zusammen mit StateValueNet über gemeinsamen Trunk möglich => Regularisierung und reicherer Trunk, aber komplex
+		- Supervised Target: Distribution der Visit Counts der aktuellen MCTS-Variante
+		- Dann neue MCTS-Variante mit dem verfeinerten Policy Network erhalten und wiederholen um iterativ besser zu werden
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
