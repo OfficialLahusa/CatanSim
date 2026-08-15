@@ -38,6 +38,7 @@
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
+	- Variante mit NN für Simulation Phase
 	- Gleichwertige Roll Results zusammenfassen und beim Tree State Update berücksichtigen
 		- Deutlich niedrigerer Branching Factor
 		- Updaten auf eine Roll Action mit gleichem Total aber anderem First/Second leicht möglich, da ja nicht die States sondern nur die Actions im Tree hinterlegt sind
