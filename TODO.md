@@ -65,6 +65,7 @@
 	- Virtual Loss Leaf Batching
 	- Update und ForceUpdate zum Wiederverwenden von Subtrees nutzen
 	- Wenn gerolled werden muss, direkt die Roll Action zurückgeben und nicht weiterrechnen, um Rechenzeit danach auf weniger Branches zu verteilen
+		- Achtung wegen Dev Cards, die können vor dem Roll gespielt werden
 	- Compute Budget
 		- Zeitlimit pro Turn
 		- Discards kriegen eigene Extrazeit
