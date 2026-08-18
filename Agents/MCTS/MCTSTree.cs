@@ -120,7 +120,23 @@ namespace Agents.MCTS
             }
         }
 
-        public void Backpropagate(MCTSNode node, double result)
+        public void Backpropagate(MCTSNode node, double result, bool pathAlreadyMarked = false)
+        {
+            MCTSNode? currentNode = node;
+
+            // Go up in tree until root is reached and add new result to each passed node
+            while (currentNode != null)
+            {
+                // Increment visit count, unless it was already increased by MarkPendingPath before
+                if (!pathAlreadyMarked)
+                    currentNode.VisitCount++;
+
+                currentNode.TotalScore += result;
+                currentNode = currentNode.Parent;
+            }
+        }
+
+        public void MarkPendingPath(MCTSNode node)
         {
             MCTSNode? currentNode = node;
 
@@ -128,7 +144,6 @@ namespace Agents.MCTS
             while (currentNode != null)
             {
                 currentNode.VisitCount++;
-                currentNode.TotalScore += result;
                 currentNode = currentNode.Parent;
             }
         }
