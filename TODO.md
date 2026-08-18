@@ -62,6 +62,7 @@
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
+	- Profilen und dann ggf. Select/Expand/Vectorization multithreaden je nach Bottleneck
 	- Terminal States nicht ML-Simulieren
 	- Update und ForceUpdate zum Wiederverwenden von Subtrees nutzen
 	- Wenn gerolled werden muss, direkt die Roll Action zurückgeben und nicht weiterrechnen, um Rechenzeit danach auf weniger Branches zu verteilen
