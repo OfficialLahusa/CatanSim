@@ -172,7 +172,8 @@ namespace Agents.MCTS
                 // Only select best move if the player has deciding power
                 if (HasDecidingPower(node))
                 {
-                    return node.Children.OrderByDescending(c => c.GetUCT(_explorationParameter)).First();
+                    // Slight random jitter to break ties (especially important for unexplored nodes)
+                    return node.Children.OrderByDescending(c => c.GetUCT(_explorationParameter) + _random.NextDouble() * 1e-5).First();
                 }
                 // Otherwise select random move
                 // This is to avoid the AI from making intentional bad moves on other players' turns

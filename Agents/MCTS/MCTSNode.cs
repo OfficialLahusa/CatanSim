@@ -53,7 +53,8 @@ namespace Agents.MCTS
 
             // Max priority for unexplored nodes
             if (visitCountSnapshot == 0)
-                return double.PositiveInfinity;
+                // Not double.PositiveInfinity, because that would invalidate random additive tie breaker noise
+                return 1e9;
 
             // Root node does not have an exploration term
             if (Parent == null)
