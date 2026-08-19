@@ -4,6 +4,7 @@ using Common.Actions;
 using Common.Serialization;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -16,13 +17,15 @@ namespace Agents.MCTS
     public class MCTSAgent : Agent
     {
         protected const double TIME_LIMIT_SECONDS = 5;
-        protected const uint BATCH_SIZE = 32;
+        protected const uint BATCH_SIZE = 256;
         protected MCTSTree _tree;
         protected double _explorationParameter;
-        protected Random _random = new Random();
+        protected Random _random = Random.Shared;
 
         protected static StateValueNet _stateValueNet;
         protected static StateVectorizer _stateVectorizer;
+
+        protected readonly object _treeLock = new object();
         
 
         public MCTSAgent(sbyte playerIndex, double explorationParameter = 1.414)
@@ -102,9 +105,9 @@ namespace Agents.MCTS
 
         protected void RunBatchedIterations(uint batchSize)
         {
-            List<(MCTSNode leafNode, GameState stateAtLeaf)> leaves = [];
+            var leaves = new (MCTSNode leafNode, GameState stateAtLeaf)[batchSize];
 
-            for (uint i = 0; i < batchSize; i++)
+            Parallel.For(0, (int)batchSize, i =>
             {
                 // Selection
                 // Find a leaf node to expand, starting from the root node and traversing down the tree using the UCT formula
@@ -120,20 +123,20 @@ namespace Agents.MCTS
 
                 _tree.MarkPendingPath(leafNode);
 
-                leaves.Add((leafNode, stateAtLeaf));
-            }
+                leaves[i] = (leafNode, stateAtLeaf);
+            });
             
 
             // Simulation
             // Run simulation and get result (win percentage)
             List<double> results = BatchSimulateML(leaves.Select(x => x.stateAtLeaf).ToList());
 
-            for (int i = 0; i < batchSize; i++)
+            Parallel.For(0, (int)batchSize, i =>
             {
                 // Backpropagation
                 // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root
                 _tree.Backpropagate(leaves[i].leafNode, results[i], pathAlreadyMarked: true);
-            }
+            });
         }
 
         protected double SimulatePlayout(GameState state)
@@ -165,13 +168,16 @@ namespace Agents.MCTS
         {
             // Featurize all states
             DenseTensor<float> batchFeatures = new DenseTensor<float>([states.Count, 1611]);
-            Span<float> destination = batchFeatures.Buffer.Span;
+            Memory<float> memoryBuffer = batchFeatures.Buffer;
 
-            for (int i = 0; i < states.Count; i++)
+            // Parallel Featurization (CPU bound)
+            Parallel.For(0, states.Count, i =>
             {
-                float[] featureVector = _stateVectorizer.Vectorize(states[i], 0).ToArray();
-                featureVector.CopyTo(destination.Slice(i * 1611, 1611));
-            }
+                Span<float> destinationSlice = memoryBuffer.Span.Slice((int)i * 1611, 1611);
+
+                ReadOnlySpan<float> featureVector = _stateVectorizer.Vectorize(states[(int)i], 0).ToArray();
+                featureVector.CopyTo(destinationSlice);
+            });
 
             // Run Batched NN Inference
             float[] outputs = _stateValueNet.Run(batchFeatures);

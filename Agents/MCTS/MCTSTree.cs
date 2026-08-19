@@ -19,7 +19,7 @@ namespace Agents.MCTS
         public MCTSNode RootNode;
         protected sbyte _ownerIdx;
         protected double _explorationParameter;
-        protected Random _random = new Random();
+        protected Random _random = Random.Shared;
 
         public MCTSTree(GameState rootState, sbyte ownerIdx, double explorationParameter)
         {
@@ -82,40 +82,50 @@ namespace Agents.MCTS
 
         public void ExpandNode(MCTSNode node, GameState state)
         {
-            List<Action> actions = GetValidActions(state);
-            foreach (var action in actions)
+            // Guard against double expansion
+            // If this node was already concurrently expanded by another thread, return early
+            lock(node.ChildLock)
             {
-                // If action has output randomness, get all possible outcomes and group them into a subtree
-                if (action is IOutputRandomnessAction randomAction)
+                if(node.Children.Count > 0)
                 {
-                    MCTSNode groupNode = new MCTSNode((sbyte)state.Turn.PlayerIndex, node, action, false, true);
-                    node.Children.Add(groupNode);
+                    return;
+                }
 
-                    List<Action> variants = randomAction.GetOutcomeVariants(state, (sbyte)state.Turn.PlayerIndex);
+                List<Action> actions = GetValidActions(state);
+                foreach (var action in actions)
+                {
+                    // If action has output randomness, get all possible outcomes and group them into a subtree
+                    if (action is IOutputRandomnessAction randomAction)
+                    {
+                        MCTSNode groupNode = new MCTSNode((sbyte)state.Turn.PlayerIndex, node, action, false, true);
+                        node.Children.Add(groupNode);
 
-                    foreach (Action variant in variants)
+                        List<Action> variants = randomAction.GetOutcomeVariants(state, (sbyte)state.Turn.PlayerIndex);
+
+                        foreach (Action variant in variants)
+                        {
+                            // Check if node is terminal and who the active player is after the action
+                            variant.Apply(state);
+                            bool isTerminal = state.HasEnded;
+                            sbyte nextActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
+                            variant.Revert(state);
+
+                            MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, groupNode, variant, isTerminal);
+                            groupNode.Children.Add(childNode);
+                        }
+                    }
+                    // Otherwise just add the node directly as a child
+                    else
                     {
                         // Check if node is terminal and who the active player is after the action
-                        variant.Apply(state);
+                        action.Apply(state);
                         bool isTerminal = state.HasEnded;
                         sbyte nextActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
-                        variant.Revert(state);
+                        action.Revert(state);
 
-                        MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, groupNode, variant, isTerminal);
-                        groupNode.Children.Add(childNode);
+                        MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, node, action, isTerminal);
+                        node.Children.Add(childNode);
                     }
-                }
-                // Otherwise just add the node directly as a child
-                else
-                {
-                    // Check if node is terminal and who the active player is after the action
-                    action.Apply(state);
-                    bool isTerminal = state.HasEnded;
-                    sbyte nextActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
-                    action.Revert(state);
-
-                    MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, node, action, isTerminal);
-                    node.Children.Add(childNode);
                 }
             }
         }
@@ -129,9 +139,9 @@ namespace Agents.MCTS
             {
                 // Increment visit count, unless it was already increased by MarkPendingPath before
                 if (!pathAlreadyMarked)
-                    currentNode.VisitCount++;
+                    currentNode.IncrementVisitCount();
 
-                currentNode.TotalScore += result;
+                currentNode.AddResult(result);
                 currentNode = currentNode.Parent;
             }
         }
@@ -143,30 +153,33 @@ namespace Agents.MCTS
             // Go up in tree until root is reached and add new result to each passed node
             while (currentNode != null)
             {
-                currentNode.VisitCount++;
+                currentNode.IncrementVisitCount();
                 currentNode = currentNode.Parent;
             }
         }
 
         public MCTSNode SelectChild(MCTSNode node)
         {
-            // If the node is a grouped output randomness action, choose a child node with uniform random distribution
-            if (node.IsOutputRandomnessGroup)
+            lock(node.ChildLock)
             {
-                return node.Children[_random.Next(node.Children.Count)];
-            }
+                // If the node is a grouped output randomness action, choose a child node with uniform random distribution
+                if (node.IsOutputRandomnessGroup)
+                {
+                    return node.Children[_random.Next(node.Children.Count)];
+                }
 
-            // Otherwise, determine if the player this agent is representing currently has deciding power over the next action            
-            // Only select best move if the player has deciding power
-            if (HasDecidingPower(node))
-            {
-                return node.Children.OrderByDescending(c => c.GetUCT(_explorationParameter)).First();
-            }
-            // Otherwise select random move
-            // This is to avoid the AI from making intentional bad moves on other players' turns
-            else
-            {
-                return node.Children[_random.Next(node.Children.Count)];
+                // Otherwise, determine if the player this agent is representing currently has deciding power over the next action            
+                // Only select best move if the player has deciding power
+                if (HasDecidingPower(node))
+                {
+                    return node.Children.OrderByDescending(c => c.GetUCT(_explorationParameter)).First();
+                }
+                // Otherwise select random move
+                // This is to avoid the AI from making intentional bad moves on other players' turns
+                else
+                {
+                    return node.Children[_random.Next(node.Children.Count)];
+                }
             }
         }
 
