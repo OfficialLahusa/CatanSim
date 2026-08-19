@@ -4,6 +4,9 @@
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
 - RoadAction.GetActionsForState optimieren (derzeit sehr ineffizient)
     - Caching von Intersection/Edge Ownership (maybe in PlayerState?)
+- RoadAction.CalculateLongestRoad optimieren
+	- Bitmask für Edge Ownership
+	- Allocations reduzieren
 - Observation Filter (Agents nur die für sie sichtbaren Informationen geben)
 	- "StateView"?
 	- Von Robber gestohlene Karten
