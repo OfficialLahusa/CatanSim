@@ -62,7 +62,7 @@
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
-	- Profilen und dann ggf. Select/Expand/Vectorization multithreaden je nach Bottleneck
+	- Particle MCTS
 	- Terminal States nicht ML-Simulieren
 	- Update und ForceUpdate zum Wiederverwenden von Subtrees nutzen
 	- Wenn gerolled werden muss, direkt die Roll Action zurückgeben und nicht weiterrechnen, um Rechenzeit danach auf weniger Branches zu verteilen
@@ -75,7 +75,6 @@
 	- Gleichwertige Roll Results zusammenfassen und beim Tree State Update berücksichtigen
 		- Deutlich niedrigerer Branching Factor
 		- Updaten auf eine Roll Action mit gleichem Total aber anderem First/Second leicht möglich, da ja nicht die States sondern nur die Actions im Tree hinterlegt sind
-	- Parallelisieren
 	- State Value Netzwerkarchitekturen aus Initial Placement Paper prüfen
 	- State Hashes zusätzlich für Validation und Caching?
 - GreedyAgent
