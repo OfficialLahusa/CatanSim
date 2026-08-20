@@ -89,26 +89,6 @@ namespace Common
 
         public void CalculateLongestRoad(int causingPlayerIdx, bool checkForBreak = false)
         {
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            uint longestRoadFast = CalculateLongestRoadFast(causingPlayerIdx, checkForBreak);
-            double secondsFast = stopwatch.Elapsed.TotalSeconds;
-            Console.WriteLine($"Fast longest road calculation took {secondsFast}s");
-
-            stopwatch.Restart();
-            uint longestRoadSlow = CalculateLongestRoadSlow(causingPlayerIdx, checkForBreak);
-            double secondsSlow = stopwatch.Elapsed.TotalSeconds;
-            Console.WriteLine($"Slow longest road calculation took {secondsSlow}s");
-
-            Console.WriteLine($"Speedup: {secondsSlow/secondsFast:P2}");
-
-            AwardLongestRoadVPs(causingPlayerIdx, checkForBreak, longestRoadSlow);
-
-            if (longestRoadFast != longestRoadSlow)
-                throw new InvalidOperationException($"The methods produced different lengths for player {causingPlayerIdx}. Fast: {longestRoadFast}, Slow: {longestRoadSlow}");
-        }
-
-        private uint CalculateLongestRoadFast(int causingPlayerIdx, bool checkForBreak = false)
-        {
             // Board indices of the roads owned by the player
             // Max 15 since we assume default building stock
             Span<byte> globalRoadIndices = stackalloc byte[15];
@@ -163,7 +143,8 @@ namespace Common
             // Update longest road length of the handled player
             Players[causingPlayerIdx].LongestRoadLength = longestRoadLength;
 
-            return longestRoadLength;
+            // Update victory points
+            AwardLongestRoadVPs(causingPlayerIdx, checkForBreak, longestRoadLength);
         }
 
         private uint GetMaxPathDFS(int playerIdx, int playerRoadIdx, int currentIntersectionIdx, ushort remainingMask, byte roadCount, ref Span<byte> globalRoadIndices)
@@ -223,81 +204,6 @@ namespace Common
             }
 
             return 1 + maxDepth;
-        }
-
-        private uint CalculateLongestRoadSlow(int causingPlayerIdx, bool checkForBreak = false)
-        {
-            Dictionary<Edge, int> roadIndexLookup = Board.Edges
-                .Select((edge, idx) => (edge, idx))
-                .Where(x => x.edge.Owner == causingPlayerIdx && x.edge.Building != Edge.BuildingType.None)
-                .ToDictionary(x => x.edge, x => x.idx);
-
-            ImmutableHashSet<Edge> playerRoads = roadIndexLookup.Keys.ToImmutableHashSet();
-            HashSet<Edge> longestPlayerRoad = [];
-
-            // Recursively calculate longest road from each possible starting road
-            foreach (Edge startingRoad in playerRoads)
-            {
-                // Create one candidate each for the top and bottom search direction along the starting road
-                (Intersection top, Intersection bottom) = Board.Adjacency.GetIntersections(startingRoad);
-
-                foreach (Intersection startingDirection in new Intersection[] {top, bottom})
-                {
-                    HashSet<Edge> candidate = CalculateLongestRoadRec(causingPlayerIdx, startingRoad, startingDirection, playerRoads.Remove(startingRoad), [], Board);
-                    if (candidate.Count > longestPlayerRoad.Count)
-                    {
-                        longestPlayerRoad = candidate;
-
-                        // Skip remaining branches, if the candidate length is guaranteed to be maximal
-                        // => No longer road achievable, only permutations
-                        if (longestPlayerRoad.Count == playerRoads.Count) break;
-                    }
-                }
-            }
-
-            uint longestRoadLength = (uint)longestPlayerRoad.Count;
-            Players[causingPlayerIdx].LongestRoadLength = longestRoadLength;
-
-            return longestRoadLength;
-        }
-
-        private static HashSet<Edge> CalculateLongestRoadRec(int playerIdx, Edge current, Intersection intersectionToFollow, ImmutableHashSet<Edge> remaining, ImmutableHashSet<Edge> contained, Board board)
-        {
-            HashSet<Edge> longestPlayerRoad = [.. contained, current];
-
-            // Terminate if all player roads are contained
-            if (remaining.IsEmpty) return longestPlayerRoad;
-
-            // Find possible branches
-            bool intersectionBlocked = intersectionToFollow.Owner != playerIdx && intersectionToFollow.Building != Intersection.BuildingType.None;
-
-            // Don't branch if intersection is blocked
-            if (intersectionBlocked)
-                return longestPlayerRoad;
-
-            // Otherwise, branch along remaining roads located at intersection
-            var roadsOnIntersection = board.Adjacency.GetEdges(intersectionToFollow).Where(edge => edge.Owner == playerIdx && edge != current);
-            var remainingTopRoads = roadsOnIntersection.Intersect(remaining);
-
-            // Recursively evaluate branches
-            foreach (Edge branch in remainingTopRoads)
-            {
-                // Get next intersection along the branching edge
-                (Intersection top, Intersection bottom) = board.Adjacency.GetIntersections(branch);
-                Intersection nextIntersection = top != intersectionToFollow ? top : bottom;
-
-                HashSet<Edge> candidate = CalculateLongestRoadRec(playerIdx, branch, nextIntersection, remaining.Remove(branch), [.. contained, current], board);
-                if (candidate.Count > longestPlayerRoad.Count)
-                {
-                    longestPlayerRoad = candidate;
-
-                    // Skip remaining branches, if the candidate length is guaranteed to be maximal
-                    // => No longer road achievable, only permutations
-                    if (longestPlayerRoad.Count == contained.Count + remaining.Count) break;
-                }
-            }
-
-            return longestPlayerRoad;
         }
 
         private void AwardLongestRoadVPs(int causingPlayerIdx, bool checkForBreak, uint roadLength)
