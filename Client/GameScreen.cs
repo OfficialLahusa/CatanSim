@@ -628,7 +628,7 @@ namespace Client
                     // Track distribution of rolls
                     if (playedAction is RollAction rollAction)
                     {
-                        _rollDistribution[rollAction.RollResult.Total]++;
+                        _rollDistribution[rollAction.History!.RollResult.Total]++;
                     }
 
                     // Write entry to event log
@@ -712,7 +712,7 @@ namespace Client
                 // Track distribution of rolls
                 if (playedAction is RollAction rollAction)
                 {
-                    _rollDistribution[rollAction.RollResult.Total]++;
+                    _rollDistribution[rollAction.History!.RollResult.Total]++;
                 }
 
                 // Write entry to event log
@@ -771,7 +771,7 @@ namespace Client
             // Track distribution of rolls
             if (playedAction is RollAction rollAction)
             {
-                _rollDistribution[rollAction.RollResult.Total]++;
+                _rollDistribution[rollAction.History!.RollResult.Total]++;
             }
 
             // Write entry to event log
@@ -811,7 +811,7 @@ namespace Client
             // Remove from roll distribution tracking
             if (playedAction is RollAction rollAction)
             {
-                _rollDistribution[rollAction.RollResult.Total]--;
+                _rollDistribution[rollAction.History!.RollResult.Total]--;
             }
 
             // Remove latest section from log
@@ -850,7 +850,7 @@ namespace Client
             // Track distribution of rolls
             if (playedAction is RollAction rollAction)
             {
-                _rollDistribution[rollAction.RollResult.Total]++;
+                _rollDistribution[rollAction.History!.RollResult.Total]++;
             }
 
             // Write entry to event log

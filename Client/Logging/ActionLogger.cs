@@ -42,7 +42,7 @@ namespace Client.Logging
 
                 case RollAction rollAction:
                     {
-                        _log.WriteLine(new ColoredStrEntry($"Rolled {rollAction.RollResult.Total} ({rollAction.RollResult.First}+{rollAction.RollResult.Second})", playerColor));
+                        _log.WriteLine(new ColoredStrEntry($"Rolled {rollAction.History!.RollResult.Total} ({rollAction.History!.RollResult.First}+{rollAction.History!.RollResult.Second})", playerColor));
 
                         RollAction.RollActionHistory outcome = rollAction.History!;
 

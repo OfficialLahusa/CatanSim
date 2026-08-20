@@ -4,7 +4,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using YamlDotNet.Serialization;
-using static Common.Actions.BuyDevelopmentCardAction;
 
 namespace Common.Actions
 {
@@ -12,6 +11,7 @@ namespace Common.Actions
     {
         public record RollActionHistory
         {
+            public RollResult RollResult { get; init; }
             public RollResult PrevRollResult { get; init; }
             public bool TriggeredRobber { get; init; }
             [YamlIgnore]
@@ -62,10 +62,11 @@ namespace Common.Actions
             public uint RobbedYields { get; init; } = 0;
             public uint CappedYields { get; init; } = 0;
 
-            public RollActionHistory(RollResult PrevRollResult, bool TriggeredRobber, uint[,]? AwardedYields = null, uint RobbedYields = 0, uint CappedYields = 0)
+            public RollActionHistory(RollResult RollResult, RollResult PrevRollResult, uint[,]? AwardedYields = null, uint RobbedYields = 0, uint CappedYields = 0)
             {
+                this.RollResult = RollResult;
                 this.PrevRollResult = PrevRollResult;
-                this.TriggeredRobber = TriggeredRobber;
+                this.TriggeredRobber = RollResult.Total == 7;
                 this.AwardedYields = AwardedYields;
                 this.RobbedYields = RobbedYields;
                 this.CappedYields = CappedYields;
@@ -74,21 +75,18 @@ namespace Common.Actions
             /// <summary>
             /// Parameterless constructor for deserialization
             /// </summary>
-            private RollActionHistory() : this(new(), false) { }
+            private RollActionHistory() : this(new(), new()) { }
         }
 
         public RollActionHistory? History { get; private set; }
 
-        public RollResult RollResult { get; init; }
 
-        // Randomize roll when null is passed
-        // The option to specify the roll result is primarily used for action tree exploration
-        // TODO: Potentially rewrite by forcing randomization and moving the result to history
-        public RollAction(sbyte playerIdx, RollResult? rollResult)
+        // Randomized roll action
+        // The roll result (output randomness) is determined during Apply and stored in the action history
+
+        public RollAction(sbyte playerIdx)
             : base(playerIdx)
-        {
-            RollResult = rollResult ?? RollResult.GetRandom();
-        }
+        { }
 
         /// <summary>
         /// Parameterless constructor for deserialization
@@ -101,7 +99,11 @@ namespace Common.Actions
         {
             base.Apply(state);
 
-            bool robberTriggered = RollResult.Total == 7;
+            // If the action already has a history, reuse the stored RollResult
+            // Otherwise, obtain Random RollResult
+            RollResult rollResult = HasHistory() ? History!.RollResult : RollResult.GetRandom();
+
+            bool robberTriggered = rollResult.Total == 7;
 
             if (robberTriggered)
             {
@@ -115,17 +117,17 @@ namespace Common.Actions
                 // Require robber move
                 state.Turn.MustMoveRobber = true;
 
-                History = new RollActionHistory(state.Turn.LastRoll, robberTriggered);
+                History = new RollActionHistory(rollResult, state.Turn.LastRoll);
             }
             else
             {
-                (uint[,] yieldSummary, uint robbedYields, uint cappedYields) = AwardYields(state, RollResult.Total);
+                (uint[,] yieldSummary, uint robbedYields, uint cappedYields) = AwardYields(state, rollResult.Total);
 
-                History = new RollActionHistory(state.Turn.LastRoll, robberTriggered, yieldSummary, robbedYields, cappedYields);
+                History = new RollActionHistory(rollResult, state.Turn.LastRoll, yieldSummary, robbedYields, cappedYields);
             }
 
             // Update turn state
-            state.Turn.LastRoll = RollResult;
+            state.Turn.LastRoll = rollResult;
             state.Turn.MustRoll = false;
         }
 
@@ -164,8 +166,11 @@ namespace Common.Actions
             state.Turn.MustRoll = true;
         }
 
-        private (uint[,] yieldSummary, uint robbedYields, uint cappedYields) AwardYields(GameState state, int number)
+        private (uint[,] yieldSummary, uint robbedYields, uint cappedYields) AwardYields(GameState state, int number, bool previewOnly = false)
         {
+            if (number == 7)
+                throw new InvalidOperationException("Cannot award yields when a non-yielding number is rolled.");
+
             uint[,] yieldSummary = new uint[state.Players.Length, CardSet<ResourceCardType>.Values.Count];
             uint robbedYields = 0;
 
@@ -236,6 +241,12 @@ namespace Common.Actions
                     // Remove capped yields from summary
                     yieldSummary[playerIdx, resourceTypeIdx] = awardedAmount;
 
+                    // When in preview mode, don't actually transfer the cards
+                    // This is used for output randomness exploration
+                    if (previewOnly)
+                        continue;
+
+                    // Transfer cards
                     state.ResourceBank.Remove(resourceType, awardedAmount);
                     state.Players[playerIdx].ResourceCards.Add(resourceType, awardedAmount);
                 }
@@ -272,7 +283,7 @@ namespace Common.Actions
         {
             List<Action> actions = [];
 
-            RollAction randomRollAction = new RollAction(playerIdx, null);
+            RollAction randomRollAction = new RollAction(playerIdx);
             if(randomRollAction.IsValidFor(state)) actions.Add(randomRollAction);
 
             return actions;
@@ -288,13 +299,28 @@ namespace Common.Actions
             if (!IsTurnValid(state.Turn, playerIdx)) return variants;
 
             // Output randomness: What is the dice roll result?
-            // This action is an exception from the other output randomness actions, since the initial parameters of the RollResult have to be disregarded.
             for (byte first = 1; first <= 6; first++)
             {
                 for (byte second = 1; second <= 6; second++)
                 {
-                    RollResult roll = new() { First = first, Second = second };
-                    RollAction action = new((sbyte)state.Turn.PlayerIndex, roll);
+                    RollResult rollResult = new() { First = first, Second = second };
+                    RollAction action = new((sbyte)state.Turn.PlayerIndex);
+                    RollActionHistory outcome;
+
+                    // Robber rolls does not receive yield summary
+                    if (rollResult.Total == 7)
+                    {
+                        outcome = new RollActionHistory(rollResult, state.Turn.LastRoll);
+                    }
+                    // Yield rolls receive summary
+                    else
+                    {
+                        (uint[,] yieldSummary, uint robbedYields, uint cappedYields) = AwardYields(state, rollResult.Total, previewOnly: true);
+                        outcome = new RollActionHistory(rollResult, state.Turn.LastRoll, yieldSummary, robbedYields, cappedYields);
+                    }
+
+                    action.History = outcome;
+                    
 
                     if (action.IsValidFor(state))
                     {
@@ -308,7 +334,10 @@ namespace Common.Actions
 
         public override string ToString()
         {
-            return base.ToString() + $", {RollResult.First}+{RollResult.Second}={RollResult.Total}";
+            if (HasHistory())
+                return base.ToString() + $", {History!.RollResult.First}+{History!.RollResult.Second}={History!.RollResult.Total}";
+
+            return base.ToString();
         }
     }
 }

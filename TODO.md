@@ -108,7 +108,6 @@
 - Simulation Server
 	- Zeitlimit für Agents
 	- Client schlägt Action vor, Server returned tatsächliches Ergebnis (Action mit History und Observation Filter)
-	- Dort dann die Parameter der geschickten Roll-Action ignorieren und auf dem Server erst Roll Result festlegen, dann mit History zurückschicken
 - Interface für JSettlers Agents/Server
 - Serialization
 	- Packets über Netzwerk
