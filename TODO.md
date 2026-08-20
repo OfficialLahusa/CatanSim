@@ -18,16 +18,19 @@
 - Testen, ob Bank immer Gesamtsumme behält
 
 ## Agents
+- PlayedActionsCount aus Agent-Interface entfernen (default 0)
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Mehr Playouts
 	- Nach jedem einzelnen Move speichern um Impact gut lernbar zu machen
 	- Komplett Random ohne Heuristik um unvorteilhafte Positionen nicht unterzurepräsentieren
 - Agent Game Tree Viewer
+	- Als Basisvariante GraphML ausgeben und mit yEd hierarchisch autolayouten
 	- State Eval Bar und Node Properties jeweils für den sichtbaren Teil des Baums berechnen
 	- Click auf Node lädt dortiges State
 	- Color Coding nach Anzahl Visits
 - Branching Factor Histogramm aus Playouts generieren
-- Update(Action), ForceUpdate(GameState) ins Agent-Interface integrieren, um MCTS-Baumupdates zu ermöglichen
+- HandleAction(Action), ResetToState(GameState) ins Agent-Interface integrieren, um MCTS-Baumupdates zu ermöglichen
+	- Noch in DatasetGenerator verwenden
 	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
 - StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
 - StateValueNetv2
