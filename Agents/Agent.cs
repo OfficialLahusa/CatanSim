@@ -19,5 +19,9 @@ namespace Agents
         }
 
         public abstract Action Act(GameState state, uint playedActionsCount);
+
+        public virtual void HandleAction(Action action) { }
+
+        public virtual void ResetToState(GameState state) { }
     }
 }

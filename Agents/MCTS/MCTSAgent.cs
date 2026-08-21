@@ -28,7 +28,7 @@ namespace Agents.MCTS
         protected readonly object _treeLock = new object();
         
 
-        public MCTSAgent(sbyte playerIndex, double explorationParameter = 1.414)
+        public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414)
             : base(playerIndex)
         {
             _explorationParameter = explorationParameter;
@@ -47,6 +47,19 @@ namespace Agents.MCTS
             RunForTime(TIME_LIMIT_SECONDS);
 
             return _tree.GetMostPromisingMove();
+        }
+
+        public override void HandleAction(Action action)
+        {
+            // TODO: Advance MCTSTree to child of root matching action
+            // Enables reusing of relevant subtrees for future decisions
+            // Requires careful consideration of grouped nodes
+            // Unlink bidirectional parent <-> child references involving the old root node to allow for GC
+        }
+
+        public override void ResetToState(GameState state)
+        {
+            // TODO: Clear MCTS Tree and initialize new root node
         }
 
         public void RunIterations(int iterations)

@@ -321,7 +321,7 @@ namespace Client
                             0 => new RandomAgent(agentIdx),
                             1 => new SimpleAgent(agentIdx),
                             2 => new GreedyAgent(agentIdx),
-                            3 => new MCTSAgent(agentIdx),
+                            3 => new MCTSAgent(agentIdx, _state),
                             _ => throw new InvalidOperationException()
                         };
                     }
@@ -441,6 +441,7 @@ namespace Client
                 if (ImGui.Button(action.ToString()))
                 {
                     action.Apply(_state);
+                    // TODO: Forward action to agents
                     _legalActions = LegalActionProvider.GetActionsForState(_state);
                     _renderer.Update();
                     UpdateValuation();
@@ -584,6 +585,22 @@ namespace Client
             GuiImpl.Update(_window, deltaTime);
         }
 
+        private void ProgressAgentsByAction(Action action)
+        {
+            foreach (Agent agent in _agents)
+            {
+                agent.HandleAction(action);
+            }
+        }
+
+        private void ResetAgents()
+        {
+            foreach (Agent agent in _agents)
+            {
+                agent.ResetToState(_state);
+            }
+        }
+
         private void BenchmarkPlayouts(int matches, bool verbose = true)
         {
             if (_state.HasEnded) return;
@@ -622,6 +639,9 @@ namespace Client
                     // Apply action to state
                     playedAction.Apply(_state);
 
+                    // Update agents
+                    ProgressAgentsByAction(playedAction);
+
                     // Push to action stack
                     _playedActions.Push(playedAction);
 
@@ -646,6 +666,9 @@ namespace Client
                 _state.Reset();
 
                 _playedActions.Clear();
+
+                // Reset internal agent state
+                ResetAgents();
 
                 _eventLog.Clear();
                 _actionLogger.Init();
@@ -706,6 +729,9 @@ namespace Client
                 // Apply action to state
                 playedAction.Apply(_state);
 
+                // Update agents
+                ProgressAgentsByAction(playedAction);
+
                 // Push to action stack
                 _playedActions.Push(playedAction);
 
@@ -765,6 +791,9 @@ namespace Client
             // Apply action to state
             playedAction.Apply(_state);
 
+            // Update agents
+            ProgressAgentsByAction(playedAction);
+
             // Push to action stack
             _playedActions.Push(playedAction);
 
@@ -805,6 +834,9 @@ namespace Client
             // Revert action
             playedAction.Revert(_state);
 
+            // Reset internal agent state
+            ResetAgents();
+
             // Add to undo history
             _undoHistory.Push(playedAction);
 
@@ -843,6 +875,9 @@ namespace Client
 
             // Apply action to state
             playedAction.Apply(_state);
+
+            // Update agents
+            ProgressAgentsByAction(playedAction);
 
             // Push to action stack
             _playedActions.Push(playedAction);
@@ -934,6 +969,12 @@ namespace Client
             // Precompute Adjacency Cache
             _state.Board.Adjacency.PrecomputeAll();
 
+            // Create shared RandomAgents to run the playouts
+            // Simulator agent configuration is irrelevant
+            Agent[] randomAgents = new Agent[4];
+            for (sbyte i = 0; i < 4; i++)
+                randomAgents[i] = new RandomAgent(i);
+
             ConcurrentQueue<int> runs = new ConcurrentQueue<int>(Enumerable.Range(0, playoutCount));
             CountdownEvent countdown = new CountdownEvent(playoutCount);
 
@@ -964,11 +1005,13 @@ namespace Client
                         if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
                         // Pick action
-                        Action playedAction = _agents[actingPlayerIdx.Value].Act(simState, playedActionCount);
+                        Action playedAction = randomAgents[actingPlayerIdx.Value].Act(simState, playedActionCount);
 
                         // Apply action to state
                         playedAction.Apply(simState);
                         playedActionCount++;
+
+                        // No agent state update necessary, since RandomAgents are stateless
                     }
 
                     // Since players can only win on their own turn, the winner is the current turn player
@@ -1014,6 +1057,9 @@ namespace Client
             _playedActions.Clear();
             _undoHistory.Clear();
 
+            // Reset internal agent state
+            ResetAgents();
+
             _eventLog.Clear();
             _actionLogger.Init();
 
@@ -1040,6 +1086,9 @@ namespace Client
 
             _playedActions.Clear();
             _undoHistory.Clear();
+
+            // Reset internal agent state
+            ResetAgents();
 
             _eventLog.Clear();
             _actionLogger.Init();
@@ -1286,6 +1335,9 @@ namespace Client
             _playedActions = new(saveFile.PlayedActions);
             _undoHistory = new(saveFile.UndoHistory);
 
+            // Reset internal agent state
+            ResetAgents();
+
             // Update visuals
             _renderer.Board = _state.Board;
             _renderer.Update();
@@ -1316,6 +1368,9 @@ namespace Client
             _state = saveFile.GameState;
             _playedActions = new(saveFile.PlayedActions);
             _undoHistory = new(saveFile.UndoHistory);
+
+            // Reset internal agent state
+            ResetAgents();
 
             // Update visuals
             _renderer.Board = _state.Board;
