@@ -34,6 +34,7 @@
 	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
 - StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
 - StateValueNetv2
+	- v2 erstmal auf v1 basiert mit Player/Tile Embeddings, GraphConv auf v3 schieben
 	- PlayedActionsCount entfernen
 	- Unzuverlässige Outputs für sehr weit zurückliegende Spieler addressieren
 		- Durch zusätzlichen paarweisen Hinge/Logistic Loss Term auf richtige Reihenfolge zwischen Spieler-Winrates
@@ -44,7 +45,7 @@
 - PolicyNet
 	- Wahrscheinlichkeitsverteilung darüber welche Moves aus einem State wie erkundenswert sind
 	- Action Space explodiert kombinatorisch, deshalb nicht über ein finite fixed-size Action Space die Verteilung berechnen
-	- Stattdessen ein NN was State und eine Action als Input bekommt und einen Score ausgibt
+	- Stattdessen ein NN was State und eine Action paarweise als Input bekommt und einen Score ausgibt
 	- Dann über alle Legal Moves aus dem State batched berechnen und Softmax über die Scores berechnen um eine Verteilung zu erhalten
 	- Output dann über PUCT (Predictor UCT) für Exploration benutzen
 	- Action Encoding
