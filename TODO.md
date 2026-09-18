@@ -24,7 +24,7 @@
 	- Nach jedem einzelnen Move speichern um Impact gut lernbar zu machen
 	- Komplett Random ohne Heuristik um unvorteilhafte Positionen nicht unterzurepräsentieren
 - Agent Game Tree Viewer
-	- Als Basisvariante GraphML ausgeben und mit yEd hierarchisch autolayouten
+	- Als Basisvariante GraphML ausgeben und mit Gephi/yEd hierarchisch autolayouten
 	- State Eval Bar und Node Properties jeweils für den sichtbaren Teil des Baums berechnen
 	- Click auf Node lädt dortiges State
 	- Color Coding nach Anzahl Visits
@@ -34,8 +34,9 @@
 	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
 - StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
 - StateValueNetv2
-	- v2 erstmal auf v1 basiert mit Player/Tile Embeddings, GraphConv auf v3 schieben
+	- v2 erstmal auf v1 basiert mit Player/Tile Encoderblöcken, Embeddings statt OneHot, GraphConv auf v3 schieben
 	- PlayedActionsCount entfernen
+	- State Vectorizer über push/pop Architektur eine Index-Aufschlüsselung generieren lassen
 	- Unzuverlässige Outputs für sehr weit zurückliegende Spieler addressieren
 		- Durch zusätzlichen paarweisen Hinge/Logistic Loss Term auf richtige Reihenfolge zwischen Spieler-Winrates
 	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
