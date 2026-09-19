@@ -6,6 +6,7 @@
     - Caching von Intersection/Edge Ownership (maybe in PlayerState?)
 - Observation Filter (Agents nur die für sie sichtbaren Informationen geben)
 	- "StateView"?
+ - In Information Set MCTS (ISMCTS) einlesen
 	- Von Robber gestohlene Karten
 	- Gezogene Development Cards
 	- Discards sind public Info, also nicht nötig!
@@ -40,6 +41,7 @@
 	- Unzuverlässige Outputs für sehr weit zurückliegende Spieler addressieren
 		- Durch zusätzlichen paarweisen Hinge/Logistic Loss Term auf richtige Reihenfolge zwischen Spieler-Winrates
 	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
+ - Graph Transformer als Alternative in Betracht ziehen
 	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
 	- Data Augmentation basierend auf Spielerposition (alle Spieler random rotieren)
     - Data Augmentation basierend auf Reduktion der Sichtbarkeit (alle Karten ausser die eines Spielers unknown machen, zufällig Karten unknown machen)
