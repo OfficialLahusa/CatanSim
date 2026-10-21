@@ -11,6 +11,34 @@ namespace Agents
 {
     public class RandomAgent : Agent
     {
+        // Action providers of every type except discards (which are handled separately)
+        private static readonly Func<GameState, sbyte, List<Action>>[] ActionProviders =
+        [
+            EndTurnAction.GetActionsForState,
+
+            RollAction.GetActionsForState,
+            RobberAction.GetActionsForState,
+
+            FirstInitialSettlementAction.GetActionsForState,
+            FirstInitialRoadAction.GetActionsForState,
+            SecondInitialSettlementAction.GetActionsForState,
+            SecondInitialRoadAction.GetActionsForState,
+
+            RoadAction.GetActionsForState,
+            SettlementAction.GetActionsForState,
+            CityAction.GetActionsForState,
+            BuyDevelopmentCardAction.GetActionsForState,
+
+            KnightAction.GetActionsForState,
+            MonopolyAction.GetActionsForState,
+            RoadBuildingAction.GetActionsForState,
+            YearOfPlentyAction.GetActionsForState,
+
+            FourToOneTradeAction.GetActionsForState,
+            ThreeToOneTradeAction.GetActionsForState,
+            TwoToOneTradeAction.GetActionsForState
+        ];
+
         public RandomAgent(sbyte playerIndex)
             : base(playerIndex)
         {
@@ -25,42 +53,28 @@ namespace Agents
                 return DiscardAction.GetRandomDiscard(state, PlayerIndex);
             }
 
-            // Pick an action type uniformly, then an instance of that type uniformly.
+            // Pick an action type uniformly among the types with a legal action, then an instance of that type uniformly.
             // Sampling uniformly over all instances would drown EndTurn (one instance) among the many
             // trade/road variants, and never ending the turn while trades remain produced degenerate
             // games with hundreds of rounds.
-            List<List<Action>> actionGroups = [
-                EndTurnAction.GetActionsForState(state, PlayerIndex),
+            // Types are drawn without replacement and empty ones skipped, which gives the same uniform choice among the
+            // non-empty types while only enumerating the actions of the types actually tried.
+            Span<int> remainingTypes = stackalloc int[ActionProviders.Length];
+            for (int i = 0; i < remainingTypes.Length; i++)
+                remainingTypes[i] = i;
 
-                RollAction.GetActionsForState(state, PlayerIndex),
-                RobberAction.GetActionsForState(state, PlayerIndex),
+            for (int remaining = remainingTypes.Length; remaining > 0; remaining--)
+            {
+                int pick = Utils.Random.Next(remaining);
+                int providerIdx = remainingTypes[pick];
+                remainingTypes[pick] = remainingTypes[remaining - 1];
 
-                FirstInitialSettlementAction.GetActionsForState(state, PlayerIndex),
-                FirstInitialRoadAction.GetActionsForState(state, PlayerIndex),
-                SecondInitialSettlementAction.GetActionsForState(state, PlayerIndex),
-                SecondInitialRoadAction.GetActionsForState(state, PlayerIndex),
+                List<Action> actions = ActionProviders[providerIdx](state, PlayerIndex);
+                if (actions.Count > 0)
+                    return actions[Utils.Random.Next(actions.Count)];
+            }
 
-                RoadAction.GetActionsForState(state, PlayerIndex),
-                SettlementAction.GetActionsForState(state, PlayerIndex),
-                CityAction.GetActionsForState(state, PlayerIndex),
-                BuyDevelopmentCardAction.GetActionsForState(state, PlayerIndex),
-
-                KnightAction.GetActionsForState(state, PlayerIndex),
-                MonopolyAction.GetActionsForState(state, PlayerIndex),
-                RoadBuildingAction.GetActionsForState(state, PlayerIndex),
-                YearOfPlentyAction.GetActionsForState(state, PlayerIndex),
-
-                FourToOneTradeAction.GetActionsForState(state, PlayerIndex),
-                ThreeToOneTradeAction.GetActionsForState(state, PlayerIndex),
-                TwoToOneTradeAction.GetActionsForState(state, PlayerIndex)
-            ];
-
-            actionGroups.RemoveAll(group => group.Count == 0);
-
-            if (actionGroups.Count == 0) throw new InvalidOperationException();
-
-            List<Action> actions = actionGroups[Utils.Random.Next(actionGroups.Count)];
-            return actions[Utils.Random.Next(actions.Count)];
+            throw new InvalidOperationException();
         }
     }
 }
