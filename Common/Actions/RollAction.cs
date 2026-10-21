@@ -293,6 +293,13 @@ namespace Common.Actions
             return actions;
         }
 
+        public bool HasSameOutcome(Action other)
+        {
+            // Dice pairs with the same total are equivalent outcomes
+            return other is RollAction otherRoll && HasHistory() && otherRoll.HasHistory()
+                && History!.RollResult.Total == otherRoll.History!.RollResult.Total;
+        }
+
         public List<OutcomeVariant> GetOutcomeVariants(GameState state, sbyte playerIdx)
         {
             if (HasHistory())

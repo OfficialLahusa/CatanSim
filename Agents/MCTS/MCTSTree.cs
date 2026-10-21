@@ -22,7 +22,7 @@ namespace Agents.MCTS
         protected Random _random = Random.Shared;
 
         // Running value range of the tree, used to normalize Q values during selection (null disables normalization)
-        public MinMaxStats? ValueBounds { get; }
+        public MinMaxStats? ValueBounds { get; private set; }
 
         public MCTSTree(GameState rootState, sbyte ownerIdx, double explorationParameter, bool normalizeValues = true)
         {
@@ -38,7 +38,61 @@ namespace Agents.MCTS
             // Return the child with the highest visit count
             MCTSNode bestChild = RootNode.Children.OrderByDescending(c => c.VisitCount).First();
 
-            return bestChild.LastAction!;
+            // Hand out a copy without history: the caller applies it to the real game (resolving output randomness anew),
+            // while the tree's own instance stays untouched
+            Action move = bestChild.LastAction!.Clone();
+            if (move is IReplayAction replayMove)
+                replayMove.ClearHistory();
+
+            return move;
+        }
+
+        /// <summary>
+        /// Finds the node the tree arrives at when the given, already applied action is played at the root:
+        /// the matching decision child, or for output randomness actions the outcome child with an equivalent outcome.
+        /// Returns null if the root was never expanded or no child matches.
+        /// </summary>
+        public MCTSNode? FindChildForAction(Action action)
+        {
+            foreach (MCTSNode child in RootNode.Children)
+            {
+                if (child.LastAction == null || !child.LastAction.IsSameDecision(action)) continue;
+
+                if (!child.IsOutputRandomnessGroup) return child;
+
+                // Outcomes are matched by equivalence, e.g. a roll of (6, 1) arrives at the outcome represented by (1, 6)
+                return child.Children.FirstOrDefault(outcome => outcome.LastAction is IOutputRandomnessAction randomOutcome && randomOutcome.HasSameOutcome(action));
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Makes a node below the root the new root, keeping the statistics of its subtree and discarding everything else.
+        /// The new root state is the real game state after the move. It may differ from the state the subtree was explored
+        /// with in details that do not affect the game (e.g. the dice pair behind a roll total).
+        /// </summary>
+        public void ReRoot(MCTSNode newRoot, GameState newRootState)
+        {
+            newRoot.DetachFromParent();
+            RootNode = newRoot;
+            RootState = newRootState;
+
+            // Rebuild the value range from the kept subtree, so values of discarded branches no longer stretch it
+            if (ValueBounds != null)
+            {
+                ValueBounds = new MinMaxStats();
+
+                Stack<MCTSNode> pending = new([newRoot]);
+                while (pending.TryPop(out MCTSNode? node))
+                {
+                    if (node.VisitCount > 0)
+                        ValueBounds.Update(node.TotalScore / node.VisitCount);
+
+                    foreach (MCTSNode child in node.Children)
+                        pending.Push(child);
+                }
+            }
         }
 
         public int GetTreeSize()
@@ -75,9 +129,10 @@ namespace Agents.MCTS
                 node = SelectChild(node);
 
                 // Don't execute empty actions and actions leading into a randomness group (since their direct children are variations of that same action)
+                // Apply a copy: Apply rewrites the action's history, and the tree's instance is shared by all threads and iterations
                 if (node.LastAction != null && !node.IsOutputRandomnessGroup)
                 {
-                    node.LastAction!.Apply(state);
+                    node.LastAction!.Clone().Apply(state);
                 }
             }
 

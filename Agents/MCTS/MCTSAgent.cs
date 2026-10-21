@@ -18,20 +18,26 @@ namespace Agents.MCTS
     {
         protected const double TIME_LIMIT_SECONDS = 5;
         protected const uint BATCH_SIZE = 256;
-        protected MCTSTree _tree;
+
+        // Search tree, kept across moves by HandleAction (null until the next Act builds a new one)
+        protected MCTSTree? _tree;
         protected double _explorationParameter;
+        protected double _timeLimitSeconds;
         protected Random _random = Random.Shared;
 
         protected static StateValueNet _stateValueNet;
         protected static StateVectorizer _stateVectorizer;
 
         protected readonly object _treeLock = new object();
-        
 
-        public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414)
+
+        public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414, double timeLimitSeconds = TIME_LIMIT_SECONDS)
             : base(playerIndex)
         {
             _explorationParameter = explorationParameter;
+            _timeLimitSeconds = timeLimitSeconds;
+
+            ResetToState(initialState);
         }
 
         static MCTSAgent()
@@ -42,24 +48,44 @@ namespace Agents.MCTS
 
         public override Action Act(GameState state)
         {
-            _tree = new MCTSTree(state, PlayerIndex, _explorationParameter);
+            // Reuse the tree kept up to date by HandleAction as long as it describes exactly this state.
+            // Otherwise (first move, missed or manual actions, undo) start over on a private copy of the state.
+            if (_tree == null || !_tree.RootState.Equals(state))
+            {
+                _tree = new MCTSTree(new GameState(state), PlayerIndex, _explorationParameter);
+            }
 
-            RunForTime(TIME_LIMIT_SECONDS);
+            RunForTime(_timeLimitSeconds);
 
             return _tree.GetMostPromisingMove();
         }
 
         public override void HandleAction(Action action)
         {
-            // TODO: Advance MCTSTree to child of root matching action
-            // Enables reusing of relevant subtrees for future decisions
-            // Requires careful consideration of grouped nodes
-            // Unlink bidirectional parent <-> child references involving the old root node to allow for GC
+            // Called after the action was applied to the real game, so its output randomness is resolved in its history
+            if (_tree == null) return;
+
+            MCTSNode? nextRoot = _tree.FindChildForAction(action);
+            GameState nextState = new GameState(_tree.RootState);
+            Action replay = action.Clone();
+
+            // Without a matching explored child, or if the tree lost track of the real game, the next Act starts over
+            if (nextRoot == null || !replay.IsValidFor(nextState))
+            {
+                _tree = null;
+                return;
+            }
+
+            // Advance the root state with the real action instead of the tree's: equivalent outcomes keep their actual
+            // details (e.g. the dice pair behind a roll total), so the root state stays identical to the real game state
+            replay.Apply(nextState);
+            _tree.ReRoot(nextRoot, nextState);
         }
 
         public override void ResetToState(GameState state)
         {
-            // TODO: Clear MCTS Tree and initialize new root node
+            // The tree is rebuilt for the given state by the next Act
+            _tree = null;
         }
 
         public void RunIterations(int iterations)
@@ -95,16 +121,19 @@ namespace Agents.MCTS
 
         protected void RunOneIteration()
         {
+            // Only called while Act holds a tree
+            MCTSTree tree = _tree!;
+
             // Selection
             // Find a leaf node to expand, starting from the root node and traversing down the tree using the UCT formula
-            (MCTSNode leafNode, GameState stateAtLeaf) = _tree.SelectLeafNode();
+            (MCTSNode leafNode, GameState stateAtLeaf) = tree.SelectLeafNode();
 
             // Expansion
             // If the selected leaf isn't terminal, expand its children and select a leaf node among them
             if (!leafNode.IsTerminal)
             {
-                _tree.ExpandNode(leafNode, stateAtLeaf);
-                (leafNode, stateAtLeaf) = _tree.SelectLeafNode(leafNode, stateAtLeaf, suppressStateCopy: true);
+                tree.ExpandNode(leafNode, stateAtLeaf);
+                (leafNode, stateAtLeaf) = tree.SelectLeafNode(leafNode, stateAtLeaf, suppressStateCopy: true);
             }
 
             // Simulation
@@ -113,28 +142,31 @@ namespace Agents.MCTS
 
             // Backpropagation
             // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root
-            _tree.Backpropagate(leafNode, result);
+            tree.Backpropagate(leafNode, result);
         }
 
         protected void RunBatchedIterations(uint batchSize)
         {
+            // Only called while Act holds a tree
+            MCTSTree tree = _tree!;
+
             var leaves = new (MCTSNode leafNode, GameState stateAtLeaf)[batchSize];
 
             Parallel.For(0, (int)batchSize, i =>
             {
                 // Selection
                 // Find a leaf node to expand, starting from the root node and traversing down the tree using the UCT formula
-                (MCTSNode leafNode, GameState stateAtLeaf) = _tree.SelectLeafNode();
+                (MCTSNode leafNode, GameState stateAtLeaf) = tree.SelectLeafNode();
 
                 // Expansion
                 // If the selected leaf isn't terminal, expand its children and select a leaf node among them
                 if (!leafNode.IsTerminal)
                 {
-                    _tree.ExpandNode(leafNode, stateAtLeaf);
-                    (leafNode, stateAtLeaf) = _tree.SelectLeafNode(leafNode, stateAtLeaf, suppressStateCopy: true);
+                    tree.ExpandNode(leafNode, stateAtLeaf);
+                    (leafNode, stateAtLeaf) = tree.SelectLeafNode(leafNode, stateAtLeaf, suppressStateCopy: true);
                 }
 
-                _tree.MarkPendingPath(leafNode);
+                tree.MarkPendingPath(leafNode);
 
                 leaves[i] = (leafNode, stateAtLeaf);
             });
@@ -164,7 +196,7 @@ namespace Agents.MCTS
             {
                 // Backpropagation
                 // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root
-                _tree.Backpropagate(leaves[i].leafNode, results[i], pathAlreadyMarked: true);
+                tree.Backpropagate(leaves[i].leafNode, results[i], pathAlreadyMarked: true);
             });
         }
 

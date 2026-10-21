@@ -199,6 +199,12 @@ namespace Common.Actions
             return actions;
         }
 
+        public bool HasSameOutcome(Action other)
+        {
+            return other is RobberAction otherRobber && HasHistory() && otherRobber.HasHistory()
+                && History!.StolenCard == otherRobber.History!.StolenCard;
+        }
+
         public List<OutcomeVariant> GetOutcomeVariants(GameState state, sbyte playerIdx)
         {
             if (HasHistory())

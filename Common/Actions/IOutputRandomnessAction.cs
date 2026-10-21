@@ -18,5 +18,11 @@ namespace Common.Actions
         /// The probabilities of the returned variants sum to 1.
         /// </summary>
         public List<OutcomeVariant> GetOutcomeVariants(GameState state, sbyte playerIdx);
+
+        /// <summary>
+        /// Whether the other action resolved its randomness to an outcome equivalent to this action's
+        /// (e.g. the same dice total). Both actions need a stored history.
+        /// </summary>
+        public bool HasSameOutcome(Action other);
     }
 }

@@ -73,6 +73,14 @@ namespace Agents.MCTS
             return meanValue + explorationParameter * Math.Sqrt(Math.Log(Parent.VisitCount) / visitCountSnapshot);
         }
 
+        /// <summary>
+        /// Cuts the link to the parent, so this node can become the root of a reused subtree
+        /// </summary>
+        public void DetachFromParent()
+        {
+            Parent = null;
+        }
+
         public void IncrementVisitCount()
         {
             Interlocked.Increment(ref _visitCount);

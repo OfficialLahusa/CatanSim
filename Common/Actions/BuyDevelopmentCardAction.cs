@@ -158,6 +158,12 @@ namespace Common.Actions
             return action.IsValidFor(state) ? [action] : [];
         }
 
+        public bool HasSameOutcome(Action other)
+        {
+            return other is BuyDevelopmentCardAction otherBuy && HasHistory() && otherBuy.HasHistory()
+                && History!.DrawnType == otherBuy.History!.DrawnType;
+        }
+
         public List<OutcomeVariant> GetOutcomeVariants(GameState state, sbyte playerIdx)
         {
             if (HasHistory())
