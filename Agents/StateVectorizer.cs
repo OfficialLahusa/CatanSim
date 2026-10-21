@@ -27,7 +27,7 @@ namespace Agents
         }
 
         // Length of the feature vector produced by Vectorize for the classic 4-player board
-        public const int FeatureDim = 1610;
+        public const int FeatureDim = 1609;
 
         public DenseTensor<float> Vectorize(GameState state)
         {
@@ -67,8 +67,8 @@ namespace Agents
 
             features.Add((float)state.Turn.RoundCounter);
 
-            features.Add((float)state.Turn.LastRoll.First);
-            features.Add((float)state.Turn.LastRoll.Second);
+            // Only the total of the last roll affects the game, so equivalent rolls get identical features
+            features.Add((float)state.Turn.LastRoll.Total);
 
             float[] playerIdx = new float[state.Players.Length];
             playerIdx[state.Turn.PlayerIndex] = 1.0f;

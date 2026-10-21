@@ -1,5 +1,5 @@
 """
-Convert GameState YAML snapshots into a flat fixed-length (currently 1610) numeric feature vector.
+Convert GameState YAML snapshots into a flat fixed-length (currently 1609) numeric feature vector.
 
 Design notes
 ------------
@@ -36,7 +36,7 @@ import numpy as np
 import yaml
 
 # Total size of the final GameState feature vector
-FEATURE_DIM = 1610
+FEATURE_DIM = 1609
 
 # --------------------------------------------------------------------------
 # Vocabularies for categorical fields.
@@ -208,9 +208,9 @@ def encode_turn(turn: Dict[str, Any], num_players: int) -> List[float]:
     feats: List[float] = []
     feats.append(float(turn["RoundCounter"]))
 
+    # Only the total of the last roll affects the game, so equivalent rolls get identical features
     last_roll = turn.get("LastRoll") or {}
-    feats.append(float(last_roll.get("First") or 0))
-    feats.append(float(last_roll.get("Second") or 0))
+    feats.append(float((last_roll.get("First") or 0) + (last_roll.get("Second") or 0)))
 
     # PlayerIndex as one-hot (categorical, not ordinal).
     player_idx = turn["PlayerIndex"]
