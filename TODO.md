@@ -25,7 +25,7 @@
 		- Benchmark Cheating MCTS vs. Determinized MCTS vs. Random => Wert des Informationsvorteils messen
 		- Schwächen: Strategy Fusion und Non-Locality (v.a. bei Räuber- und Monopoly-Zielwahl)
 	- 3. SO-ISMCTS (Single Observer)
-		- Voraussetzung: Actions im Baum nicht mehr teilen/mutieren (History pro Iteration statt im Baum)
+		- Voraussetzung erfüllt: die Selektion wendet Kopien der Baum-Actions an, verschiedene Determinisierungen pro Iteration verändern den Baum also nicht
 		- Knoten = Information Sets aus Sicht des Root-Spielers, pro Iteration eine Determinisierung an der Root samplen
 		- Subset-armed Bandit: UCT mit Availability Counts statt Parent Visits, da legale Actions je Determinisierung variieren
 		- Output Randomness nur dort branchen, wo der Root-Spieler das Ergebnis beobachtet (kein Spoilern von Dev Bank und beraubten Händen)
@@ -104,11 +104,9 @@
 	- Click auf Node lädt dortiges State
 	- Color Coding nach Anzahl Visits
 - Branching Factor Histogramm aus Playouts generieren
-- HandleAction(Action), ResetToState(GameState) im MCTSAgent implementieren, um MCTS-Baumupdates zu ermöglichen
-	- Im Agent-Interface schon vorhanden, im MCTSAgent noch leere Stubs (Act baut jedes Mal einen neuen Baum)
-	- Voraussetzung: Actions im Baum nicht mehr teilen/mutieren (Apply überschreibt History über Threads hinweg)
-	- Neue Root vom Parent abkoppeln, sonst laufen UCT und Backprop über die alte Root weiter
-	- Noch in DatasetGenerator verwenden
+- HandleAction(Action), ResetToState(GameState) noch im DatasetCollector aufrufen
+	- Dort laufen derzeit nur zustandslose RandomAgents, nötig sobald zustandsbehaftete Agents (z.B. MCTS) Daten erzeugen
+	- Achtung: die Agents werden dort von allen Playout-Threads geteilt, zustandsbehaftete Agents brauchen eine Instanz pro Playout
 	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
 - StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
 - StateValueNetv2
@@ -151,7 +149,10 @@
 	- Sampelt jetzt erst den Action-Typ, dann die Instanz (vorher nie EndTurn solange Trades möglich waren => 500+ Runden pro Spiel)
 - MCTSAgent
 	- Particle MCTS
-	- Update und ForceUpdate zum Wiederverwenden von Subtrees nutzen
+	- Subtree-Reuse nach Gegnerzügen verbessern
+		- HandleAction/ResetToState sind implementiert: nach eigenen Zügen wird der Baum immer weiterverwendet, nach Gegnerzügen nur in ~13% der Fälle
+		- Ursache: Gegnerzüge werden in der Selektion zufällig gewählt, ihre Nodes sind daher selten expandiert
+		- Ansätze: Gegnerzüge der Root vorab expandieren, Pondering während der Gegnerzüge, Opponent Modeling statt Zufallswahl
 	- Wenn gerolled werden muss, direkt die Roll Action zurückgeben und nicht weiterrechnen, um Rechenzeit danach auf weniger Branches zu verteilen
 		- Achtung wegen Dev Cards, die können vor dem Roll gespielt werden
 	- Compute Budget
@@ -159,13 +160,12 @@
 		- Discards kriegen eigene Extrazeit
 		- Initial Placements kriegen eigene Extrazeit
 		- Dann immer das ganze Budget nutzen um seinen Initiativabschnitt fertigzurechnen und dann diesen Pfad auch instantly fertig spielen
-	- Gleichwertige Roll Results zusammenfassen und beim Tree State Update berücksichtigen
-		- Derzeit 36 separate Kinder pro Roll-Gruppe, (1,6) und (6,1) sind getrennte Subtrees
-		- OutcomeVariant trägt jetzt Wahrscheinlichkeiten => 11 Totals mit summierten Gewichten (1/36 bis 6/36)
-		- Deutlich niedrigerer Branching Factor
-		- Achtung: LastRoll.First/Second sind Features im Vectorizer (C# und Python), gleiche Totals ergeben also verschiedene Net-Inputs
-			- Entweder kanonisches Paar pro Total im Baum verwenden oder Vectorizer auf Total umstellen (Retrain nötig)
-		- Updaten auf eine Roll Action mit gleichem Total aber anderem First/Second leicht möglich, da ja nicht die States sondern nur die Actions im Tree hinterlegt sind
+	- Selektion beschleunigen (derzeit ~58% der Suchzeit, 15.5k-17.5k Iterationen/s; Selektion allein skaliert nur ~1,7x von 1 auf 16 Threads)
+		- Besten Child in einem Durchlauf bestimmen statt OrderByDescending über alle Kinder (Sortierung + Allokation bei jedem Schritt)
+		- HasDecidingPower pro Node bei der Expansion cachen statt dreimal pro SelectChild über die Kinder zu iterieren
+		- Fertig expandierte Children-Listen als unveränderliches Array veröffentlichen und ohne Lock lesen (derzeit warten alle Threads am ChildLock der Root)
+		- Pro Thread einen Arbeits-State mit Apply/Revert entlang des Pfads nutzen statt pro Iteration den GameState zu kopieren (~19 us und ~39 KB pro Kopie)
+		- Selektion des nächsten Batches mit der Inference des aktuellen überlappen (Pipelining, CPU ist während der Inference sonst idle)
 	- State Value Netzwerkarchitekturen aus Initial Placement Paper prüfen
 	- State Hashes zusätzlich für Validation und Caching?
 - GreedyAgent
