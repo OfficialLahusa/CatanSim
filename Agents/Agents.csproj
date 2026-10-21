@@ -8,9 +8,14 @@
 
   <PropertyGroup>
     <!-- Deployed value net, the single place to switch models (read by StateValueNet.DefaultModelFile).
-         The file lives in Artifacts/, which is not tracked in git, and is copied next to every program referencing Agents. -->
+         The file lives in Artifacts/, which is not tracked in git. When it is missing, the build downloads it from
+         Hugging Face and checks its SHA-256 (disable with -p:DownloadStateValueNet=false). It is copied next to every
+         program referencing Agents. -->
     <StateValueNetModel>state_value_net-tvtaun4u.onnx</StateValueNetModel>
+    <StateValueNetModelSha256>4c8a73d26a1b6b3bd1a3e9aee0d3dd9653140d2b98b50aef222acac0874786f0</StateValueNetModelSha256>
+    <StateValueNetModelUrl>https://huggingface.co/Lahusa/catansim-state-value-net/resolve/main/$(StateValueNetModel)</StateValueNetModelUrl>
     <StateValueNetModelPath>$(MSBuildThisFileDirectory)Artifacts\$(StateValueNetModel)</StateValueNetModelPath>
+    <DownloadStateValueNet Condition="'$(DownloadStateValueNet)' == ''">true</DownloadStateValueNet>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,8 +26,35 @@
     <None Include="$(StateValueNetModelPath)" Link="$(StateValueNetModel)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <Target Name="DownloadValueNet" BeforeTargets="AssignTargetPaths" Condition="!Exists('$(StateValueNetModelPath)') And '$(DownloadStateValueNet)' == 'true'">
+    <PropertyGroup>
+      <!-- Unique per build, since several builds of this project can run at the same time -->
+      <_ValueNetDownloadName>$(StateValueNetModel).$([System.Guid]::NewGuid().ToString('N')).download</_ValueNetDownloadName>
+      <_ValueNetDownloadPath>$(MSBuildThisFileDirectory)Artifacts\$(_ValueNetDownloadName)</_ValueNetDownloadPath>
+    </PropertyGroup>
+
+    <Message Importance="high" Text="Downloading value net $(StateValueNetModel) from $(StateValueNetModelUrl)" />
+    <!-- Offline builds continue without the model (the warning below explains what is missing) -->
+    <DownloadFile SourceUrl="$(StateValueNetModelUrl)" DestinationFolder="$(MSBuildThisFileDirectory)Artifacts" DestinationFileName="$(_ValueNetDownloadName)" ContinueOnError="WarnAndContinue" />
+
+    <GetFileHash Files="$(_ValueNetDownloadPath)" Algorithm="SHA256" Condition="Exists('$(_ValueNetDownloadPath)')">
+      <Output TaskParameter="Hash" PropertyName="_ValueNetDownloadHash" />
+    </GetFileHash>
+
+    <!-- Property comparisons are case-insensitive, GetFileHash reports upper-case hex.
+         Another build may have put the model in place meanwhile, then this download is simply dropped. -->
+    <Warning Text="Downloaded value net does not match the expected SHA-256 and was discarded." Condition="Exists('$(_ValueNetDownloadPath)') And '$(_ValueNetDownloadHash)' != '$(StateValueNetModelSha256)'" />
+    <Move SourceFiles="$(_ValueNetDownloadPath)" DestinationFiles="$(StateValueNetModelPath)" Condition="Exists('$(_ValueNetDownloadPath)') And '$(_ValueNetDownloadHash)' == '$(StateValueNetModelSha256)' And !Exists('$(StateValueNetModelPath)')" ContinueOnError="true" />
+    <Delete Files="$(_ValueNetDownloadPath)" ContinueOnError="true" />
+
+    <!-- The static item above was evaluated before the download -->
+    <ItemGroup Condition="Exists('$(StateValueNetModelPath)')">
+      <None Include="$(StateValueNetModelPath)" Link="$(StateValueNetModel)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
   <Target Name="WarnAboutMissingValueNet" BeforeTargets="Build" Condition="!Exists('$(StateValueNetModelPath)')">
-    <Warning Text="Value net $(StateValueNetModel) is missing in Agents/Artifacts (it is not tracked in git). GreedyAgent, MCTSAgent and the Client's net evaluation are unavailable until it is placed there." />
+    <Warning Text="Value net $(StateValueNetModel) is missing in Agents/Artifacts and could not be downloaded. GreedyAgent, MCTSAgent and the Client's net evaluation are unavailable until it is placed there." />
   </Target>
 
   <ItemGroup>

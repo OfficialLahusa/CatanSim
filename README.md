@@ -12,6 +12,9 @@ The codebase is divided into several projects:
 - **DatasetProcessing:** Formatting tool for the conversion of simulator save files into feature vectors and grouped train/val/test splitting.
 - **Server:** Simulator server for online multiplayer (future work).
 
+## Value Net
+The ML-based agents and the client's state evaluation use an ONNX state value network hosted at [Lahusa/catansim-state-value-net](https://huggingface.co/Lahusa/catansim-state-value-net). The build downloads it into `Agents/Artifacts/` when it is missing and verifies its checksum (disable with `-p:DownloadStateValueNet=false`). The deployed model is set by `StateValueNetModel` in `Agents/Agents.csproj`.
+
 ## Credits
 Programming by Lasse Huber-Saffer.
 
