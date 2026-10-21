@@ -17,7 +17,7 @@ namespace Agents
 
         }
 
-        public override Action Act(GameState state, uint playedActionsCount)
+        public override Action Act(GameState state)
         {
             // While a discard is pending, no other action is valid for this player
             if (DiscardAction.IsTurnValid(state.Turn, PlayerIndex))

@@ -669,7 +669,7 @@ namespace Client
                     if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
                     // Query agent for current state
-                    Action playedAction = _agents[actingPlayerIdx.Value].Act(_state, (uint)_playedActions.Count);
+                    Action playedAction = _agents[actingPlayerIdx.Value].Act(_state);
 
                     if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
 
@@ -759,7 +759,7 @@ namespace Client
                 if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
                 // Query agent for current state
-                Action playedAction = _agents[actingPlayerIdx.Value].Act(_state, (uint)_playedActions.Count);
+                Action playedAction = _agents[actingPlayerIdx.Value].Act(_state);
 
                 if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
 
@@ -821,7 +821,7 @@ namespace Client
             if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
             // Query agent for current state
-            Action playedAction = _agents[actingPlayerIdx.Value].Act(_state, (uint)_playedActions.Count);
+            Action playedAction = _agents[actingPlayerIdx.Value].Act(_state);
 
             if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
 
@@ -1025,7 +1025,6 @@ namespace Client
                 while (runs.TryDequeue(out int runIdx))
                 {
                     GameState simState = new GameState(_state);
-                    uint playedActionCount = 0;
                     while (!simState.HasEnded)
                     {
                         // Find first player that is allowed to act on state
@@ -1042,11 +1041,10 @@ namespace Client
                         if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
 
                         // Pick action
-                        Action playedAction = randomAgents[actingPlayerIdx.Value].Act(simState, playedActionCount);
+                        Action playedAction = randomAgents[actingPlayerIdx.Value].Act(simState);
 
                         // Apply action to state
                         playedAction.Apply(simState);
-                        playedActionCount++;
 
                         // No agent state update necessary, since RandomAgents are stateless
                     }

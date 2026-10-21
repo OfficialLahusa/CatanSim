@@ -27,23 +27,23 @@ namespace Agents
             _stateVectorizer = new StateVectorizer();
         }
 
-        public override Action Act(GameState state, uint playedActionsCount)
+        public override Action Act(GameState state)
         {
             List<Action> firstInitialSettlementActions = FirstInitialSettlementAction.GetActionsForState(state, PlayerIndex);
             if (firstInitialSettlementActions.Count > 0)
             {
-                return GreedySelectAction(firstInitialSettlementActions, state, playedActionsCount);
+                return GreedySelectAction(firstInitialSettlementActions, state);
             }
 
             List<Action> secondInitialSettlementActions = SecondInitialSettlementAction.GetActionsForState(state, PlayerIndex);
             if (secondInitialSettlementActions.Count > 0)
             {
-                return GreedySelectAction(secondInitialSettlementActions, state, playedActionsCount);
+                return GreedySelectAction(secondInitialSettlementActions, state);
             }
 
             if (DiscardAction.IsTurnValid(state.Turn, PlayerIndex))
             {
-                return GreedySelectAction(DiscardAction.GetActionsForState(state, PlayerIndex), state, playedActionsCount);
+                return GreedySelectAction(DiscardAction.GetActionsForState(state, PlayerIndex), state);
             }
 
             List<Action> actions = [
@@ -72,17 +72,17 @@ namespace Agents
 
             if (actions.Count == 0) throw new InvalidOperationException();
 
-            return GreedySelectAction(actions, state, playedActionsCount);
+            return GreedySelectAction(actions, state);
         }
 
-        protected Action GreedySelectAction(List<Action> actions, GameState state, uint playedActionsCount)
+        protected Action GreedySelectAction(List<Action> actions, GameState state)
         {
             return actions
-                .OrderByDescending(a => PredictValue(a, state, playedActionsCount))
+                .OrderByDescending(a => PredictValue(a, state))
                 .First();
         }
 
-        protected float PredictValue(Action action, GameState currentState, uint playedActionsCount)
+        protected float PredictValue(Action action, GameState currentState)
         {
             // If action is an output randomness action, average the value over all outcomes
             if (action is IOutputRandomnessAction randomAction)

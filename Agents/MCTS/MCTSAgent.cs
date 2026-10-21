@@ -40,7 +40,7 @@ namespace Agents.MCTS
             _stateVectorizer = new StateVectorizer();
         }
 
-        public override Action Act(GameState state, uint playedActionsCount)
+        public override Action Act(GameState state)
         {
             _tree = new MCTSTree(state, PlayerIndex, _explorationParameter);
 

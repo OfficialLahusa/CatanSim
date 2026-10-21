@@ -18,7 +18,7 @@ namespace Agents
             PlayerIndex = playerIndex;
         }
 
-        public abstract Action Act(GameState state, uint playedActionsCount);
+        public abstract Action Act(GameState state);
 
         public virtual void HandleAction(Action action) { }
 
