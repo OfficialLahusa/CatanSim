@@ -35,9 +35,7 @@ namespace Tests
 
         public static GameState NewGame()
         {
-            GameState state = new GameState(MapGenerator.GenerateRandomClassic(), PlayerCount);
-            state.Board.Adjacency.PrecomputeAll();
-            return state;
+            return new GameState(MapGenerator.GenerateRandomClassic(), PlayerCount);
         }
 
         public static Agent[] RandomAgents()

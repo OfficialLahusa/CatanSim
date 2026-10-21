@@ -1027,9 +1027,6 @@ namespace Client
 
             Clock playoutClock = new Clock();
 
-            // Precompute Adjacency Cache
-            _state.Board.Adjacency.PrecomputeAll();
-
             // Create shared RandomAgents to run the playouts
             // Simulator agent configuration is irrelevant
             Agent[] randomAgents = new Agent[4];

@@ -337,7 +337,7 @@ namespace Tests
             foreach (Intersection a in corners)
                 foreach (Intersection b in corners)
                 {
-                    bool adjacent = state.Board.Adjacency.GetEdges(a).Overlaps(state.Board.Adjacency.GetEdges(b));
+                    bool adjacent = state.Board.Adjacency.GetEdges(a).Intersect(state.Board.Adjacency.GetEdges(b)).Any();
                     if (a.Index != b.Index && !adjacent) return (state, tile, a.Index, b.Index);
                 }
 

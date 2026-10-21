@@ -171,9 +171,6 @@ namespace DatasetCollector
         {
             DateTime startTime = DateTime.Now;
 
-            // Precompute Adjacency Cache
-            sampleState.Board.Adjacency.PrecomputeAll();
-
             ConcurrentQueue<int> runs = new ConcurrentQueue<int>(Enumerable.Range(0, (int)_playoutsPerSample));
             CountdownEvent countdown = new CountdownEvent((int)_playoutsPerSample);
 
