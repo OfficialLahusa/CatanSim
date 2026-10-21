@@ -289,16 +289,16 @@ namespace Common.Actions
             return actions;
         }
 
-        public List<Action> GetOutcomeVariants(GameState state, sbyte playerIdx)
+        public List<OutcomeVariant> GetOutcomeVariants(GameState state, sbyte playerIdx)
         {
             if (HasHistory())
                 throw new InvalidOperationException("The output randomness of this action was already resolved.");
 
-            List<Action> variants = new List<Action>();
+            List<OutcomeVariant> variants = new();
 
             if (!IsTurnValid(state.Turn, playerIdx)) return variants;
 
-            // Output randomness: What is the dice roll result?
+            // Output randomness: What is the dice roll result? Each ordered pair of dice is equally likely
             for (byte first = 1; first <= 6; first++)
             {
                 for (byte second = 1; second <= 6; second++)
@@ -324,7 +324,7 @@ namespace Common.Actions
 
                     if (action.IsValidFor(state))
                     {
-                        variants.Add(action);
+                        variants.Add(new OutcomeVariant(action, 1.0 / 36));
                     }
                 }
             }

@@ -33,6 +33,9 @@ namespace Agents.MCTS
         public sbyte ActivePlayerIndex { get; set; }
         public bool IsOutputRandomnessGroup { get; set; }
 
+        // Probability of this outcome among its siblings (only meaningful for children of a randomness group)
+        public double OutcomeProbability { get; set; } = 1.0;
+
         public readonly object ChildLock = new object();
         public List<MCTSNode> Children { get; set; } = new List<MCTSNode>();
 

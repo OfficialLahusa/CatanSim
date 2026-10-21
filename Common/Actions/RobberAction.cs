@@ -199,18 +199,20 @@ namespace Common.Actions
             return actions;
         }
 
-        public List<Action> GetOutcomeVariants(GameState state, sbyte playerIdx)
+        public List<OutcomeVariant> GetOutcomeVariants(GameState state, sbyte playerIdx)
         {
             if (HasHistory())
                 throw new InvalidOperationException("The output randomness of this action was already resolved.");
 
-            List<Action> variants = new List<Action>();
+            List<OutcomeVariant> variants = new();
 
             if (!IsTurnValid(state.Turn, playerIdx)) return variants;
 
-            // Output randomness: Which resource card was drawn from the target player
+            // Output randomness: Which resource card was drawn from the target player, proportional to their hand
             // It is possible to not draw a card at all, hence the nullability
             ResourceCardType?[] stolenCardOptions = [null, .. CardSet<ResourceCardType>.Values];
+            CardSet<ResourceCardType>? targetHand = TargetPlayerIndex.HasValue ? state.Players[TargetPlayerIndex.Value].ResourceCards : null;
+            uint targetHandSize = targetHand?.Count() ?? 0;
 
             foreach (ResourceCardType? stolenCard in stolenCardOptions)
             {
@@ -220,7 +222,9 @@ namespace Common.Actions
 
                 if (actionCopy.IsBoardValid(state))
                 {
-                    variants.Add(actionCopy);
+                    // IsBoardValid only accepts "no card" when there is nothing to steal, and a card only if the target holds it
+                    double probability = stolenCard.HasValue ? (double)targetHand!.Get(stolenCard.Value) / targetHandSize : 1.0;
+                    variants.Add(new OutcomeVariant(actionCopy, probability));
                 }
             }
 

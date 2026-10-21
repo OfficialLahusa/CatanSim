@@ -158,16 +158,17 @@ namespace Common.Actions
             return action.IsValidFor(state) ? [action] : [];
         }
 
-        public List<Action> GetOutcomeVariants(GameState state, sbyte playerIdx)
+        public List<OutcomeVariant> GetOutcomeVariants(GameState state, sbyte playerIdx)
         {
             if (HasHistory())
                 throw new InvalidOperationException("The output randomness of this action was already resolved.");
 
-            List<Action> variants = new List<Action>();
+            List<OutcomeVariant> variants = new();
 
             if (!IsTurnValid(state.Turn, playerIdx)) return variants;
 
-            // Output randomness: Which development card was drawn from the bank
+            // Output randomness: Which development card was drawn from the bank, proportional to the bank's stock
+            uint bankSize = state.DevelopmentBank.Count();
             foreach (DevelopmentCardType receivedCard in CardSet<DevelopmentCardType>.Values)
             {
                 BuyDevelopmentCardAction actionCopy = new BuyDevelopmentCardAction(PlayerIndex);
@@ -176,7 +177,8 @@ namespace Common.Actions
 
                 if (actionCopy.IsBoardValid(state))
                 {
-                    variants.Add(actionCopy);
+                    double probability = (double)state.DevelopmentBank.Get(receivedCard) / bankSize;
+                    variants.Add(new OutcomeVariant(actionCopy, probability));
                 }
             }
 

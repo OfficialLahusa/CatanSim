@@ -87,18 +87,19 @@ namespace Agents
             // If action is an output randomness action, average the value over all outcomes
             if (action is IOutputRandomnessAction randomAction)
             {
-                List<Action> outcomeVariants = randomAction.GetOutcomeVariants(currentState, PlayerIndex);
+                List<OutcomeVariant> outcomeVariants = randomAction.GetOutcomeVariants(currentState, PlayerIndex);
 
-                float scoreSum = 0;
+                // Expected score over the outcome distribution
+                float expectedScore = 0;
 
-                foreach (Action actionVariant in outcomeVariants)
+                foreach ((Action actionVariant, double probability) in outcomeVariants)
                 {
                     GameState variantStateCopy = new GameState(currentState);
                     actionVariant.Apply(variantStateCopy);
-                    scoreSum += ValuationToScore(StateValueFunc(variantStateCopy));
+                    expectedScore += (float)probability * ValuationToScore(StateValueFunc(variantStateCopy));
                 }
 
-                return scoreSum / outcomeVariants.Count;
+                return expectedScore;
             }
             
             // Otherwise evaluate the result of the individual action directly

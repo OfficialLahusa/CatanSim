@@ -104,9 +104,9 @@ namespace Agents.MCTS
                         MCTSNode groupNode = new MCTSNode((sbyte)state.Turn.PlayerIndex, node, action, false, true);
                         node.Children.Add(groupNode);
 
-                        List<Action> variants = randomAction.GetOutcomeVariants(state, (sbyte)state.Turn.PlayerIndex);
+                        List<OutcomeVariant> variants = randomAction.GetOutcomeVariants(state, (sbyte)state.Turn.PlayerIndex);
 
-                        foreach (Action variant in variants)
+                        foreach ((Action variant, double probability) in variants)
                         {
                             // Check if node is terminal and who the active player is after the action
                             variant.Apply(state);
@@ -114,7 +114,10 @@ namespace Agents.MCTS
                             sbyte nextActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
                             variant.Revert(state);
 
-                            MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, groupNode, variant, isTerminal);
+                            MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, groupNode, variant, isTerminal)
+                            {
+                                OutcomeProbability = probability
+                            };
                             groupNode.Children.Add(childNode);
                         }
                     }
@@ -170,10 +173,10 @@ namespace Agents.MCTS
         {
             lock(node.ChildLock)
             {
-                // If the node is a grouped output randomness action, choose a child node with uniform random distribution
+                // If the node is a grouped output randomness action, sample an outcome according to its probability
                 if (node.IsOutputRandomnessGroup)
                 {
-                    return node.Children[_random.Next(node.Children.Count)];
+                    return SampleOutcome(node.Children);
                 }
 
                 // Otherwise, determine if the player this agent is representing currently has deciding power over the next action            
@@ -190,6 +193,21 @@ namespace Agents.MCTS
                     return node.Children[_random.Next(node.Children.Count)];
                 }
             }
+        }
+
+        private MCTSNode SampleOutcome(List<MCTSNode> outcomes)
+        {
+            double total = outcomes.Sum(outcome => outcome.OutcomeProbability);
+            double remaining = _random.NextDouble() * total;
+
+            foreach (MCTSNode outcome in outcomes)
+            {
+                remaining -= outcome.OutcomeProbability;
+                if (remaining < 0) return outcome;
+            }
+
+            // Floating point leftovers
+            return outcomes[^1];
         }
 
         private bool HasDecidingPower(MCTSNode node)
