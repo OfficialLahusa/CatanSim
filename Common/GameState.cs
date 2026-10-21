@@ -212,40 +212,31 @@ namespace Common
             // Cause: Road broken by settlement placement
             if (checkForBreak)
             {
-                // Check if player was the leader
-                if (Players[causingPlayerIdx].VictoryPoints.LongestRoadPoints == 0) return;
-
-                // Check for minimum length
-                // If nobody has a road of at least 5 anymore, the card is set aside and the holder loses the VPs
+                // A break is evaluated globally, not only for the previous holder: a card that was set aside
+                // after a tie is handed out again as soon as a single player leads
                 uint globalLongestRoad = Players.Max(state => state.LongestRoadLength);
+                int holderIdx = Array.FindIndex(Players, player => player.VictoryPoints.LongestRoadPoints > 0);
+                int leaderCount = Players.Count(state => state.LongestRoadLength == globalLongestRoad);
+
+                // Nobody qualifies anymore: card is set aside
                 if (globalLongestRoad < 5)
                 {
-                    foreach (PlayerState player in Players)
-                    {
-                        player.VictoryPoints.LongestRoadPoints = 0;
-                    }
+                    SetLongestRoadHolder(-1);
                     return;
                 }
 
-                bool isLeading = roadLength == globalLongestRoad;
-                bool isTied = Players.Count(state => state.LongestRoadLength == globalLongestRoad) > 1;
+                // Holder keeps the card while leading or tied for the lead
+                if (holderIdx >= 0 && Players[holderIdx].LongestRoadLength == globalLongestRoad) return;
 
-                // Keep VPs if still higher or tied
-                if (isLeading) return;
-
-                // Set VPs aside if tied and behind the tie
-                if (!isLeading && isTied)
+                // Sole leader (previous holder or not) receives the card
+                if (leaderCount == 1)
                 {
-                    Players[causingPlayerIdx].VictoryPoints.LongestRoadPoints = 0;
+                    SetLongestRoadHolder(Array.FindIndex(Players, state => state.LongestRoadLength == globalLongestRoad));
                     return;
                 }
 
-                // Give VPs to new leader if behind and untied
-                for (int playerIdx = 0; playerIdx < Players.Length; playerIdx++)
-                {
-                    bool isNewLeader = Players[playerIdx].LongestRoadLength == globalLongestRoad;
-                    Players[playerIdx].VictoryPoints.LongestRoadPoints = (byte)(isNewLeader ? 2 : 0);
-                }
+                // Tie that does not include the previous holder: card is set aside
+                SetLongestRoadHolder(-1);
             }
             // Cause: New road placed
             else
@@ -261,6 +252,17 @@ namespace Common
                 {
                     Players[playerIdx].VictoryPoints.LongestRoadPoints = (byte)(playerIdx == causingPlayerIdx ? 2 : 0);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Gives the Longest Road VPs to the given player and removes them from everyone else (-1 for nobody)
+        /// </summary>
+        private void SetLongestRoadHolder(int holderIdx)
+        {
+            for (int playerIdx = 0; playerIdx < Players.Length; playerIdx++)
+            {
+                Players[playerIdx].VictoryPoints.LongestRoadPoints = (byte)(playerIdx == holderIdx ? 2 : 0);
             }
         }
 
