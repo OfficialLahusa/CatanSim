@@ -9,7 +9,9 @@ namespace Common.Actions
 {
     public class RobberAction : Action, IReplayAction, IActionProvider, IOutputRandomnessAction
     {
-        public record RobberActionHistory(Tile? PrevRobber, ResourceCardType? StolenCard = null)
+        // The previous robber position is stored as a tile index rather than a Tile reference, so that
+        // Revert keeps pointing at the tile inside the board's map after copying or deserialization
+        public record RobberActionHistory(int? PrevRobberTileIndex, ResourceCardType? StolenCard = null)
         {
             /// <summary>
             /// Parameterless constructor for deserialization
@@ -41,7 +43,7 @@ namespace Common.Actions
             base.Apply(state);
 
             Tile tile = state.Board.Map.Values.ElementAt(TargetTileIndex);
-            Tile? prevRobber = state.Board.Robber;
+            int? prevRobberTileIndex = state.Board.GetRobberTileIndex();
             state.Board.Robber = tile;
 
             // Draw from adjacent player
@@ -57,7 +59,7 @@ namespace Common.Actions
                         drawnCard = state.Players[TargetPlayerIndex.Value].ResourceCards.Draw(true);
 
                         // Store outcome
-                        History = new RobberActionHistory(prevRobber, drawnCard);
+                        History = new RobberActionHistory(prevRobberTileIndex, drawnCard);
                     }
                     // Replay stored outcome
                     else
@@ -72,7 +74,7 @@ namespace Common.Actions
 
             if (History == null)
             {
-                History = new RobberActionHistory(prevRobber);
+                History = new RobberActionHistory(prevRobberTileIndex);
             }
 
             // Update turn state
@@ -85,7 +87,9 @@ namespace Common.Actions
             if (!HasHistory()) throw new InvalidOperationException();
 
             // Return robber to previous tile
-            state.Board.Robber = History!.PrevRobber;
+            state.Board.Robber = History!.PrevRobberTileIndex.HasValue
+                ? state.Board.Map.Values[History.PrevRobberTileIndex.Value]
+                : null;
 
             // Return card to adjacent player
             if (TargetPlayerIndex.HasValue && History.StolenCard.HasValue)
@@ -117,7 +121,7 @@ namespace Common.Actions
             Tile tile = state.Board.Map.Values.ElementAt(TargetTileIndex);
 
             bool isLandTile = tile.IsLandTile();
-            bool alreadyHasRobber = state.Board.Robber == tile;
+            bool alreadyHasRobber = state.Board.HasRobber(tile);
 
             if (!isLandTile || alreadyHasRobber) return false;
 
@@ -211,7 +215,7 @@ namespace Common.Actions
             foreach (ResourceCardType? stolenCard in stolenCardOptions)
             {
                 RobberAction actionCopy = new RobberAction(PlayerIndex, TargetTileIndex, TargetPlayerIndex);
-                RobberActionHistory outcome = new RobberActionHistory(state.Board.Robber, stolenCard);
+                RobberActionHistory outcome = new RobberActionHistory(state.Board.GetRobberTileIndex(), stolenCard);
                 actionCopy.History = outcome;
 
                 if (actionCopy.IsBoardValid(state))

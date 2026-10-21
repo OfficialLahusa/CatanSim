@@ -188,7 +188,7 @@ namespace Common.Actions
 
                     if (yieldCount > 0)
                     {
-                        if (tile != state.Board.Robber)
+                        if (!state.Board.HasRobber(tile))
                         {
                             yieldSummary[intersection.Owner, CardSet<ResourceCardType>.ToInt(tile.Type.ToCardType())] += yieldCount;
                         }

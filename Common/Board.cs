@@ -12,6 +12,17 @@ namespace Common
         public AdjacencyMatrix Adjacency { get; set; }
         public Tile? Robber;
 
+        /// <summary>
+        /// Index of the robber's tile in Map.Values, or null if there is no robber
+        /// </summary>
+        public int? GetRobberTileIndex() => Robber == null ? null : Robber.Y * (int)Map.Width + Robber.X;
+
+        /// <summary>
+        /// Whether the robber is on the given tile. Compared by position, since the robber may be a
+        /// separate Tile instance after deserialization.
+        /// </summary>
+        public bool HasRobber(Tile tile) => Robber != null && Robber.X == tile.X && Robber.Y == tile.Y;
+
         public Board(HexMap<Tile> map, List<Intersection> intersections, List<Edge> edges, List<Port> ports, AdjacencyMatrix adjacency, Tile? robber)
         {
             Map = map;

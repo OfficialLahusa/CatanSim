@@ -77,7 +77,7 @@ namespace Agents
 
             foreach (Tile adjTile in state.Board.Adjacency.GetTiles(intersection))
             {
-                if (considerRobber && adjTile == state.Board.Robber)
+                if (considerRobber && state.Board.HasRobber(adjTile))
                     continue;
 
                 value += adjTile.YieldPoints;
