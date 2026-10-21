@@ -86,8 +86,6 @@
 	- Dort laufen derzeit nur zustandslose RandomAgents, nötig sobald zustandsbehaftete Agents (z.B. MCTS) Daten erzeugen
 	- Achtung: die Agents werden dort von allen Playout-Threads geteilt, zustandsbehaftete Agents brauchen eine Instanz pro Playout
 	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
-- StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
-	- Wird vom Build neben jedes Programm kopiert (StateValueNetModel in Agents.csproj), ist aber nicht getrackt (artifacts/ in .gitignore): ein frischer Clone hat kein Modell, der Client startet dann ohne Net-Bewertung, Greedy- und MCTS-Agent
 - StateValueNetv2
 	- v2 erstmal auf v1 basiert mit Player/Tile Encoderblöcken, Embeddings statt OneHot, GraphConv auf v3 schieben
 	- State Vectorizer über push/pop Architektur eine Index-Aufschlüsselung generieren lassen
