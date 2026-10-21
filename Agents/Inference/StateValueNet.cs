@@ -13,13 +13,16 @@ namespace Agents.Inference
         // File name of the currently deployed model (expected next to the executable)
         public const string DefaultModelFile = "state_value_net-tvtaun4u.onnx";
 
+        // Threads ONNX Runtime uses inside one Run call. Batched MCTS inference runs between the parallel phases,
+        // so these threads don't compete with the search; beyond 8 there was no further speedup for batches of 256.
+        public static readonly int DefaultIntraOpThreads = Math.Clamp(Environment.ProcessorCount / 2, 1, 8);
+
         private InferenceSession _session;
 
-        public StateValueNet(string modelPath)
+        public StateValueNet(string modelPath, int intraOpThreads = 0)
         {
             var options = new SessionOptions() {
-                // Set the number of threads explicitly to avoid multithreading issues in parallel MCTS simulations
-                IntraOpNumThreads = 1 
+                IntraOpNumThreads = intraOpThreads > 0 ? intraOpThreads : DefaultIntraOpThreads
             };
 
             _session = new InferenceSession(modelPath, options);
