@@ -1,15 +1,14 @@
 """
-Convert GameState YAML snapshots into a flat fixed-length (currently 1611) numeric feature vector.
+Convert GameState YAML snapshots into a flat fixed-length (currently 1610) numeric feature vector.
 
 Design notes
 ------------
 - Only the `GameState` sub-tree is encoded (Settings, Turn, Board,
   ResourceBank, DevelopmentBank, Players). `PlayedActions` / `UndoHistory`
   are an event log of *arbitrary length*, not a fixed-size state snapshot,
-  so they are intentionally excluded from the vector. If you want
-  history-derived features (e.g. "turns played so far"), add them as
-  scalar summaries (see `encode_extra_history_features`) rather than trying
-  to flatten the whole log.
+  so they are intentionally excluded from the vector. The action count is
+  not encoded either: it is not observable at inference time in the same
+  way (MCTS tree nodes) and leaks the sampled game's length.
 - `Board.Adjacency` is dropped (as in the original script) since it is a
   constant function of the fixed board layout, not per-state information.
 - `FacesDownwards` (Intersections) and `Direction` (Edges) are also
@@ -37,7 +36,7 @@ import numpy as np
 import yaml
 
 # Total size of the final GameState feature vector
-FEATURE_DIM = 1611
+FEATURE_DIM = 1610
 
 # --------------------------------------------------------------------------
 # Vocabularies for categorical fields.
@@ -317,17 +316,6 @@ def encode_players(players: List[Dict[str, Any]]) -> List[float]:
     return feats
 
 
-def encode_extra_history_features(
-    played_actions_count: int
-) -> List[float]:
-    """Optional scalar summary derived from the (variable-length) action
-    log, kept separate from the fixed board/player encoding above.
-    Counts are passed in directly (see `load_state_yaml_fast`) rather than
-    from a fully-parsed log, since the log itself is never otherwise used."""
-    return [float(played_actions_count)]
-
-
-
 # --------------------------------------------------------------------------
 # Top-level conversion
 # --------------------------------------------------------------------------
@@ -335,8 +323,6 @@ def encode_extra_history_features(
 def state_to_feature_vector(
     state: Dict[str, Any],
     num_players: int = 4,
-    played_actions_count: int = 0,
-    undo_history_count: int = 0,
 ) -> List[float]:
     """Convert a parsed `GameState` dict (as returned by
     `load_state_yaml_fast`, i.e. NOT the full root document) into a flat
@@ -359,9 +345,6 @@ def state_to_feature_vector(
     feats.extend(encode_resource_bank(state["ResourceBank"]))
     feats.extend(encode_development_bank(state["DevelopmentBank"]))
     feats.extend(encode_players(state["Players"]))
-    feats.extend(
-        encode_extra_history_features(played_actions_count)
-    )
     return feats
 
 
@@ -425,13 +408,8 @@ def load_state_yaml_fast(path: str):
 
 
 def yaml_to_numpy(path: str, num_players: int = 4) -> np.ndarray:
-    game_state, played_count, undo_count = load_state_yaml_fast(path)
-    feats = state_to_feature_vector(
-        game_state,
-        num_players=num_players,
-        played_actions_count=played_count,
-        undo_history_count=undo_count,
-    )
+    game_state, _played_count, _undo_count = load_state_yaml_fast(path)
+    feats = state_to_feature_vector(game_state, num_players=num_players)
     return np.asarray(feats, dtype=np.float16)
 
 

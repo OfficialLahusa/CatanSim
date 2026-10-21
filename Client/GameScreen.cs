@@ -561,7 +561,7 @@ namespace Client
             // Print state valuation network output
             if (Keyboard.IsKeyPressed(Keyboard.Key.Enter))
             {
-                float[] winProbabilities = _stateValueNet.Run(_stateVectorizer.Vectorize(_state, (uint)_playedActions.Count));
+                float[] winProbabilities = _stateValueNet.Run(_stateVectorizer.Vectorize(_state));
                 Console.WriteLine("Win Probabilities: " + string.Join(", ", winProbabilities.Select(p => p.ToString("P5"))));
             }
         }
@@ -1113,7 +1113,7 @@ namespace Client
         {
             _valuation = _selectedValuationType switch
             {
-                0 => _stateValueNet.Run(_stateVectorizer.Vectorize(_state, (uint)_playedActions.Count)),
+                0 => _stateValueNet.Run(_stateVectorizer.Vectorize(_state)),
                 1 => SimpleAgent.StateValueFunc(_state),
                 _ => throw new NotImplementedException()
             };

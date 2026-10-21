@@ -133,6 +133,9 @@ namespace DatasetCollector
             // States bei den gegebenen Indices kopieren und sammeln
             playState = new GameState(_baseState);
             Stack<Action> replayActions = new(_playedActions);
+            // Action Stack zurücksetzen, damit jedes Sample nur die bis dahin gespielten Actions enthält
+            // (sonst stehen im Sample k alle N Actions des ersten Durchlaufs plus k weitere)
+            _playedActions = [];
             List<(GameState, Stack<Action>)> statesToSample = [(new GameState(playState), new (_playedActions.Reverse()))];
             int stateIdx = 0;
 

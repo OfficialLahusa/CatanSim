@@ -95,7 +95,7 @@ namespace Agents
                 {
                     GameState variantStateCopy = new GameState(currentState);
                     actionVariant.Apply(variantStateCopy);
-                    scoreSum += ValuationToScore(StateValueFunc(variantStateCopy, playedActionsCount + 1));
+                    scoreSum += ValuationToScore(StateValueFunc(variantStateCopy));
                 }
 
                 return scoreSum / outcomeVariants.Count;
@@ -104,7 +104,7 @@ namespace Agents
             // Otherwise evaluate the result of the individual action directly
             GameState stateCopy = new GameState(currentState);
             action.Apply(stateCopy);
-            return ValuationToScore(StateValueFunc(stateCopy, playedActionsCount + 1));
+            return ValuationToScore(StateValueFunc(stateCopy));
         }
 
         protected float ValuationToScore(float[] valuation)
@@ -112,9 +112,9 @@ namespace Agents
             return valuation[PlayerIndex] / valuation.Sum();
         }
 
-        public static float[] StateValueFunc(GameState state, uint playedActionsCount)
+        public static float[] StateValueFunc(GameState state)
         {
-            var inputTensor = _stateVectorizer.Vectorize(state, playedActionsCount);
+            var inputTensor = _stateVectorizer.Vectorize(state);
             return _stateValueNet.Run(inputTensor);
         }
     }

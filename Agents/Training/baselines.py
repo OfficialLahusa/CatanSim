@@ -31,7 +31,7 @@ import torch.nn.functional as F
 # regenerate these via the snippet at the bottom of this file instead.
 PLAYER_BLOCK_STARTS = [1470, 1505, 1540, 1575]
 VP_FIELDS_PER_PLAYER = 5  # first 5 floats of each player block
-EXPECTED_VECTOR_DIM = 1611
+EXPECTED_VECTOR_DIM = 1610
 
 VP_SMOOTHING_ALPHA = 1.0  # Laplace smoothing: avoids exact-zero probabilities
                           # (e.g. a player with 0 VP) and naturally falls back

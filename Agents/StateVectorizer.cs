@@ -26,7 +26,10 @@ namespace Agents
             _edgeBuildingTypeVocab = new EnumVocab<Edge.BuildingType>(nameof(Edge.BuildingType));
         }
 
-        public DenseTensor<float> Vectorize(GameState state, uint playedActionsCount)
+        // Length of the feature vector produced by Vectorize for the classic 4-player board
+        public const int FeatureDim = 1610;
+
+        public DenseTensor<float> Vectorize(GameState state)
         {
             List<float> features = new List<float>();
             
@@ -39,7 +42,6 @@ namespace Agents
             features.AddRange(EncodeResourceCardSet(state.ResourceBank));
             features.AddRange(EncodeDevelopmentCardSet(state.DevelopmentBank));
             features.AddRange(EncodePlayers(state));
-            features.Add((float)playedActionsCount);
 
             DenseTensor<float> tensor = new DenseTensor<float>(features.ToArray(), new int[] { 1, features.Count });
 

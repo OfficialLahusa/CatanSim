@@ -180,15 +180,15 @@ namespace Agents.MCTS
         protected List<double> BatchSimulateML(List<GameState> states)
         {
             // Featurize all states
-            DenseTensor<float> batchFeatures = new DenseTensor<float>([states.Count, 1611]);
+            DenseTensor<float> batchFeatures = new DenseTensor<float>([states.Count, StateVectorizer.FeatureDim]);
             Memory<float> memoryBuffer = batchFeatures.Buffer;
 
             // Parallel Featurization (CPU bound)
             Parallel.For(0, states.Count, i =>
             {
-                Span<float> destinationSlice = memoryBuffer.Span.Slice((int)i * 1611, 1611);
+                Span<float> destinationSlice = memoryBuffer.Span.Slice((int)i * StateVectorizer.FeatureDim, StateVectorizer.FeatureDim);
 
-                ReadOnlySpan<float> featureVector = _stateVectorizer.Vectorize(states[(int)i], 0).ToArray();
+                ReadOnlySpan<float> featureVector = _stateVectorizer.Vectorize(states[(int)i]).ToArray();
                 featureVector.CopyTo(destinationSlice);
             });
 
@@ -207,7 +207,7 @@ namespace Agents.MCTS
 
         protected double SimulateML(GameState state)
         {
-            return ValuationToScore(StateValueFunc(state, 0));
+            return ValuationToScore(StateValueFunc(state));
         }
 
         protected float ValuationToScore(float[] valuation)
@@ -215,9 +215,9 @@ namespace Agents.MCTS
             return valuation[PlayerIndex] / valuation.Sum();
         }
 
-        protected static float[] StateValueFunc(GameState state, uint playedActionsCount)
+        protected static float[] StateValueFunc(GameState state)
         {
-            var inputTensor = _stateVectorizer.Vectorize(state, playedActionsCount);
+            var inputTensor = _stateVectorizer.Vectorize(state);
             return _stateValueNet.Run(inputTensor);
         }
     }
