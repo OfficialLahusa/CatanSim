@@ -10,12 +10,20 @@ namespace Common
 
     public class SaveFile
     {
+        /// <summary>
+        /// Format version written into new save files. Bump it whenever a change makes older files replay
+        /// incorrectly (e.g. a changed action history layout). Files without the field read as version 0.
+        /// </summary>
+        public const int CurrentVersion = 1;
+
+        public int Version { get; set; }
         public GameState GameState { get; set; }
         public List<Action> PlayedActions { get; set; }
         public List<Action> UndoHistory {  get; set; }
 
         public SaveFile(GameState gameState, List<Action> playedActions, List<Action> undoHistory)
         {
+            Version = CurrentVersion;
             GameState = gameState;
             PlayedActions = playedActions;
             UndoHistory = undoHistory;

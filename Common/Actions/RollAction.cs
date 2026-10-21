@@ -103,6 +103,10 @@ namespace Common.Actions
             // Otherwise, obtain Random RollResult
             RollResult rollResult = HasHistory() ? History!.RollResult : RollResult.GetRandom();
 
+            // A stored result outside the dice range means the history was not loaded correctly
+            if (rollResult.First is < 1 or > 6 || rollResult.Second is < 1 or > 6)
+                throw new InvalidOperationException($"Invalid stored roll result {rollResult.First}+{rollResult.Second}.");
+
             bool robberTriggered = rollResult.Total == 7;
 
             if (robberTriggered)

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -80,6 +81,10 @@ namespace Common.Serialization
         public static SaveFile Deserialize(string yaml)
         {
             SaveFile save = Deserializer.Deserialize<SaveFile>(yaml);
+
+            // Older files are rejected instead of being replayed with silently wrong action histories
+            if (save.Version != SaveFile.CurrentVersion)
+                throw new InvalidDataException($"Unsupported save file version {save.Version} (this build reads version {SaveFile.CurrentVersion}).");
 
             // Reattach AdjacencyMatrix to board after deserialization
             save.GameState.Board.Adjacency.Attach(save.GameState.Board);

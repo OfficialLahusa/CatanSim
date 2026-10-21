@@ -1329,8 +1329,21 @@ namespace Client
 
         public void ReadSaveFile(string filepath)
         {
-            string saveData = File.ReadAllText(filepath);
-            SaveFile saveFile = SaveFileSerializer.Deserialize(saveData);
+            SaveFile saveFile;
+
+            // Unreadable, malformed or outdated files are reported instead of taking the client down
+            try
+            {
+                string saveData = File.ReadAllText(filepath);
+                saveFile = SaveFileSerializer.Deserialize(saveData);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Could not load save file \"{filepath}\": {e.Message}");
+                _eventLog.WriteLine(new ColoredStrEntry($"Could not load save file: {e.Message}", Color.Red));
+                return;
+            }
+
             _state = saveFile.GameState;
             _playedActions = new(saveFile.PlayedActions);
             _undoHistory = new(saveFile.UndoHistory);
