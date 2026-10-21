@@ -217,8 +217,8 @@ namespace DatasetCollector
                             actionsPlayedSinceFork++;
                         }
 
-                        // If the playout was aborted due to timeout, don't collect a result
-                        if (!simState.HasEnded) break;
+                        // If the playout was aborted due to timeout, don't collect a result but keep processing the queue
+                        if (!simState.HasEnded) continue;
 
                         // Since players can only win on their own turn, the winner is the current turn player
                         int winnerIdx = simState.Turn.PlayerIndex;
@@ -264,6 +264,14 @@ namespace DatasetCollector
                 }
             }
 
+            // Without a single finished playout there is no label; skip the sample instead of writing NaNs
+            int evalSum = timesWon.Sum();
+            if (evalSum == 0)
+            {
+                Console.WriteLine($"\n\nWarning: no playout of sample r{roundIdx}_s{sampleIdx} finished, skipping it.");
+                return;
+            }
+
             // Write GameState to file
             string sampleName = $"r{roundIdx}_s{sampleIdx}";
             SaveFile saveFile = new SaveFile(sampleState, previousActions.Reverse().ToList(), []);
@@ -272,7 +280,6 @@ namespace DatasetCollector
 
             // Write evaluation to file
             double[] normalizedEvaluation = new double[PLAYER_COUNT];
-            int evalSum = timesWon.Sum();
             for (int i = 0; i < normalizedEvaluation.Length; i++)
             {
                 normalizedEvaluation[i] = (double)timesWon[i] / evalSum;
