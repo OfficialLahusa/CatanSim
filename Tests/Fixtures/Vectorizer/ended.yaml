@@ -1,0 +1,8467 @@
+Version: 1
+GameState:
+  Settings:
+    RobberCardLimit: 7
+    VictoryPoints: 10
+  Turn:
+    RoundCounter: 34
+    LastRoll:
+      First: 1
+      Second: 2
+    PlayerIndex: 0
+    TypeOfRound: MatchEnded
+    MustRoll: false
+    AwaitedPlayerDiscards:
+    - false
+    - false
+    - false
+    - false
+    MustMoveRobber: false
+    HasPlayedDevelopmentCard: false
+  Board:
+    Robber:
+      X: 3
+      Y: 3
+      Type: Grain
+      Number: 5
+    Map:
+      Values:
+      - X: 0
+        Y: 0
+        Type: NonPlayable
+        Number: 
+      - X: 1
+        Y: 0
+        Type: Water
+        Number: 
+      - X: 2
+        Y: 0
+        Type: Water
+        Number: 
+      - X: 3
+        Y: 0
+        Type: Water
+        Number: 
+      - X: 4
+        Y: 0
+        Type: Water
+        Number: 
+      - X: 5
+        Y: 0
+        Type: NonPlayable
+        Number: 
+      - X: 6
+        Y: 0
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 1
+        Type: NonPlayable
+        Number: 
+      - X: 1
+        Y: 1
+        Type: Water
+        Number: 
+      - X: 2
+        Y: 1
+        Type: Wool
+        Number: 6
+      - X: 3
+        Y: 1
+        Type: Wool
+        Number: 11
+      - X: 4
+        Y: 1
+        Type: Wool
+        Number: 2
+      - X: 5
+        Y: 1
+        Type: Water
+        Number: 
+      - X: 6
+        Y: 1
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 2
+        Type: Water
+        Number: 
+      - X: 1
+        Y: 2
+        Type: Lumber
+        Number: 9
+      - X: 2
+        Y: 2
+        Type: Ore
+        Number: 4
+      - X: 3
+        Y: 2
+        Type: Ore
+        Number: 8
+      - X: 4
+        Y: 2
+        Type: Lumber
+        Number: 9
+      - X: 5
+        Y: 2
+        Type: Water
+        Number: 
+      - X: 6
+        Y: 2
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 3
+        Type: Water
+        Number: 
+      - X: 1
+        Y: 3
+        Type: Brick
+        Number: 3
+      - X: 2
+        Y: 3
+        Type: Grain
+        Number: 11
+      - X: 3
+        Y: 3
+        Type: Grain
+        Number: 5
+      - X: 4
+        Y: 3
+        Type: Desert
+        Number: 
+      - X: 5
+        Y: 3
+        Type: Wool
+        Number: 12
+      - X: 6
+        Y: 3
+        Type: Water
+        Number: 
+      - X: 0
+        Y: 4
+        Type: Water
+        Number: 
+      - X: 1
+        Y: 4
+        Type: Ore
+        Number: 10
+      - X: 2
+        Y: 4
+        Type: Grain
+        Number: 5
+      - X: 3
+        Y: 4
+        Type: Brick
+        Number: 10
+      - X: 4
+        Y: 4
+        Type: Lumber
+        Number: 8
+      - X: 5
+        Y: 4
+        Type: Water
+        Number: 
+      - X: 6
+        Y: 4
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 5
+        Type: NonPlayable
+        Number: 
+      - X: 1
+        Y: 5
+        Type: Water
+        Number: 
+      - X: 2
+        Y: 5
+        Type: Grain
+        Number: 3
+      - X: 3
+        Y: 5
+        Type: Brick
+        Number: 6
+      - X: 4
+        Y: 5
+        Type: Lumber
+        Number: 4
+      - X: 5
+        Y: 5
+        Type: Water
+        Number: 
+      - X: 6
+        Y: 5
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 6
+        Type: NonPlayable
+        Number: 
+      - X: 1
+        Y: 6
+        Type: Water
+        Number: 
+      - X: 2
+        Y: 6
+        Type: Water
+        Number: 
+      - X: 3
+        Y: 6
+        Type: Water
+        Number: 
+      - X: 4
+        Y: 6
+        Type: Water
+        Number: 
+      - X: 5
+        Y: 6
+        Type: NonPlayable
+        Number: 
+      - X: 6
+        Y: 6
+        Type: NonPlayable
+        Number: 
+      Width: 7
+      Height: 7
+    Intersections:
+    - Index: 0
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 1
+      FacesDownwards: true
+      Building: Settlement
+      Owner: 3
+    - Index: 2
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 3
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 4
+      FacesDownwards: false
+      Building: Settlement
+      Owner: 0
+    - Index: 5
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 6
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 7
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 8
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 9
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 10
+      FacesDownwards: false
+      Building: Settlement
+      Owner: 1
+    - Index: 11
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 12
+      FacesDownwards: false
+      Building: City
+      Owner: 0
+    - Index: 13
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 14
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 15
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 16
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 17
+      FacesDownwards: true
+      Building: City
+      Owner: 0
+    - Index: 18
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 19
+      FacesDownwards: true
+      Building: City
+      Owner: 0
+    - Index: 20
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 21
+      FacesDownwards: true
+      Building: City
+      Owner: 1
+    - Index: 22
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 23
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 24
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 25
+      FacesDownwards: false
+      Building: City
+      Owner: 2
+    - Index: 26
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 27
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 28
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 29
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 30
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 31
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 32
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 33
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 34
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 35
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 36
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 37
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 38
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 39
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 40
+      FacesDownwards: true
+      Building: City
+      Owner: 2
+    - Index: 41
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 42
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 43
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 44
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 45
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 46
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 47
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 48
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 49
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 50
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 51
+      FacesDownwards: true
+      Building: Settlement
+      Owner: 3
+    - Index: 52
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 53
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    Edges:
+    - Index: 0
+      Direction: UpDown
+      Building: Road
+      Owner: 3
+    - Index: 1
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 2
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 3
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 4
+      Direction: RightTop
+      Building: Road
+      Owner: 0
+    - Index: 5
+      Direction: LeftTop
+      Building: Road
+      Owner: 3
+    - Index: 6
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 7
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 8
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 9
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 10
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 11
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 12
+      Direction: LeftTop
+      Building: Road
+      Owner: 1
+    - Index: 13
+      Direction: UpDown
+      Building: Road
+      Owner: 0
+    - Index: 14
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 15
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 16
+      Direction: UpDown
+      Building: Road
+      Owner: 3
+    - Index: 17
+      Direction: RightTop
+      Building: Road
+      Owner: 3
+    - Index: 18
+      Direction: UpDown
+      Building: Road
+      Owner: 0
+    - Index: 19
+      Direction: RightTop
+      Building: Road
+      Owner: 0
+    - Index: 20
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 21
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 22
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 23
+      Direction: LeftTop
+      Building: Road
+      Owner: 0
+    - Index: 24
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 25
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 26
+      Direction: LeftTop
+      Building: Road
+      Owner: 1
+    - Index: 27
+      Direction: LeftTop
+      Building: Road
+      Owner: 0
+    - Index: 28
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 29
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 30
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 31
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 32
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 33
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 34
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 35
+      Direction: LeftTop
+      Building: Road
+      Owner: 2
+    - Index: 36
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 37
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 38
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 39
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 40
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 41
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 42
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 43
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 44
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 45
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 46
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 47
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 48
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 49
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 50
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 51
+      Direction: RightTop
+      Building: Road
+      Owner: 2
+    - Index: 52
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 53
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 54
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 55
+      Direction: LeftTop
+      Building: Road
+      Owner: 2
+    - Index: 56
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 57
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 58
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 59
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 60
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 61
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 62
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 63
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 64
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 65
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 66
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 67
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 68
+      Direction: LeftTop
+      Building: Road
+      Owner: 3
+    - Index: 69
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 70
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 71
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    Ports:
+    - AnchorTileX: 0
+      AnchorTileY: 2
+      AnchorDirection: East
+      Type: Generic
+    - AnchorTileX: 1
+      AnchorTileY: 0
+      AnchorDirection: SouthEast
+      Type: Ore
+    - AnchorTileX: 3
+      AnchorTileY: 0
+      AnchorDirection: SouthWest
+      Type: Wool
+    - AnchorTileX: 5
+      AnchorTileY: 1
+      AnchorDirection: SouthWest
+      Type: Lumber
+    - AnchorTileX: 6
+      AnchorTileY: 3
+      AnchorDirection: West
+      Type: Generic
+    - AnchorTileX: 5
+      AnchorTileY: 5
+      AnchorDirection: NorthWest
+      Type: Generic
+    - AnchorTileX: 3
+      AnchorTileY: 6
+      AnchorDirection: NorthWest
+      Type: Brick
+    - AnchorTileX: 1
+      AnchorTileY: 6
+      AnchorDirection: NorthEast
+      Type: Generic
+    - AnchorTileX: 0
+      AnchorTileY: 4
+      AnchorDirection: East
+      Type: Grain
+    Adjacency:
+      TileToTile:
+      - - 255
+        - 255
+        - 255
+        - 1
+        - 8
+        - 7
+      - - 0
+        - 255
+        - 255
+        - 2
+        - 9
+        - 8
+      - - 1
+        - 255
+        - 255
+        - 3
+        - 10
+        - 9
+      - - 2
+        - 255
+        - 255
+        - 4
+        - 11
+        - 10
+      - - 3
+        - 255
+        - 255
+        - 5
+        - 12
+        - 11
+      - - 4
+        - 255
+        - 255
+        - 6
+        - 13
+        - 12
+      - - 5
+        - 255
+        - 255
+        - 255
+        - 255
+        - 13
+      - - 255
+        - 255
+        - 0
+        - 8
+        - 14
+        - 255
+      - - 7
+        - 0
+        - 1
+        - 9
+        - 15
+        - 14
+      - - 8
+        - 1
+        - 2
+        - 10
+        - 16
+        - 15
+      - - 9
+        - 2
+        - 3
+        - 11
+        - 17
+        - 16
+      - - 10
+        - 3
+        - 4
+        - 12
+        - 18
+        - 17
+      - - 11
+        - 4
+        - 5
+        - 13
+        - 19
+        - 18
+      - - 12
+        - 5
+        - 6
+        - 255
+        - 20
+        - 19
+      - - 255
+        - 7
+        - 8
+        - 15
+        - 22
+        - 21
+      - - 14
+        - 8
+        - 9
+        - 16
+        - 23
+        - 22
+      - - 15
+        - 9
+        - 10
+        - 17
+        - 24
+        - 23
+      - - 16
+        - 10
+        - 11
+        - 18
+        - 25
+        - 24
+      - - 17
+        - 11
+        - 12
+        - 19
+        - 26
+        - 25
+      - - 18
+        - 12
+        - 13
+        - 20
+        - 27
+        - 26
+      - - 19
+        - 13
+        - 255
+        - 255
+        - 255
+        - 27
+      - - 255
+        - 255
+        - 14
+        - 22
+        - 28
+        - 255
+      - - 21
+        - 14
+        - 15
+        - 23
+        - 29
+        - 28
+      - - 22
+        - 15
+        - 16
+        - 24
+        - 30
+        - 29
+      - - 23
+        - 16
+        - 17
+        - 25
+        - 31
+        - 30
+      - - 24
+        - 17
+        - 18
+        - 26
+        - 32
+        - 31
+      - - 25
+        - 18
+        - 19
+        - 27
+        - 33
+        - 32
+      - - 26
+        - 19
+        - 20
+        - 255
+        - 34
+        - 33
+      - - 255
+        - 21
+        - 22
+        - 29
+        - 36
+        - 35
+      - - 28
+        - 22
+        - 23
+        - 30
+        - 37
+        - 36
+      - - 29
+        - 23
+        - 24
+        - 31
+        - 38
+        - 37
+      - - 30
+        - 24
+        - 25
+        - 32
+        - 39
+        - 38
+      - - 31
+        - 25
+        - 26
+        - 33
+        - 40
+        - 39
+      - - 32
+        - 26
+        - 27
+        - 34
+        - 41
+        - 40
+      - - 33
+        - 27
+        - 255
+        - 255
+        - 255
+        - 41
+      - - 255
+        - 255
+        - 28
+        - 36
+        - 42
+        - 255
+      - - 35
+        - 28
+        - 29
+        - 37
+        - 43
+        - 42
+      - - 36
+        - 29
+        - 30
+        - 38
+        - 44
+        - 43
+      - - 37
+        - 30
+        - 31
+        - 39
+        - 45
+        - 44
+      - - 38
+        - 31
+        - 32
+        - 40
+        - 46
+        - 45
+      - - 39
+        - 32
+        - 33
+        - 41
+        - 47
+        - 46
+      - - 40
+        - 33
+        - 34
+        - 255
+        - 48
+        - 47
+      - - 255
+        - 35
+        - 36
+        - 43
+        - 255
+        - 255
+      - - 42
+        - 36
+        - 37
+        - 44
+        - 255
+        - 255
+      - - 43
+        - 37
+        - 38
+        - 45
+        - 255
+        - 255
+      - - 44
+        - 38
+        - 39
+        - 46
+        - 255
+        - 255
+      - - 45
+        - 39
+        - 40
+        - 47
+        - 255
+        - 255
+      - - 46
+        - 40
+        - 41
+        - 48
+        - 255
+        - 255
+      - - 47
+        - 41
+        - 255
+        - 255
+        - 255
+        - 255
+      TileToIntersection:
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - - 0
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+      - - 4
+        - 3
+        - 6
+        - 7
+        - 8
+        - 9
+      - - 8
+        - 7
+        - 10
+        - 11
+        - 12
+        - 13
+      - 
+      - 
+      - 
+      - - 14
+        - 15
+        - 0
+        - 5
+        - 16
+        - 17
+      - - 16
+        - 5
+        - 4
+        - 9
+        - 18
+        - 19
+      - - 18
+        - 9
+        - 8
+        - 13
+        - 20
+        - 21
+      - - 20
+        - 13
+        - 12
+        - 22
+        - 23
+        - 24
+      - 
+      - 
+      - 
+      - - 25
+        - 26
+        - 14
+        - 17
+        - 27
+        - 28
+      - - 27
+        - 17
+        - 16
+        - 19
+        - 29
+        - 30
+      - - 29
+        - 19
+        - 18
+        - 21
+        - 31
+        - 32
+      - - 31
+        - 21
+        - 20
+        - 24
+        - 33
+        - 34
+      - - 33
+        - 24
+        - 23
+        - 35
+        - 36
+        - 37
+      - 
+      - 
+      - - 38
+        - 28
+        - 27
+        - 30
+        - 39
+        - 40
+      - - 39
+        - 30
+        - 29
+        - 32
+        - 41
+        - 42
+      - - 41
+        - 32
+        - 31
+        - 34
+        - 43
+        - 44
+      - - 43
+        - 34
+        - 33
+        - 37
+        - 45
+        - 46
+      - 
+      - 
+      - 
+      - 
+      - - 47
+        - 40
+        - 39
+        - 42
+        - 48
+        - 49
+      - - 48
+        - 42
+        - 41
+        - 44
+        - 50
+        - 51
+      - - 50
+        - 44
+        - 43
+        - 46
+        - 52
+        - 53
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      TileToEdge:
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - - 0
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+      - - 3
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+      - - 8
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+      - 
+      - 
+      - 
+      - - 16
+        - 17
+        - 5
+        - 18
+        - 19
+        - 20
+      - - 18
+        - 4
+        - 10
+        - 21
+        - 22
+        - 23
+      - - 21
+        - 9
+        - 15
+        - 24
+        - 25
+        - 26
+      - - 24
+        - 14
+        - 27
+        - 28
+        - 29
+        - 30
+      - 
+      - 
+      - 
+      - - 31
+        - 32
+        - 20
+        - 33
+        - 34
+        - 35
+      - - 33
+        - 19
+        - 23
+        - 36
+        - 37
+        - 38
+      - - 36
+        - 22
+        - 26
+        - 39
+        - 40
+        - 41
+      - - 39
+        - 25
+        - 30
+        - 42
+        - 43
+        - 44
+      - - 42
+        - 29
+        - 45
+        - 46
+        - 47
+        - 48
+      - 
+      - 
+      - - 49
+        - 34
+        - 38
+        - 50
+        - 51
+        - 52
+      - - 50
+        - 37
+        - 41
+        - 53
+        - 54
+        - 55
+      - - 53
+        - 40
+        - 44
+        - 56
+        - 57
+        - 58
+      - - 56
+        - 43
+        - 48
+        - 59
+        - 60
+        - 61
+      - 
+      - 
+      - 
+      - 
+      - - 62
+        - 51
+        - 55
+        - 63
+        - 64
+        - 65
+      - - 63
+        - 54
+        - 58
+        - 66
+        - 67
+        - 68
+      - - 66
+        - 57
+        - 61
+        - 69
+        - 70
+        - 71
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      IntersectionToTile:
+      - - 9
+        - 255
+        - 15
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 9
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 255
+        - 9
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 10
+        - 255
+        - 9
+        - 255
+        - 255
+      - - 10
+        - 255
+        - 16
+        - 255
+        - 9
+        - 255
+      - - 255
+        - 16
+        - 255
+        - 15
+        - 255
+        - 9
+      - - 255
+        - 255
+        - 10
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 11
+        - 255
+        - 10
+        - 255
+        - 255
+      - - 11
+        - 255
+        - 17
+        - 255
+        - 10
+        - 255
+      - - 255
+        - 17
+        - 255
+        - 16
+        - 255
+        - 10
+      - - 255
+        - 255
+        - 11
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 11
+        - 255
+        - 255
+      - - 255
+        - 255
+        - 18
+        - 255
+        - 11
+        - 255
+      - - 255
+        - 18
+        - 255
+        - 17
+        - 255
+        - 11
+      - - 15
+        - 255
+        - 22
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 15
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 16
+        - 255
+        - 23
+        - 255
+        - 15
+        - 255
+      - - 255
+        - 23
+        - 255
+        - 22
+        - 255
+        - 15
+      - - 17
+        - 255
+        - 24
+        - 255
+        - 16
+        - 255
+      - - 255
+        - 24
+        - 255
+        - 23
+        - 255
+        - 16
+      - - 18
+        - 255
+        - 25
+        - 255
+        - 17
+        - 255
+      - - 255
+        - 25
+        - 255
+        - 24
+        - 255
+        - 17
+      - - 255
+        - 255
+        - 255
+        - 18
+        - 255
+        - 255
+      - - 255
+        - 255
+        - 26
+        - 255
+        - 18
+        - 255
+      - - 255
+        - 26
+        - 255
+        - 25
+        - 255
+        - 18
+      - - 22
+        - 255
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 22
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 23
+        - 255
+        - 29
+        - 255
+        - 22
+        - 255
+      - - 255
+        - 29
+        - 255
+        - 255
+        - 255
+        - 22
+      - - 24
+        - 255
+        - 30
+        - 255
+        - 23
+        - 255
+      - - 255
+        - 30
+        - 255
+        - 29
+        - 255
+        - 23
+      - - 25
+        - 255
+        - 31
+        - 255
+        - 24
+        - 255
+      - - 255
+        - 31
+        - 255
+        - 30
+        - 255
+        - 24
+      - - 26
+        - 255
+        - 32
+        - 255
+        - 25
+        - 255
+      - - 255
+        - 32
+        - 255
+        - 31
+        - 255
+        - 25
+      - - 255
+        - 255
+        - 255
+        - 26
+        - 255
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 26
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 32
+        - 255
+        - 26
+      - - 29
+        - 255
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 30
+        - 255
+        - 37
+        - 255
+        - 29
+        - 255
+      - - 255
+        - 37
+        - 255
+        - 255
+        - 255
+        - 29
+      - - 31
+        - 255
+        - 38
+        - 255
+        - 30
+        - 255
+      - - 255
+        - 38
+        - 255
+        - 37
+        - 255
+        - 30
+      - - 32
+        - 255
+        - 39
+        - 255
+        - 31
+        - 255
+      - - 255
+        - 39
+        - 255
+        - 38
+        - 255
+        - 31
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 32
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 39
+        - 255
+        - 32
+      - - 37
+        - 255
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 38
+        - 255
+        - 255
+        - 255
+        - 37
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 255
+        - 37
+      - - 39
+        - 255
+        - 255
+        - 255
+        - 38
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 255
+        - 38
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 39
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 255
+        - 39
+      EdgeToWestTile:
+      - 255
+      - 255
+      - 9
+      - 9
+      - 9
+      - 15
+      - 255
+      - 10
+      - 10
+      - 10
+      - 16
+      - 255
+      - 11
+      - 11
+      - 11
+      - 17
+      - 255
+      - 255
+      - 15
+      - 15
+      - 22
+      - 16
+      - 16
+      - 23
+      - 17
+      - 17
+      - 24
+      - 18
+      - 18
+      - 18
+      - 25
+      - 255
+      - 255
+      - 22
+      - 22
+      - 255
+      - 23
+      - 23
+      - 29
+      - 24
+      - 24
+      - 30
+      - 25
+      - 25
+      - 31
+      - 26
+      - 26
+      - 26
+      - 32
+      - 255
+      - 29
+      - 29
+      - 255
+      - 30
+      - 30
+      - 37
+      - 31
+      - 31
+      - 38
+      - 32
+      - 32
+      - 39
+      - 255
+      - 37
+      - 37
+      - 255
+      - 38
+      - 38
+      - 255
+      - 39
+      - 39
+      EdgeToEastTile:
+      - 9
+      - 9
+      - 255
+      - 10
+      - 16
+      - 9
+      - 10
+      - 255
+      - 11
+      - 17
+      - 10
+      - 11
+      - 255
+      - 255
+      - 18
+      - 11
+      - 15
+      - 15
+      - 16
+      - 23
+      - 15
+      - 17
+      - 24
+      - 16
+      - 18
+      - 25
+      - 17
+      - 255
+      - 255
+      - 26
+      - 18
+      - 22
+      - 22
+      - 23
+      - 29
+      - 22
+      - 24
+      - 30
+      - 23
+      - 25
+      - 31
+      - 24
+      - 26
+      - 32
+      - 25
+      - 255
+      - 255
+      - 255
+      - 26
+      - 29
+      - 30
+      - 37
+      - 29
+      - 31
+      - 38
+      - 30
+      - 32
+      - 39
+      - 31
+      - 255
+      - 255
+      - 32
+      - 37
+      - 38
+      - 255
+      - 37
+      - 39
+      - 255
+      - 38
+      - 255
+      - 255
+      - 39
+  ResourceBank:
+    Unknown: 0
+    Lumber: 17
+    Brick: 7
+    Wool: 17
+    Grain: 16
+    Ore: 11
+  DevelopmentBank:
+    Unknown: 0
+    Knight: 8
+    RoadBuilding: 1
+    YearOfPlenty: 2
+    Monopoly: 1
+    VictoryPoint: 3
+  Players:
+  - VictoryPoints:
+      SettlementPoints: 1
+      CityPoints: 6
+      DevelopmentCardPoints: 1
+      LongestRoadPoints: 0
+      LargestArmyPoints: 2
+    PlayedKnights: 4
+    LongestRoadLength: 3
+    ResourceCards:
+      Unknown: 0
+      Lumber: 2
+      Brick: 2
+      Wool: 0
+      Grain: 0
+      Ore: 1
+    DevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 1
+    NewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    BuildingStock:
+      RemainingRoads: 9
+      RemainingSettlements: 4
+      RemainingCities: 1
+      FreeRoads: 0
+    PortPrivileges: LumberTwoToOne
+  - VictoryPoints:
+      SettlementPoints: 1
+      CityPoints: 2
+      DevelopmentCardPoints: 0
+      LongestRoadPoints: 0
+      LargestArmyPoints: 0
+    PlayedKnights: 2
+    LongestRoadLength: 1
+    ResourceCards:
+      Unknown: 0
+      Lumber: 0
+      Brick: 2
+      Wool: 0
+      Grain: 0
+      Ore: 5
+    DevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    NewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    BuildingStock:
+      RemainingRoads: 13
+      RemainingSettlements: 4
+      RemainingCities: 3
+      FreeRoads: 0
+    PortPrivileges: None
+  - VictoryPoints:
+      SettlementPoints: 0
+      CityPoints: 4
+      DevelopmentCardPoints: 0
+      LongestRoadPoints: 0
+      LargestArmyPoints: 0
+    PlayedKnights: 0
+    LongestRoadLength: 2
+    ResourceCards:
+      Unknown: 0
+      Lumber: 0
+      Brick: 5
+      Wool: 0
+      Grain: 2
+      Ore: 2
+    DevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    NewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    BuildingStock:
+      RemainingRoads: 12
+      RemainingSettlements: 5
+      RemainingCities: 2
+      FreeRoads: 0
+    PortPrivileges: None
+  - VictoryPoints:
+      SettlementPoints: 2
+      CityPoints: 0
+      DevelopmentCardPoints: 1
+      LongestRoadPoints: 0
+      LargestArmyPoints: 0
+    PlayedKnights: 0
+    LongestRoadLength: 3
+    ResourceCards:
+      Unknown: 0
+      Lumber: 0
+      Brick: 3
+      Wool: 2
+      Grain: 1
+      Ore: 0
+    DevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 1
+    NewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    BuildingStock:
+      RemainingRoads: 10
+      RemainingSettlements: 3
+      RemainingCities: 4
+      FreeRoads: 0
+    PortPrivileges: BrickTwoToOne, OreTwoToOne
+PlayedActions:
+- IntersectionIndex: 12
+  PlayerIndex: 0
+  ActionType: FirstInitialSettlementAction
+- EdgeIndex: 13
+  PlayerIndex: 0
+  ActionType: FirstInitialRoadAction
+- IntersectionIndex: 10
+  PlayerIndex: 1
+  ActionType: FirstInitialSettlementAction
+- EdgeIndex: 12
+  PlayerIndex: 1
+  ActionType: FirstInitialRoadAction
+- IntersectionIndex: 25
+  PlayerIndex: 2
+  ActionType: FirstInitialSettlementAction
+- EdgeIndex: 35
+  PlayerIndex: 2
+  ActionType: FirstInitialRoadAction
+- IntersectionIndex: 51
+  PlayerIndex: 3
+  ActionType: FirstInitialSettlementAction
+- EdgeIndex: 68
+  PlayerIndex: 3
+  ActionType: FirstInitialRoadAction
+- History:
+    InitialYields:
+    - Wool
+  IntersectionIndex: 1
+  PlayerIndex: 3
+  ActionType: SecondInitialSettlementAction
+- EdgeIndex: 0
+  PlayerIndex: 3
+  ActionType: SecondInitialRoadAction
+- History:
+    InitialYields:
+    - Grain
+    - Ore
+  IntersectionIndex: 40
+  PlayerIndex: 2
+  ActionType: SecondInitialSettlementAction
+- EdgeIndex: 51
+  PlayerIndex: 2
+  ActionType: SecondInitialRoadAction
+- History:
+    InitialYields:
+    - Grain
+    - Ore
+  IntersectionIndex: 21
+  PlayerIndex: 1
+  ActionType: SecondInitialSettlementAction
+- EdgeIndex: 26
+  PlayerIndex: 1
+  ActionType: SecondInitialRoadAction
+- History:
+    InitialYields:
+    - Grain
+    - Grain
+    - Ore
+  IntersectionIndex: 19
+  PlayerIndex: 0
+  ActionType: SecondInitialSettlementAction
+- EdgeIndex: 23
+  PlayerIndex: 0
+  ActionType: SecondInitialRoadAction
+- History:
+    RollResult:
+      First: 6
+      Second: 1
+    PrevRollResult:
+      First: 5
+      Second: 6
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 25
+    StolenCard: 
+  TargetTileIndex: 31
+  TargetPlayerIndex: 
+  PlayerIndex: 0
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 3
+    PrevRollResult:
+      First: 6
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 5
+    PrevRollResult:
+      First: 3
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 1
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 2
+    PrevRollResult:
+      First: 4
+      Second: 5
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 31
+    StolenCard: Lumber
+  TargetTileIndex: 23
+  TargetPlayerIndex: 0
+  PlayerIndex: 3
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 3
+    PrevRollResult:
+      First: 5
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 1
+    PrevRollResult:
+      First: 2
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 2
+    PrevRollResult:
+      First: 2
+      Second: 1
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 23
+    StolenCard: 
+  TargetTileIndex: 15
+  TargetPlayerIndex: 
+  PlayerIndex: 2
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 4
+    PrevRollResult:
+      First: 5
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 1
+    PrevRollResult:
+      First: 6
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 2
+    PrevRollResult:
+      First: 5
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 6
+    PrevRollResult:
+      First: 2
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 2
+    PrevRollResult:
+      First: 6
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- InputType: Brick
+  OutputType: Ore
+  PlayerIndex: 3
+  ActionType: TwoToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 2
+    PrevRollResult:
+      First: 6
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 6
+    PrevRollResult:
+      First: 2
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 1
+    PrevRollResult:
+      First: 5
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 3
+    PrevRollResult:
+      First: 4
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 4
+    PrevRollResult:
+      First: 1
+      Second: 3
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- SelectedCards:
+    Unknown: 0
+    Lumber: 0
+    Brick: 0
+    Wool: 0
+    Grain: 1
+    Ore: 3
+  PlayerIndex: 0
+  ActionType: DiscardAction
+- History:
+    PrevRobberTileIndex: 15
+    StolenCard: Lumber
+  TargetTileIndex: 9
+  TargetPlayerIndex: 3
+  PlayerIndex: 0
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 5
+    PrevRollResult:
+      First: 3
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 0
+      - 0
+    RobbedYields: 1
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 2
+    PrevRollResult:
+      First: 1
+      Second: 5
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 9
+    StolenCard: 
+  TargetTileIndex: 31
+  TargetPlayerIndex: 
+  PlayerIndex: 2
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 6
+    PrevRollResult:
+      First: 5
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 1
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 2
+    PrevRollResult:
+      First: 3
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 3
+    PrevRollResult:
+      First: 1
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 2
+    PrevRollResult:
+      First: 1
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- InputType: Grain
+  OutputType: Lumber
+  PlayerIndex: 2
+  ActionType: FourToOneTradeAction
+- History:
+    PrevLongestRoadHolder: -1
+    WasFree: false
+  EdgeIndex: 55
+  PlayerIndex: 2
+  ActionType: RoadAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 1
+    PrevRollResult:
+      First: 1
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 1
+    PrevRollResult:
+      First: 1
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 6
+    PrevRollResult:
+      First: 3
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 3
+    PrevRollResult:
+      First: 6
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 1
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 3
+    PrevRollResult:
+      First: 6
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 2
+    PrevRollResult:
+      First: 1
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Ore
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 1
+    PrevRollResult:
+      First: 1
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    DrawnType: Knight
+  PlayerIndex: 1
+  ActionType: BuyDevelopmentCardAction
+- History:
+    DrawnType: Monopoly
+  PlayerIndex: 1
+  ActionType: BuyDevelopmentCardAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 1
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 1
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 3
+    PrevRollResult:
+      First: 1
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 1
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 2
+    PrevRollResult:
+      First: 6
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 1
+    PrevRollResult:
+      First: 1
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Grain
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- IntersectionIndex: 12
+  PlayerIndex: 0
+  ActionType: CityAction
+- History:
+    DrawnType: Knight
+  PlayerIndex: 0
+  ActionType: BuyDevelopmentCardAction
+- History:
+    DrawnType: VictoryPoint
+  PlayerIndex: 0
+  ActionType: BuyDevelopmentCardAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 1
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 1
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    TransferredCards:
+    - Item1: 2
+      Item2: 5
+    - Item1: 3
+      Item2: 1
+  ChosenType: Brick
+  PlayerIndex: 1
+  ActionType: MonopolyAction
+- History:
+    RollResult:
+      First: 6
+      Second: 2
+    PrevRollResult:
+      First: 2
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- InputType: Brick
+  OutputType: Wool
+  PlayerIndex: 1
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: true
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 2
+    PrevRollResult:
+      First: 6
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 6
+    PrevRollResult:
+      First: 6
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    PrevLargestArmyHolder: -1
+  PlayerIndex: 0
+  ActionType: KnightAction
+- History:
+    PrevRobberTileIndex: 31
+    StolenCard: Wool
+  TargetTileIndex: 11
+  TargetPlayerIndex: 1
+  PlayerIndex: 0
+  ActionType: RobberAction
+- History:
+    RollResult:
+      First: 2
+      Second: 5
+    PrevRollResult:
+      First: 2
+      Second: 6
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 11
+    StolenCard: 
+  TargetTileIndex: 31
+  TargetPlayerIndex: 
+  PlayerIndex: 0
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: true
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    PrevLargestArmyHolder: -1
+  PlayerIndex: 1
+  ActionType: KnightAction
+- History:
+    PrevRobberTileIndex: 31
+    StolenCard: 
+  TargetTileIndex: 30
+  TargetPlayerIndex: 
+  PlayerIndex: 1
+  ActionType: RobberAction
+- History:
+    RollResult:
+      First: 5
+      Second: 5
+    PrevRollResult:
+      First: 2
+      Second: 5
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: true
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 1
+    PrevRollResult:
+      First: 5
+      Second: 5
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- IntersectionIndex: 40
+  PlayerIndex: 2
+  ActionType: CityAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 3
+    PrevRollResult:
+      First: 4
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 3
+    PrevRollResult:
+      First: 5
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 2
+    PrevRollResult:
+      First: 3
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- IntersectionIndex: 21
+  PlayerIndex: 1
+  ActionType: CityAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 3
+    PrevRollResult:
+      First: 6
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 2
+    PrevRollResult:
+      First: 5
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 5
+    PrevRollResult:
+      First: 6
+      Second: 2
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- SelectedCards:
+    Unknown: 0
+    Lumber: 0
+    Brick: 0
+    Wool: 0
+    Grain: 0
+    Ore: 4
+  PlayerIndex: 1
+  ActionType: DiscardAction
+- History:
+    PrevRobberTileIndex: 30
+    StolenCard: 
+  TargetTileIndex: 32
+  TargetPlayerIndex: 
+  PlayerIndex: 0
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 5
+    PrevRollResult:
+      First: 2
+      Second: 5
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 32
+    StolenCard: Wool
+  TargetTileIndex: 38
+  TargetPlayerIndex: 3
+  PlayerIndex: 1
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 1
+    PrevRollResult:
+      First: 2
+      Second: 5
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 38
+    StolenCard: 
+  TargetTileIndex: 32
+  TargetPlayerIndex: 
+  PlayerIndex: 2
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 6
+    PrevRollResult:
+      First: 6
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 2
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 1
+    PrevRollResult:
+      First: 3
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Grain
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- InputType: Grain
+  OutputType: Brick
+  PlayerIndex: 0
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 4
+    PrevRollResult:
+      First: 4
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 2
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 4
+    PrevRollResult:
+      First: 5
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 1
+    PrevRollResult:
+      First: 6
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 2
+    PrevRollResult:
+      First: 3
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 6
+    PrevRollResult:
+      First: 2
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 1
+    PrevRollResult:
+      First: 4
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 6
+    PrevRollResult:
+      First: 5
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- InputType: Wool
+  OutputType: Grain
+  PlayerIndex: 3
+  ActionType: FourToOneTradeAction
+- InputType: Brick
+  OutputType: Lumber
+  PlayerIndex: 3
+  ActionType: TwoToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 4
+    PrevRollResult:
+      First: 5
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 2
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Wool
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- InputType: Lumber
+  OutputType: Brick
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- History:
+    DrawnType: Knight
+  PlayerIndex: 0
+  ActionType: BuyDevelopmentCardAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 1
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 5
+    PrevRollResult:
+      First: 5
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    DrawnType: Knight
+  PlayerIndex: 1
+  ActionType: BuyDevelopmentCardAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 1
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 3
+    PrevRollResult:
+      First: 6
+      Second: 5
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 2
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- InputType: Ore
+  OutputType: Brick
+  PlayerIndex: 2
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 3
+    PrevRollResult:
+      First: 6
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 3
+    PrevRollResult:
+      First: 1
+      Second: 3
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- SelectedCards:
+    Unknown: 0
+    Lumber: 2
+    Brick: 2
+    Wool: 0
+    Grain: 0
+    Ore: 0
+  PlayerIndex: 0
+  ActionType: DiscardAction
+- History:
+    PrevRobberTileIndex: 32
+    StolenCard: Grain
+  TargetTileIndex: 22
+  TargetPlayerIndex: 2
+  PlayerIndex: 0
+  ActionType: RobberAction
+- History:
+    PrevLargestArmyHolder: -1
+  PlayerIndex: 0
+  ActionType: KnightAction
+- History:
+    PrevRobberTileIndex: 22
+    StolenCard: 
+  TargetTileIndex: 31
+  TargetPlayerIndex: 
+  PlayerIndex: 0
+  ActionType: RobberAction
+- History:
+    DrawnType: Knight
+  PlayerIndex: 0
+  ActionType: BuyDevelopmentCardAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 1
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: true
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 3
+    PrevRollResult:
+      First: 4
+      Second: 3
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 31
+    StolenCard: Grain
+  TargetTileIndex: 24
+  TargetPlayerIndex: 0
+  PlayerIndex: 1
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 2
+    PrevRollResult:
+      First: 4
+      Second: 3
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 24
+    StolenCard: Ore
+  TargetTileIndex: 23
+  TargetPlayerIndex: 0
+  PlayerIndex: 2
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 2
+    PrevRollResult:
+      First: 5
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 1
+    PrevRollResult:
+      First: 3
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 2
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    PrevLargestArmyHolder: -1
+  PlayerIndex: 1
+  ActionType: KnightAction
+- History:
+    PrevRobberTileIndex: 23
+    StolenCard: Brick
+  TargetTileIndex: 29
+  TargetPlayerIndex: 2
+  PlayerIndex: 1
+  ActionType: RobberAction
+- History:
+    RollResult:
+      First: 1
+      Second: 1
+    PrevRollResult:
+      First: 1
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 2
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- InputType: Grain
+  OutputType: Ore
+  PlayerIndex: 1
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: true
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 5
+    PrevRollResult:
+      First: 1
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 4
+    PrevRollResult:
+      First: 1
+      Second: 5
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 3
+    PrevRollResult:
+      First: 2
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Wool
+  OutputType: Brick
+  PlayerIndex: 0
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 3
+    PrevRollResult:
+      First: 3
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- InputType: Ore
+  OutputType: Grain
+  PlayerIndex: 1
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 6
+    PrevRollResult:
+      First: 5
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 5
+    PrevRollResult:
+      First: 5
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- InputType: Brick
+  OutputType: Wool
+  PlayerIndex: 3
+  ActionType: TwoToOneTradeAction
+- History:
+    DrawnType: RoadBuilding
+  PlayerIndex: 3
+  ActionType: BuyDevelopmentCardAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 1
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 1
+    PrevRollResult:
+      First: 6
+      Second: 5
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 29
+    StolenCard: 
+  TargetTileIndex: 23
+  TargetPlayerIndex: 
+  PlayerIndex: 0
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 6
+    PrevRollResult:
+      First: 6
+      Second: 1
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevRobberTileIndex: 23
+    StolenCard: 
+  TargetTileIndex: 10
+  TargetPlayerIndex: 
+  PlayerIndex: 1
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 6
+    PrevRollResult:
+      First: 1
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 2
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 3
+    PrevRollResult:
+      First: 3
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- PlayerIndex: 3
+  ActionType: RoadBuildingAction
+- History:
+    PrevLongestRoadHolder: -1
+    WasFree: true
+  EdgeIndex: 17
+  PlayerIndex: 3
+  ActionType: RoadAction
+- History:
+    PrevFreeRoads: 1
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: true
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    PrevLargestArmyHolder: -1
+  PlayerIndex: 0
+  ActionType: KnightAction
+- History:
+    PrevRobberTileIndex: 10
+    StolenCard: Wool
+  TargetTileIndex: 38
+  TargetPlayerIndex: 3
+  PlayerIndex: 0
+  ActionType: RobberAction
+- History:
+    RollResult:
+      First: 3
+      Second: 3
+    PrevRollResult:
+      First: 1
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+    RobbedYields: 1
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevLongestRoadHolder: -1
+    WasFree: false
+  EdgeIndex: 19
+  PlayerIndex: 0
+  ActionType: RoadAction
+- History:
+    DrawnType: Knight
+  PlayerIndex: 0
+  ActionType: BuyDevelopmentCardAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 1
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: true
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 5
+    PrevRollResult:
+      First: 3
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 1
+    PrevRollResult:
+      First: 3
+      Second: 5
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 1
+      - 0
+      - 0
+    RobbedYields: 1
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 4
+    PrevRollResult:
+      First: 5
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 2
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- InputType: Wool
+  OutputType: Lumber
+  PlayerIndex: 3
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    PrevLargestArmyHolder: 0
+  PlayerIndex: 0
+  ActionType: KnightAction
+- History:
+    PrevRobberTileIndex: 38
+    StolenCard: 
+  TargetTileIndex: 39
+  TargetPlayerIndex: 
+  PlayerIndex: 0
+  ActionType: RobberAction
+- History:
+    RollResult:
+      First: 3
+      Second: 4
+    PrevRollResult:
+      First: 5
+      Second: 4
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- SelectedCards:
+    Unknown: 0
+    Lumber: 0
+    Brick: 0
+    Wool: 2
+    Grain: 1
+    Ore: 1
+  PlayerIndex: 1
+  ActionType: DiscardAction
+- History:
+    PrevRobberTileIndex: 39
+    StolenCard: Brick
+  TargetTileIndex: 9
+  TargetPlayerIndex: 3
+  PlayerIndex: 0
+  ActionType: RobberAction
+- InputType: Lumber
+  OutputType: Wool
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- History:
+    PrevLongestRoadHolder: -1
+  IntersectionIndex: 17
+  PlayerIndex: 0
+  ActionType: SettlementAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: true
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 5
+    PrevRollResult:
+      First: 3
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 5
+    PrevRollResult:
+      First: 5
+      Second: 5
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 0
+      - 0
+    RobbedYields: 1
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 6
+    PrevRollResult:
+      First: 1
+      Second: 5
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevLongestRoadHolder: -1
+    WasFree: false
+  EdgeIndex: 16
+  PlayerIndex: 3
+  ActionType: RoadAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 4
+    PrevRollResult:
+      First: 5
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 0
+      - 0
+    RobbedYields: 1
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 1
+    PrevRollResult:
+      First: 2
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 1
+    PrevRollResult:
+      First: 2
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 0
+      - 0
+    RobbedYields: 1
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 2
+    PrevRollResult:
+      First: 5
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 0
+      - 0
+    RobbedYields: 1
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- InputType: Brick
+  OutputType: Wool
+  PlayerIndex: 3
+  ActionType: TwoToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 6
+    PrevRollResult:
+      First: 4
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 1
+    PrevRollResult:
+      First: 6
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 0
+      - 0
+      - 0
+    RobbedYields: 1
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 6
+    PrevRollResult:
+      First: 5
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 3
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- IntersectionIndex: 25
+  PlayerIndex: 2
+  ActionType: CityAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 4
+    PrevRollResult:
+      First: 3
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 3
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevLongestRoadHolder: -1
+    WasFree: false
+  EdgeIndex: 5
+  PlayerIndex: 3
+  ActionType: RoadAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 6
+    PrevRollResult:
+      First: 5
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 3
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Brick
+  PlayerIndex: 0
+  ActionType: FourToOneTradeAction
+- InputType: Lumber
+  OutputType: Ore
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 1
+    PrevRollResult:
+      First: 3
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 3
+    PrevRollResult:
+      First: 4
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 2
+    PrevRollResult:
+      First: 5
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 1
+    PrevRollResult:
+      First: 2
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Brick
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- IntersectionIndex: 17
+  PlayerIndex: 0
+  ActionType: CityAction
+- History:
+    PrevLongestRoadHolder: -1
+    WasFree: false
+  EdgeIndex: 27
+  PlayerIndex: 0
+  ActionType: RoadAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 2
+    PrevRollResult:
+      First: 3
+      Second: 1
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- SelectedCards:
+    Unknown: 0
+    Lumber: 0
+    Brick: 2
+    Wool: 0
+    Grain: 1
+    Ore: 1
+  PlayerIndex: 1
+  ActionType: DiscardAction
+- History:
+    PrevRobberTileIndex: 9
+    StolenCard: 
+  TargetTileIndex: 26
+  TargetPlayerIndex: 
+  PlayerIndex: 1
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 4
+    PrevRollResult:
+      First: 5
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 4
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 6
+    PrevRollResult:
+      First: 5
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 3
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 2
+    PrevRollResult:
+      First: 5
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Grain
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- InputType: Lumber
+  OutputType: Ore
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- InputType: Grain
+  OutputType: Ore
+  PlayerIndex: 0
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 1
+    PrevRollResult:
+      First: 4
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 1
+    PrevRollResult:
+      First: 5
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 3
+    PrevRollResult:
+      First: 5
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- InputType: Brick
+  OutputType: Grain
+  PlayerIndex: 3
+  ActionType: TwoToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 3
+    PrevRollResult:
+      First: 3
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 4
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Ore
+  PlayerIndex: 0
+  ActionType: TwoToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 6
+    PrevRollResult:
+      First: 6
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- InputType: Ore
+  OutputType: Brick
+  PlayerIndex: 1
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 3
+    PrevRollResult:
+      First: 2
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 4
+    PrevRollResult:
+      First: 1
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 4
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- InputType: Wool
+  OutputType: Ore
+  PlayerIndex: 3
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 2
+    PrevRollResult:
+      First: 5
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Ore
+  PlayerIndex: 0
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 4
+    PrevRollResult:
+      First: 6
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 1
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 4
+    PrevRollResult:
+      First: 1
+      Second: 4
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- SelectedCards:
+    Unknown: 0
+    Lumber: 0
+    Brick: 2
+    Wool: 0
+    Grain: 1
+    Ore: 3
+  PlayerIndex: 0
+  ActionType: DiscardAction
+- History:
+    PrevRobberTileIndex: 26
+    StolenCard: Lumber
+  TargetTileIndex: 18
+  TargetPlayerIndex: 0
+  PlayerIndex: 2
+  ActionType: RobberAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 3
+    PrevRollResult:
+      First: 3
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 1
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    DrawnType: VictoryPoint
+  PlayerIndex: 3
+  ActionType: BuyDevelopmentCardAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 1
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 2
+    PrevRollResult:
+      First: 1
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 2
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 2
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- IntersectionIndex: 19
+  PlayerIndex: 0
+  ActionType: CityAction
+- History:
+    PrevLongestRoadHolder: -1
+    WasFree: false
+  EdgeIndex: 18
+  PlayerIndex: 0
+  ActionType: RoadAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 6
+    PrevRollResult:
+      First: 1
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 2
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 2
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 6
+    PrevRollResult:
+      First: 3
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 2
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 2
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 1
+    PrevRollResult:
+      First: 3
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- InputType: Brick
+  OutputType: Grain
+  PlayerIndex: 3
+  ActionType: TwoToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 1
+    PrevRollResult:
+      First: 4
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 2
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 2
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Wool
+  PlayerIndex: 0
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 6
+    PrevRollResult:
+      First: 2
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 6
+    PrevRollResult:
+      First: 4
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- InputType: Grain
+  OutputType: Wool
+  PlayerIndex: 2
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 2
+      Second: 2
+    PrevRollResult:
+      First: 6
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 2
+    PrevRollResult:
+      First: 2
+      Second: 2
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 4
+      Second: 3
+    PrevRollResult:
+      First: 4
+      Second: 2
+    TriggeredRobber: true
+    AwardedYields: 
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- SelectedCards:
+    Unknown: 0
+    Lumber: 0
+    Brick: 1
+    Wool: 1
+    Grain: 1
+    Ore: 1
+  PlayerIndex: 0
+  ActionType: DiscardAction
+- SelectedCards:
+    Unknown: 0
+    Lumber: 0
+    Brick: 1
+    Wool: 0
+    Grain: 2
+    Ore: 1
+  PlayerIndex: 1
+  ActionType: DiscardAction
+- SelectedCards:
+    Unknown: 0
+    Lumber: 1
+    Brick: 2
+    Wool: 1
+    Grain: 0
+    Ore: 0
+  PlayerIndex: 2
+  ActionType: DiscardAction
+- History:
+    PrevRobberTileIndex: 18
+    StolenCard: Grain
+  TargetTileIndex: 24
+  TargetPlayerIndex: 0
+  PlayerIndex: 1
+  ActionType: RobberAction
+- InputType: Grain
+  OutputType: Brick
+  PlayerIndex: 1
+  ActionType: FourToOneTradeAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 3
+    PrevRollResult:
+      First: 4
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 6
+      Second: 3
+    PrevRollResult:
+      First: 5
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 4
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 4
+    PrevRollResult:
+      First: 6
+      Second: 3
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 4
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Grain
+  PlayerIndex: 0
+  ActionType: FourToOneTradeAction
+- History:
+    PrevLongestRoadHolder: -1
+    WasFree: false
+  EdgeIndex: 4
+  PlayerIndex: 0
+  ActionType: RoadAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 0
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 5
+      Second: 1
+    PrevRollResult:
+      First: 5
+      Second: 4
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 1
+      - 1
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 1
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 1
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 6
+    PrevRollResult:
+      First: 5
+      Second: 1
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 4
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 2
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 2
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 3
+      Second: 5
+    PrevRollResult:
+      First: 3
+      Second: 6
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 2
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 3
+  ActionType: RollAction
+- History:
+    PrevFreeRoads: 0
+    PrevNewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    PrevHasPlayedDevelopmentCard: false
+  PlayerIndex: 3
+  ActionType: EndTurnAction
+- History:
+    RollResult:
+      First: 1
+      Second: 2
+    PrevRollResult:
+      First: 3
+      Second: 5
+    TriggeredRobber: false
+    AwardedYields:
+    - - 0
+      - 0
+      - 2
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    - - 0
+      - 0
+      - 2
+      - 0
+      - 2
+      - 0
+    - - 0
+      - 0
+      - 0
+      - 0
+      - 0
+      - 0
+    RobbedYields: 0
+    CappedYields: 0
+  PlayerIndex: 0
+  ActionType: RollAction
+- InputType: Lumber
+  OutputType: Wool
+  PlayerIndex: 0
+  ActionType: FourToOneTradeAction
+- History:
+    PrevLongestRoadHolder: -1
+  IntersectionIndex: 4
+  PlayerIndex: 0
+  ActionType: SettlementAction
+UndoHistory: []

@@ -1,0 +1,2006 @@
+Version: 1
+GameState:
+  Settings:
+    RobberCardLimit: 7
+    VictoryPoints: 10
+  Turn:
+    RoundCounter: 1
+    LastRoll:
+      First: 5
+      Second: 6
+    PlayerIndex: 3
+    TypeOfRound: SecondInitial
+    MustRoll: false
+    AwaitedPlayerDiscards:
+    - false
+    - false
+    - false
+    - false
+    MustMoveRobber: false
+    HasPlayedDevelopmentCard: false
+  Board:
+    Robber:
+      X: 4
+      Y: 3
+      Type: Desert
+      Number: 
+    Map:
+      Values:
+      - X: 0
+        Y: 0
+        Type: NonPlayable
+        Number: 
+      - X: 1
+        Y: 0
+        Type: Water
+        Number: 
+      - X: 2
+        Y: 0
+        Type: Water
+        Number: 
+      - X: 3
+        Y: 0
+        Type: Water
+        Number: 
+      - X: 4
+        Y: 0
+        Type: Water
+        Number: 
+      - X: 5
+        Y: 0
+        Type: NonPlayable
+        Number: 
+      - X: 6
+        Y: 0
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 1
+        Type: NonPlayable
+        Number: 
+      - X: 1
+        Y: 1
+        Type: Water
+        Number: 
+      - X: 2
+        Y: 1
+        Type: Wool
+        Number: 6
+      - X: 3
+        Y: 1
+        Type: Wool
+        Number: 11
+      - X: 4
+        Y: 1
+        Type: Wool
+        Number: 2
+      - X: 5
+        Y: 1
+        Type: Water
+        Number: 
+      - X: 6
+        Y: 1
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 2
+        Type: Water
+        Number: 
+      - X: 1
+        Y: 2
+        Type: Lumber
+        Number: 9
+      - X: 2
+        Y: 2
+        Type: Ore
+        Number: 4
+      - X: 3
+        Y: 2
+        Type: Ore
+        Number: 8
+      - X: 4
+        Y: 2
+        Type: Lumber
+        Number: 9
+      - X: 5
+        Y: 2
+        Type: Water
+        Number: 
+      - X: 6
+        Y: 2
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 3
+        Type: Water
+        Number: 
+      - X: 1
+        Y: 3
+        Type: Brick
+        Number: 3
+      - X: 2
+        Y: 3
+        Type: Grain
+        Number: 11
+      - X: 3
+        Y: 3
+        Type: Grain
+        Number: 5
+      - X: 4
+        Y: 3
+        Type: Desert
+        Number: 
+      - X: 5
+        Y: 3
+        Type: Wool
+        Number: 12
+      - X: 6
+        Y: 3
+        Type: Water
+        Number: 
+      - X: 0
+        Y: 4
+        Type: Water
+        Number: 
+      - X: 1
+        Y: 4
+        Type: Ore
+        Number: 10
+      - X: 2
+        Y: 4
+        Type: Grain
+        Number: 5
+      - X: 3
+        Y: 4
+        Type: Brick
+        Number: 10
+      - X: 4
+        Y: 4
+        Type: Lumber
+        Number: 8
+      - X: 5
+        Y: 4
+        Type: Water
+        Number: 
+      - X: 6
+        Y: 4
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 5
+        Type: NonPlayable
+        Number: 
+      - X: 1
+        Y: 5
+        Type: Water
+        Number: 
+      - X: 2
+        Y: 5
+        Type: Grain
+        Number: 3
+      - X: 3
+        Y: 5
+        Type: Brick
+        Number: 6
+      - X: 4
+        Y: 5
+        Type: Lumber
+        Number: 4
+      - X: 5
+        Y: 5
+        Type: Water
+        Number: 
+      - X: 6
+        Y: 5
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 6
+        Type: NonPlayable
+        Number: 
+      - X: 1
+        Y: 6
+        Type: Water
+        Number: 
+      - X: 2
+        Y: 6
+        Type: Water
+        Number: 
+      - X: 3
+        Y: 6
+        Type: Water
+        Number: 
+      - X: 4
+        Y: 6
+        Type: Water
+        Number: 
+      - X: 5
+        Y: 6
+        Type: NonPlayable
+        Number: 
+      - X: 6
+        Y: 6
+        Type: NonPlayable
+        Number: 
+      Width: 7
+      Height: 7
+    Intersections:
+    - Index: 0
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 1
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 2
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 3
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 4
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 5
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 6
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 7
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 8
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 9
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 10
+      FacesDownwards: false
+      Building: Settlement
+      Owner: 1
+    - Index: 11
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 12
+      FacesDownwards: false
+      Building: Settlement
+      Owner: 0
+    - Index: 13
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 14
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 15
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 16
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 17
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 18
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 19
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 20
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 21
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 22
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 23
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 24
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 25
+      FacesDownwards: false
+      Building: Settlement
+      Owner: 2
+    - Index: 26
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 27
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 28
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 29
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 30
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 31
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 32
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 33
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 34
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 35
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 36
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 37
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 38
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 39
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 40
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 41
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 42
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 43
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 44
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 45
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 46
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 47
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 48
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 49
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    - Index: 50
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 51
+      FacesDownwards: true
+      Building: Settlement
+      Owner: 3
+    - Index: 52
+      FacesDownwards: false
+      Building: None
+      Owner: -1
+    - Index: 53
+      FacesDownwards: true
+      Building: None
+      Owner: -1
+    Edges:
+    - Index: 0
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 1
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 2
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 3
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 4
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 5
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 6
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 7
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 8
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 9
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 10
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 11
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 12
+      Direction: LeftTop
+      Building: Road
+      Owner: 1
+    - Index: 13
+      Direction: UpDown
+      Building: Road
+      Owner: 0
+    - Index: 14
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 15
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 16
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 17
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 18
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 19
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 20
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 21
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 22
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 23
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 24
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 25
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 26
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 27
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 28
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 29
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 30
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 31
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 32
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 33
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 34
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 35
+      Direction: LeftTop
+      Building: Road
+      Owner: 2
+    - Index: 36
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 37
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 38
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 39
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 40
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 41
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 42
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 43
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 44
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 45
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 46
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 47
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 48
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 49
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 50
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 51
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 52
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 53
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 54
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 55
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 56
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 57
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 58
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 59
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 60
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 61
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 62
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 63
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 64
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 65
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    - Index: 66
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 67
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 68
+      Direction: LeftTop
+      Building: Road
+      Owner: 3
+    - Index: 69
+      Direction: UpDown
+      Building: None
+      Owner: -1
+    - Index: 70
+      Direction: RightTop
+      Building: None
+      Owner: -1
+    - Index: 71
+      Direction: LeftTop
+      Building: None
+      Owner: -1
+    Ports:
+    - AnchorTileX: 0
+      AnchorTileY: 2
+      AnchorDirection: East
+      Type: Generic
+    - AnchorTileX: 1
+      AnchorTileY: 0
+      AnchorDirection: SouthEast
+      Type: Ore
+    - AnchorTileX: 3
+      AnchorTileY: 0
+      AnchorDirection: SouthWest
+      Type: Wool
+    - AnchorTileX: 5
+      AnchorTileY: 1
+      AnchorDirection: SouthWest
+      Type: Lumber
+    - AnchorTileX: 6
+      AnchorTileY: 3
+      AnchorDirection: West
+      Type: Generic
+    - AnchorTileX: 5
+      AnchorTileY: 5
+      AnchorDirection: NorthWest
+      Type: Generic
+    - AnchorTileX: 3
+      AnchorTileY: 6
+      AnchorDirection: NorthWest
+      Type: Brick
+    - AnchorTileX: 1
+      AnchorTileY: 6
+      AnchorDirection: NorthEast
+      Type: Generic
+    - AnchorTileX: 0
+      AnchorTileY: 4
+      AnchorDirection: East
+      Type: Grain
+    Adjacency:
+      TileToTile:
+      - - 255
+        - 255
+        - 255
+        - 1
+        - 8
+        - 7
+      - - 0
+        - 255
+        - 255
+        - 2
+        - 9
+        - 8
+      - - 1
+        - 255
+        - 255
+        - 3
+        - 10
+        - 9
+      - - 2
+        - 255
+        - 255
+        - 4
+        - 11
+        - 10
+      - - 3
+        - 255
+        - 255
+        - 5
+        - 12
+        - 11
+      - - 4
+        - 255
+        - 255
+        - 6
+        - 13
+        - 12
+      - - 5
+        - 255
+        - 255
+        - 255
+        - 255
+        - 13
+      - - 255
+        - 255
+        - 0
+        - 8
+        - 14
+        - 255
+      - - 7
+        - 0
+        - 1
+        - 9
+        - 15
+        - 14
+      - - 8
+        - 1
+        - 2
+        - 10
+        - 16
+        - 15
+      - - 9
+        - 2
+        - 3
+        - 11
+        - 17
+        - 16
+      - - 10
+        - 3
+        - 4
+        - 12
+        - 18
+        - 17
+      - - 11
+        - 4
+        - 5
+        - 13
+        - 19
+        - 18
+      - - 12
+        - 5
+        - 6
+        - 255
+        - 20
+        - 19
+      - - 255
+        - 7
+        - 8
+        - 15
+        - 22
+        - 21
+      - - 14
+        - 8
+        - 9
+        - 16
+        - 23
+        - 22
+      - - 15
+        - 9
+        - 10
+        - 17
+        - 24
+        - 23
+      - - 16
+        - 10
+        - 11
+        - 18
+        - 25
+        - 24
+      - - 17
+        - 11
+        - 12
+        - 19
+        - 26
+        - 25
+      - - 18
+        - 12
+        - 13
+        - 20
+        - 27
+        - 26
+      - - 19
+        - 13
+        - 255
+        - 255
+        - 255
+        - 27
+      - - 255
+        - 255
+        - 14
+        - 22
+        - 28
+        - 255
+      - - 21
+        - 14
+        - 15
+        - 23
+        - 29
+        - 28
+      - - 22
+        - 15
+        - 16
+        - 24
+        - 30
+        - 29
+      - - 23
+        - 16
+        - 17
+        - 25
+        - 31
+        - 30
+      - - 24
+        - 17
+        - 18
+        - 26
+        - 32
+        - 31
+      - - 25
+        - 18
+        - 19
+        - 27
+        - 33
+        - 32
+      - - 26
+        - 19
+        - 20
+        - 255
+        - 34
+        - 33
+      - - 255
+        - 21
+        - 22
+        - 29
+        - 36
+        - 35
+      - - 28
+        - 22
+        - 23
+        - 30
+        - 37
+        - 36
+      - - 29
+        - 23
+        - 24
+        - 31
+        - 38
+        - 37
+      - - 30
+        - 24
+        - 25
+        - 32
+        - 39
+        - 38
+      - - 31
+        - 25
+        - 26
+        - 33
+        - 40
+        - 39
+      - - 32
+        - 26
+        - 27
+        - 34
+        - 41
+        - 40
+      - - 33
+        - 27
+        - 255
+        - 255
+        - 255
+        - 41
+      - - 255
+        - 255
+        - 28
+        - 36
+        - 42
+        - 255
+      - - 35
+        - 28
+        - 29
+        - 37
+        - 43
+        - 42
+      - - 36
+        - 29
+        - 30
+        - 38
+        - 44
+        - 43
+      - - 37
+        - 30
+        - 31
+        - 39
+        - 45
+        - 44
+      - - 38
+        - 31
+        - 32
+        - 40
+        - 46
+        - 45
+      - - 39
+        - 32
+        - 33
+        - 41
+        - 47
+        - 46
+      - - 40
+        - 33
+        - 34
+        - 255
+        - 48
+        - 47
+      - - 255
+        - 35
+        - 36
+        - 43
+        - 255
+        - 255
+      - - 42
+        - 36
+        - 37
+        - 44
+        - 255
+        - 255
+      - - 43
+        - 37
+        - 38
+        - 45
+        - 255
+        - 255
+      - - 44
+        - 38
+        - 39
+        - 46
+        - 255
+        - 255
+      - - 45
+        - 39
+        - 40
+        - 47
+        - 255
+        - 255
+      - - 46
+        - 40
+        - 41
+        - 48
+        - 255
+        - 255
+      - - 47
+        - 41
+        - 255
+        - 255
+        - 255
+        - 255
+      TileToIntersection:
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - - 0
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+      - - 4
+        - 3
+        - 6
+        - 7
+        - 8
+        - 9
+      - - 8
+        - 7
+        - 10
+        - 11
+        - 12
+        - 13
+      - 
+      - 
+      - 
+      - - 14
+        - 15
+        - 0
+        - 5
+        - 16
+        - 17
+      - - 16
+        - 5
+        - 4
+        - 9
+        - 18
+        - 19
+      - - 18
+        - 9
+        - 8
+        - 13
+        - 20
+        - 21
+      - - 20
+        - 13
+        - 12
+        - 22
+        - 23
+        - 24
+      - 
+      - 
+      - 
+      - - 25
+        - 26
+        - 14
+        - 17
+        - 27
+        - 28
+      - - 27
+        - 17
+        - 16
+        - 19
+        - 29
+        - 30
+      - - 29
+        - 19
+        - 18
+        - 21
+        - 31
+        - 32
+      - - 31
+        - 21
+        - 20
+        - 24
+        - 33
+        - 34
+      - - 33
+        - 24
+        - 23
+        - 35
+        - 36
+        - 37
+      - 
+      - 
+      - - 38
+        - 28
+        - 27
+        - 30
+        - 39
+        - 40
+      - - 39
+        - 30
+        - 29
+        - 32
+        - 41
+        - 42
+      - - 41
+        - 32
+        - 31
+        - 34
+        - 43
+        - 44
+      - - 43
+        - 34
+        - 33
+        - 37
+        - 45
+        - 46
+      - 
+      - 
+      - 
+      - 
+      - - 47
+        - 40
+        - 39
+        - 42
+        - 48
+        - 49
+      - - 48
+        - 42
+        - 41
+        - 44
+        - 50
+        - 51
+      - - 50
+        - 44
+        - 43
+        - 46
+        - 52
+        - 53
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      TileToEdge:
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - - 0
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+      - - 3
+        - 6
+        - 7
+        - 8
+        - 9
+        - 10
+      - - 8
+        - 11
+        - 12
+        - 13
+        - 14
+        - 15
+      - 
+      - 
+      - 
+      - - 16
+        - 17
+        - 5
+        - 18
+        - 19
+        - 20
+      - - 18
+        - 4
+        - 10
+        - 21
+        - 22
+        - 23
+      - - 21
+        - 9
+        - 15
+        - 24
+        - 25
+        - 26
+      - - 24
+        - 14
+        - 27
+        - 28
+        - 29
+        - 30
+      - 
+      - 
+      - 
+      - - 31
+        - 32
+        - 20
+        - 33
+        - 34
+        - 35
+      - - 33
+        - 19
+        - 23
+        - 36
+        - 37
+        - 38
+      - - 36
+        - 22
+        - 26
+        - 39
+        - 40
+        - 41
+      - - 39
+        - 25
+        - 30
+        - 42
+        - 43
+        - 44
+      - - 42
+        - 29
+        - 45
+        - 46
+        - 47
+        - 48
+      - 
+      - 
+      - - 49
+        - 34
+        - 38
+        - 50
+        - 51
+        - 52
+      - - 50
+        - 37
+        - 41
+        - 53
+        - 54
+        - 55
+      - - 53
+        - 40
+        - 44
+        - 56
+        - 57
+        - 58
+      - - 56
+        - 43
+        - 48
+        - 59
+        - 60
+        - 61
+      - 
+      - 
+      - 
+      - 
+      - - 62
+        - 51
+        - 55
+        - 63
+        - 64
+        - 65
+      - - 63
+        - 54
+        - 58
+        - 66
+        - 67
+        - 68
+      - - 66
+        - 57
+        - 61
+        - 69
+        - 70
+        - 71
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      - 
+      IntersectionToTile:
+      - - 9
+        - 255
+        - 15
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 9
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 255
+        - 9
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 10
+        - 255
+        - 9
+        - 255
+        - 255
+      - - 10
+        - 255
+        - 16
+        - 255
+        - 9
+        - 255
+      - - 255
+        - 16
+        - 255
+        - 15
+        - 255
+        - 9
+      - - 255
+        - 255
+        - 10
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 11
+        - 255
+        - 10
+        - 255
+        - 255
+      - - 11
+        - 255
+        - 17
+        - 255
+        - 10
+        - 255
+      - - 255
+        - 17
+        - 255
+        - 16
+        - 255
+        - 10
+      - - 255
+        - 255
+        - 11
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 11
+        - 255
+        - 255
+      - - 255
+        - 255
+        - 18
+        - 255
+        - 11
+        - 255
+      - - 255
+        - 18
+        - 255
+        - 17
+        - 255
+        - 11
+      - - 15
+        - 255
+        - 22
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 15
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 16
+        - 255
+        - 23
+        - 255
+        - 15
+        - 255
+      - - 255
+        - 23
+        - 255
+        - 22
+        - 255
+        - 15
+      - - 17
+        - 255
+        - 24
+        - 255
+        - 16
+        - 255
+      - - 255
+        - 24
+        - 255
+        - 23
+        - 255
+        - 16
+      - - 18
+        - 255
+        - 25
+        - 255
+        - 17
+        - 255
+      - - 255
+        - 25
+        - 255
+        - 24
+        - 255
+        - 17
+      - - 255
+        - 255
+        - 255
+        - 18
+        - 255
+        - 255
+      - - 255
+        - 255
+        - 26
+        - 255
+        - 18
+        - 255
+      - - 255
+        - 26
+        - 255
+        - 25
+        - 255
+        - 18
+      - - 22
+        - 255
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 255
+        - 22
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 23
+        - 255
+        - 29
+        - 255
+        - 22
+        - 255
+      - - 255
+        - 29
+        - 255
+        - 255
+        - 255
+        - 22
+      - - 24
+        - 255
+        - 30
+        - 255
+        - 23
+        - 255
+      - - 255
+        - 30
+        - 255
+        - 29
+        - 255
+        - 23
+      - - 25
+        - 255
+        - 31
+        - 255
+        - 24
+        - 255
+      - - 255
+        - 31
+        - 255
+        - 30
+        - 255
+        - 24
+      - - 26
+        - 255
+        - 32
+        - 255
+        - 25
+        - 255
+      - - 255
+        - 32
+        - 255
+        - 31
+        - 255
+        - 25
+      - - 255
+        - 255
+        - 255
+        - 26
+        - 255
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 26
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 32
+        - 255
+        - 26
+      - - 29
+        - 255
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 30
+        - 255
+        - 37
+        - 255
+        - 29
+        - 255
+      - - 255
+        - 37
+        - 255
+        - 255
+        - 255
+        - 29
+      - - 31
+        - 255
+        - 38
+        - 255
+        - 30
+        - 255
+      - - 255
+        - 38
+        - 255
+        - 37
+        - 255
+        - 30
+      - - 32
+        - 255
+        - 39
+        - 255
+        - 31
+        - 255
+      - - 255
+        - 39
+        - 255
+        - 38
+        - 255
+        - 31
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 32
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 39
+        - 255
+        - 32
+      - - 37
+        - 255
+        - 255
+        - 255
+        - 255
+        - 255
+      - - 38
+        - 255
+        - 255
+        - 255
+        - 37
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 255
+        - 37
+      - - 39
+        - 255
+        - 255
+        - 255
+        - 38
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 255
+        - 38
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 39
+        - 255
+      - - 255
+        - 255
+        - 255
+        - 255
+        - 255
+        - 39
+      EdgeToWestTile:
+      - 255
+      - 255
+      - 9
+      - 9
+      - 9
+      - 15
+      - 255
+      - 10
+      - 10
+      - 10
+      - 16
+      - 255
+      - 11
+      - 11
+      - 11
+      - 17
+      - 255
+      - 255
+      - 15
+      - 15
+      - 22
+      - 16
+      - 16
+      - 23
+      - 17
+      - 17
+      - 24
+      - 18
+      - 18
+      - 18
+      - 25
+      - 255
+      - 255
+      - 22
+      - 22
+      - 255
+      - 23
+      - 23
+      - 29
+      - 24
+      - 24
+      - 30
+      - 25
+      - 25
+      - 31
+      - 26
+      - 26
+      - 26
+      - 32
+      - 255
+      - 29
+      - 29
+      - 255
+      - 30
+      - 30
+      - 37
+      - 31
+      - 31
+      - 38
+      - 32
+      - 32
+      - 39
+      - 255
+      - 37
+      - 37
+      - 255
+      - 38
+      - 38
+      - 255
+      - 39
+      - 39
+      EdgeToEastTile:
+      - 9
+      - 9
+      - 255
+      - 10
+      - 16
+      - 9
+      - 10
+      - 255
+      - 11
+      - 17
+      - 10
+      - 11
+      - 255
+      - 255
+      - 18
+      - 11
+      - 15
+      - 15
+      - 16
+      - 23
+      - 15
+      - 17
+      - 24
+      - 16
+      - 18
+      - 25
+      - 17
+      - 255
+      - 255
+      - 26
+      - 18
+      - 22
+      - 22
+      - 23
+      - 29
+      - 22
+      - 24
+      - 30
+      - 23
+      - 25
+      - 31
+      - 24
+      - 26
+      - 32
+      - 25
+      - 255
+      - 255
+      - 255
+      - 26
+      - 29
+      - 30
+      - 37
+      - 29
+      - 31
+      - 38
+      - 30
+      - 32
+      - 39
+      - 31
+      - 255
+      - 255
+      - 32
+      - 37
+      - 38
+      - 255
+      - 37
+      - 39
+      - 255
+      - 38
+      - 255
+      - 255
+      - 39
+  ResourceBank:
+    Unknown: 0
+    Lumber: 19
+    Brick: 19
+    Wool: 19
+    Grain: 19
+    Ore: 19
+  DevelopmentBank:
+    Unknown: 0
+    Knight: 14
+    RoadBuilding: 2
+    YearOfPlenty: 2
+    Monopoly: 2
+    VictoryPoint: 5
+  Players:
+  - VictoryPoints:
+      SettlementPoints: 1
+      CityPoints: 0
+      DevelopmentCardPoints: 0
+      LongestRoadPoints: 0
+      LargestArmyPoints: 0
+    PlayedKnights: 0
+    LongestRoadLength: 1
+    ResourceCards:
+      Unknown: 0
+      Lumber: 0
+      Brick: 0
+      Wool: 0
+      Grain: 0
+      Ore: 0
+    DevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    NewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    BuildingStock:
+      RemainingRoads: 14
+      RemainingSettlements: 4
+      RemainingCities: 4
+      FreeRoads: 0
+    PortPrivileges: LumberTwoToOne
+  - VictoryPoints:
+      SettlementPoints: 1
+      CityPoints: 0
+      DevelopmentCardPoints: 0
+      LongestRoadPoints: 0
+      LargestArmyPoints: 0
+    PlayedKnights: 0
+    LongestRoadLength: 1
+    ResourceCards:
+      Unknown: 0
+      Lumber: 0
+      Brick: 0
+      Wool: 0
+      Grain: 0
+      Ore: 0
+    DevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    NewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    BuildingStock:
+      RemainingRoads: 14
+      RemainingSettlements: 4
+      RemainingCities: 4
+      FreeRoads: 0
+    PortPrivileges: None
+  - VictoryPoints:
+      SettlementPoints: 1
+      CityPoints: 0
+      DevelopmentCardPoints: 0
+      LongestRoadPoints: 0
+      LargestArmyPoints: 0
+    PlayedKnights: 0
+    LongestRoadLength: 1
+    ResourceCards:
+      Unknown: 0
+      Lumber: 0
+      Brick: 0
+      Wool: 0
+      Grain: 0
+      Ore: 0
+    DevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    NewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    BuildingStock:
+      RemainingRoads: 14
+      RemainingSettlements: 4
+      RemainingCities: 4
+      FreeRoads: 0
+    PortPrivileges: None
+  - VictoryPoints:
+      SettlementPoints: 1
+      CityPoints: 0
+      DevelopmentCardPoints: 0
+      LongestRoadPoints: 0
+      LargestArmyPoints: 0
+    PlayedKnights: 0
+    LongestRoadLength: 1
+    ResourceCards:
+      Unknown: 0
+      Lumber: 0
+      Brick: 0
+      Wool: 0
+      Grain: 0
+      Ore: 0
+    DevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    NewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    BuildingStock:
+      RemainingRoads: 14
+      RemainingSettlements: 4
+      RemainingCities: 4
+      FreeRoads: 0
+    PortPrivileges: BrickTwoToOne
+PlayedActions:
+- IntersectionIndex: 12
+  PlayerIndex: 0
+  ActionType: FirstInitialSettlementAction
+- EdgeIndex: 13
+  PlayerIndex: 0
+  ActionType: FirstInitialRoadAction
+- IntersectionIndex: 10
+  PlayerIndex: 1
+  ActionType: FirstInitialSettlementAction
+- EdgeIndex: 12
+  PlayerIndex: 1
+  ActionType: FirstInitialRoadAction
+- IntersectionIndex: 25
+  PlayerIndex: 2
+  ActionType: FirstInitialSettlementAction
+- EdgeIndex: 35
+  PlayerIndex: 2
+  ActionType: FirstInitialRoadAction
+- IntersectionIndex: 51
+  PlayerIndex: 3
+  ActionType: FirstInitialSettlementAction
+- EdgeIndex: 68
+  PlayerIndex: 3
+  ActionType: FirstInitialRoadAction
+UndoHistory: []
