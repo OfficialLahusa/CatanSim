@@ -21,12 +21,16 @@ namespace Agents.MCTS
         protected double _explorationParameter;
         protected Random _random = Random.Shared;
 
-        public MCTSTree(GameState rootState, sbyte ownerIdx, double explorationParameter)
+        // Running value range of the tree, used to normalize Q values during selection (null disables normalization)
+        public MinMaxStats? ValueBounds { get; }
+
+        public MCTSTree(GameState rootState, sbyte ownerIdx, double explorationParameter, bool normalizeValues = true)
         {
             RootState = rootState;
             RootNode = new MCTSNode((sbyte)rootState.Turn.PlayerIndex, null, null, false);
             _ownerIdx = ownerIdx;
             _explorationParameter = explorationParameter;
+            ValueBounds = normalizeValues ? new MinMaxStats() : null;
         }
 
         public Action GetMostPromisingMove()
@@ -142,6 +146,10 @@ namespace Agents.MCTS
                     currentNode.IncrementVisitCount();
 
                 currentNode.AddResult(result);
+
+                // Keep the tree-wide value range up to date with the node's new mean value
+                ValueBounds?.Update(currentNode.TotalScore / currentNode.VisitCount);
+
                 currentNode = currentNode.Parent;
             }
         }
@@ -173,7 +181,7 @@ namespace Agents.MCTS
                 if (HasDecidingPower(node))
                 {
                     // Slight random jitter to break ties (especially important for unexplored nodes)
-                    return node.Children.OrderByDescending(c => c.GetUCT(_explorationParameter) + _random.NextDouble() * 1e-5).First();
+                    return node.Children.OrderByDescending(c => c.GetUCT(_explorationParameter, ValueBounds) + _random.NextDouble() * 1e-5).First();
                 }
                 // Otherwise select random move
                 // This is to avoid the AI from making intentional bad moves on other players' turns

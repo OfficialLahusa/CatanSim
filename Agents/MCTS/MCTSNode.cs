@@ -45,7 +45,7 @@ namespace Agents.MCTS
             IsOutputRandomnessGroup = isOutputRandomnessGroup;
         }
 
-        public double GetUCT(double explorationParameter)
+        public double GetUCT(double explorationParameter, MinMaxStats? valueBounds = null)
         {
             // Snapshots for thread-safety
             uint visitCountSnapshot = VisitCount;
@@ -56,11 +56,18 @@ namespace Agents.MCTS
                 // Not double.PositiveInfinity, because that would invalidate random additive tie breaker noise
                 return 1e9;
 
+            double meanValue = totalScoreSnapshot / visitCountSnapshot;
+
             // Root node does not have an exploration term
             if (Parent == null)
-                return totalScoreSnapshot / visitCountSnapshot;
+                return meanValue;
 
-            return totalScoreSnapshot / visitCountSnapshot + explorationParameter * Math.Sqrt(Math.Log(Parent.VisitCount) / visitCountSnapshot);
+            // Rescale the exploitation term to the range of values seen in the tree, so that it stays
+            // comparable to the exploration term even when all values are tiny (player far behind)
+            if (valueBounds != null)
+                meanValue = valueBounds.Normalize(meanValue);
+
+            return meanValue + explorationParameter * Math.Sqrt(Math.Log(Parent.VisitCount) / visitCountSnapshot);
         }
 
         public void IncrementVisitCount()
