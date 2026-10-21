@@ -302,34 +302,35 @@ namespace Common.Actions
 
             if (!IsTurnValid(state.Turn, playerIdx)) return variants;
 
-            // Output randomness: What is the dice roll result? Each ordered pair of dice is equally likely
-            for (byte first = 1; first <= 6; first++)
+            // Output randomness: What is the dice roll total?
+            // Only the total affects the game, so ordered pairs with the same total are combined into one outcome,
+            // represented by the pair with the lowest possible first die and weighted by the number of pairs (1/36 to 6/36)
+            for (byte total = 2; total <= 12; total++)
             {
-                for (byte second = 1; second <= 6; second++)
+                byte first = (byte)Math.Max(1, total - 6);
+                RollResult rollResult = new() { First = first, Second = (byte)(total - first) };
+                int pairCount = 6 - Math.Abs(total - 7);
+
+                RollAction action = new((sbyte)state.Turn.PlayerIndex);
+                RollActionHistory outcome;
+
+                // Robber rolls does not receive yield summary
+                if (rollResult.Total == 7)
                 {
-                    RollResult rollResult = new() { First = first, Second = second };
-                    RollAction action = new((sbyte)state.Turn.PlayerIndex);
-                    RollActionHistory outcome;
+                    outcome = new RollActionHistory(rollResult, state.Turn.LastRoll);
+                }
+                // Yield rolls receive summary
+                else
+                {
+                    (uint[,] yieldSummary, uint robbedYields, uint cappedYields) = AwardYields(state, rollResult.Total, previewOnly: true);
+                    outcome = new RollActionHistory(rollResult, state.Turn.LastRoll, yieldSummary, robbedYields, cappedYields);
+                }
 
-                    // Robber rolls does not receive yield summary
-                    if (rollResult.Total == 7)
-                    {
-                        outcome = new RollActionHistory(rollResult, state.Turn.LastRoll);
-                    }
-                    // Yield rolls receive summary
-                    else
-                    {
-                        (uint[,] yieldSummary, uint robbedYields, uint cappedYields) = AwardYields(state, rollResult.Total, previewOnly: true);
-                        outcome = new RollActionHistory(rollResult, state.Turn.LastRoll, yieldSummary, robbedYields, cappedYields);
-                    }
+                action.History = outcome;
 
-                    action.History = outcome;
-                    
-
-                    if (action.IsValidFor(state))
-                    {
-                        variants.Add(new OutcomeVariant(action, 1.0 / 36));
-                    }
+                if (action.IsValidFor(state))
+                {
+                    variants.Add(new OutcomeVariant(action, pairCount / 36.0));
                 }
             }
 
