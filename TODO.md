@@ -40,9 +40,30 @@
 	- 5. Particle MCTS / POMCP nur bei Bedarf
 		- Bei exaktem Belief Tracker wenig Gewinn gegenüber ISMCTS
 		- Relevant, sobald Player Trades mit Angeboten/Ablehnungen dazukommen (schwer als Constraints abbildbar)
-- GameState in Static und Dynamic unterteilen?
-	- Tiles, Edges und Intersections als Struktur statisch speichern und teilen
-	- Playstate (Roads, Settlements, Cities) als Byte-Arrays mit gleichen Indizes abbilden
+- GameState in Static und Dynamic unterteilen
+	- Messung (Kopie eines GameState nach 400 Actions): 8,5 us / 38,8 KB, davon Board 7,8 us / 37,1 KB und AdjacencyMatrix allein 6,6 us / 28,7 KB, alle 4 PlayerStates nur 0,6 us / 1,5 KB
+	- Dynamischer Board-Teil als Arrays (54 + 54 + 72 + 72 Bytes) kostet 0,1 us / 0,4 KB => Kopie nach dem Split ~1 us / ~2 KB
+	- Ursache: die Adjazenz liefert Objekte eines bestimmten Boards (HashSet<Edge>, Intersection-Instanzen) und muss deshalb pro Kopie neu gebunden werden, ihre Lazy Caches machen außerdem Lesezugriffe zu Schreibzugriffen (PrecomputeAll vor Multithreading nötig)
+	- Statisch (pro Spiel einmal, von allen Kopien geteilt): Tiles (Typ, Zahl, ändern sich nur in der Map-Generierung), Indizes und Ausrichtung von Intersections und Edges, Ports inkl. zugehöriger Intersections, komplette Adjazenz
+	- Dynamisch (wird kopiert): Gebäude und Owner pro Intersection, Straße und Owner pro Edge, Robber als Tile-Index, dazu wie bisher Turn, Banks und Players
+	- Betroffene Stellen (Audit)
+		- ~45 Aufrufe der objektbasierten Adjazenz (SettlementAction, Placement-Actions, RollAction, RobberAction, GameState, SimpleAgent, BoardRenderer, ~45 in Tests)
+		- ~50 Schreibzugriffe auf Building/Owner (7 Actions, Board.Clear, MapGenerator, Edit Mode im GameScreen, ~30 in Tests) und ~120 Lesezugriffe
+		- Longest Road, StateVectorizer und Produktion in RollAction lesen dann direkt die Arrays
+		- Client: ~25 Stellen in BoardRenderer und Edit Mode (gute Gelegenheit, den Edit Mode gleichzeitig konsistent zu machen)
+		- Tests: Helper (PlaceBuilding, BuildRoad, ...) umstellen, die Assertions bleiben gleich
+	- Serialisierung: YAML-Form per Custom Converter exakt beibehalten => keine neue Save-Version, Python-Vectorizer, bestehende Datensätze, Fixtures und Upgrader bleiben gültig
+		- Alternative kompaktes Format nur bei Bedarf (bräuchte Save-Version 2, Upgrader-Schritt, Python-Anpassung, neue Fixtures)
+	- Equals/GetHashCode: geteiltes Layout per Referenz vergleichen, dann die Arrays
+	- Reihenfolge (nach jedem Schritt grüne Tests und ein Profiling-Lauf, je ein Commit)
+		- Profiling nach jedem Schritt ist Pflicht: GameState-Kopie (Zeit und Allokation), Random Playouts (1 Thread und Skalierung bis alle Kerne), MCTS-Iterationen/s mit Phasenaufteilung, jeweils gegen die Werte vor dem Schritt; Ergebnisse in die Commit-Message
+		- 1. Adjazenz indexbasiert, eager berechnet und unveränderlich, von allen Kopien geteilt; dünner Wrapper pro Board übersetzt Indizes zurück in Objekte, damit die Aufrufer unverändert bleiben => ~78% der Kopierkosten weg, PrecomputeAll überflüssig
+		- 2. Tiles und Ports ins geteilte Layout, Robber als Tile-Index (beseitigt auch die "Robber nach dem Laden ein anderes Tile-Objekt"-Fehlerklasse)
+		- 3. Gebäude und Owner als Arrays, Intersection/Edge vorübergehend als Views über die Arrays, YAML-Converter (C#/Python-Paritätsfixtures und Serialisierungstests sichern das Format ab)
+		- 4. Views entfernen, restliche Aufrufer migrieren
+		- 5. Danach: Ownership-Bitmasken pro Spieler (siehe "RoadAction.GetActionsForState optimieren") und MCTS-Selektion neu messen (der Punkt "Arbeits-State pro Thread statt Kopie" ist bei billigen Kopien vermutlich überflüssig)
+	- Erwarteter Effekt (geschätzt): MCTS profitiert am meisten (eine Kopie pro Iteration, Allokation limitiert über Threads), Random Playouts moderat über arraybasierte Adjazenz in den Providern
+	- Hilft auch ISMCTS: Determinisierungen kopieren pro Sample einen State, Konflikte mit StateView/Belief Tracker gibt es keine
 - Action für variable Player Trades
 - Regelabweichung: Road-Building-Straßen erst nach dem Würfeln und beliebig später im Zug platzierbar, laut Regelbuch sofort (auch vor dem Würfeln)
 - Client
