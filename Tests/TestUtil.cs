@@ -166,7 +166,7 @@ namespace Tests
             return Path.Combine(dir?.FullName ?? throw new DirectoryNotFoundException("Tests.csproj not found above the test output."), "Fixtures");
         }
 
-        public static string ModelPath => Path.Combine(AppContext.BaseDirectory, StateValueNet.DefaultModelFile);
+        public static string ModelPath => StateValueNet.DefaultModelPath;
 
         /// <summary>
         /// Skips the test when the deployed value net is not available (it is not tracked in git)

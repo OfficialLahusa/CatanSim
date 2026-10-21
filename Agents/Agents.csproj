@@ -6,6 +6,25 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- Deployed value net, the single place to switch models (read by StateValueNet.DefaultModelFile).
+         The file lives in Artifacts/, which is not tracked in git, and is copied next to every program referencing Agents. -->
+    <StateValueNetModel>state_value_net-tvtaun4u.onnx</StateValueNetModel>
+    <StateValueNetModelPath>$(MSBuildThisFileDirectory)Artifacts\$(StateValueNetModel)</StateValueNetModelPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="StateValueNetModel" Value="$(StateValueNetModel)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('$(StateValueNetModelPath)')">
+    <None Include="$(StateValueNetModelPath)" Link="$(StateValueNetModel)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="WarnAboutMissingValueNet" BeforeTargets="Build" Condition="!Exists('$(StateValueNetModelPath)')">
+    <Warning Text="Value net $(StateValueNetModel) is missing in Agents/Artifacts (it is not tracked in git). GreedyAgent, MCTSAgent and the Client's net evaluation are unavailable until it is placed there." />
+  </Target>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
   </ItemGroup>

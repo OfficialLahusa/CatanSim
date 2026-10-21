@@ -26,11 +26,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Test fixtures (shared with the Python tests in Python/) -->
+    <!-- Test fixtures (shared with the Python tests in Python/). The value net is copied here by the Agents project
+         when it exists; tests that need it are skipped otherwise. -->
     <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
-
-    <!-- The value net is not tracked in git; tests that need it are skipped when it is missing -->
-    <None Include="..\Agents\Artifacts\*.onnx" CopyToOutputDirectory="PreserveNewest" Link="%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

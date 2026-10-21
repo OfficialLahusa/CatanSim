@@ -84,7 +84,8 @@ namespace Client
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
 
         // State value network for win rate evaluation
-        private StateValueNet _stateValueNet = new StateValueNet(StateValueNet.DefaultModelFile);
+        // Null when the model file is missing (it is not tracked in git), the net evaluation is unavailable then
+        private StateValueNet? _stateValueNet = StateValueNet.IsDefaultModelAvailable ? new StateValueNet(StateValueNet.DefaultModelFile) : null;
         private StateVectorizer _stateVectorizer = new StateVectorizer();
         private readonly string[] _valuationTypes = ["State Value Network", "Simple Agent"];
         private int _selectedValuationType = 0;
@@ -107,6 +108,13 @@ namespace Client
             _cardWidget = new CardWidget(window, _state.Players[_playerIndex]);
             _diceWidget = new DiceWidget(window);
             _diceWidget.Active = true;
+
+            // Without the value net, fall back to the heuristic evaluation
+            if (_stateValueNet == null)
+            {
+                Console.WriteLine($"Value net not found at \"{StateValueNet.DefaultModelPath}\": net evaluation, GreedyAgent and MCTSAgent are unavailable.");
+                _selectedValuationType = 1;
+            }
 
             // Recalculate valuation
             UpdateValuation();
@@ -351,16 +359,26 @@ namespace Client
                     using (new ImGuiTextColor(ColorPalette.GetPlayerColor(agentIdx)))
                         ImGui.Text($"Player {agentIdx}:");
 
+                    int previousAgentType = _selectedAgentTypes[agentIdx];
                     if (ImGui.Combo($"##Agent {agentIdx}", ref _selectedAgentTypes[agentIdx], _agentTypes, _agentTypes.Length))
                     {
-                        _agents[agentIdx] = _selectedAgentTypes[agentIdx] switch
+                        // GreedyAgent and MCTSAgent evaluate states with the value net
+                        if (_selectedAgentTypes[agentIdx] is 2 or 3 && _stateValueNet == null)
                         {
-                            0 => new RandomAgent(agentIdx),
-                            1 => new SimpleAgent(agentIdx),
-                            2 => new GreedyAgent(agentIdx),
-                            3 => new MCTSAgent(agentIdx, _state),
-                            _ => throw new InvalidOperationException()
-                        };
+                            _eventLog.WriteLine(new ColoredStrEntry($"{_agentTypes[_selectedAgentTypes[agentIdx]]} needs the value net {StateValueNet.DefaultModelFile}, which is missing", Color.Red));
+                            _selectedAgentTypes[agentIdx] = previousAgentType;
+                        }
+                        else
+                        {
+                            _agents[agentIdx] = _selectedAgentTypes[agentIdx] switch
+                            {
+                                0 => new RandomAgent(agentIdx),
+                                1 => new SimpleAgent(agentIdx),
+                                2 => new GreedyAgent(agentIdx),
+                                3 => new MCTSAgent(agentIdx, _state),
+                                _ => throw new InvalidOperationException()
+                            };
+                        }
                     }
                 }
 
@@ -382,6 +400,12 @@ namespace Client
                 ImGui.Checkbox("Show Evaluation Bar", ref _showEvaluationBar);
                 if (ImGui.Combo("##Evaluation Type", ref _selectedValuationType, _valuationTypes, _valuationTypes.Length))
                 {
+                    if (_selectedValuationType == 0 && _stateValueNet == null)
+                    {
+                        _eventLog.WriteLine(new ColoredStrEntry($"The net evaluation needs the value net {StateValueNet.DefaultModelFile}, which is missing", Color.Red));
+                        _selectedValuationType = 1;
+                    }
+
                     UpdateValuation();
                 }
 
@@ -596,7 +620,7 @@ namespace Client
                 }
             }
             // Print state valuation network output
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Enter))
+            if (Keyboard.IsKeyPressed(Keyboard.Key.Enter) && _stateValueNet != null)
             {
                 float[] winProbabilities = _stateValueNet.Run(_stateVectorizer.Vectorize(_state));
                 Console.WriteLine("Win Probabilities: " + string.Join(", ", winProbabilities.Select(p => p.ToString("P5"))));
@@ -1148,8 +1172,8 @@ namespace Client
         {
             _valuation = _selectedValuationType switch
             {
-                0 => _stateValueNet.Run(_stateVectorizer.Vectorize(_state)),
-                1 => SimpleAgent.StateValueFunc(_state),
+                0 when _stateValueNet != null => _stateValueNet.Run(_stateVectorizer.Vectorize(_state)),
+                0 or 1 => SimpleAgent.StateValueFunc(_state),
                 _ => throw new NotImplementedException()
             };
         }

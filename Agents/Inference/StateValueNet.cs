@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.ML.OnnxRuntime;
@@ -10,8 +11,15 @@ namespace Agents.Inference
 {
     public class StateValueNet
     {
-        // File name of the currently deployed model (expected next to the executable)
-        public const string DefaultModelFile = "state_value_net-tvtaun4u.onnx";
+        // File name of the deployed model, set by StateValueNetModel in Agents.csproj, which also copies it next to the executable
+        public static readonly string DefaultModelFile = typeof(StateValueNet).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(attribute => attribute.Key == "StateValueNetModel").Value!;
+
+        public static string DefaultModelPath => ResolveModelPath(DefaultModelFile);
+
+        // The model file is not tracked in git, so a fresh clone builds without it
+        public static bool IsDefaultModelAvailable => File.Exists(DefaultModelPath);
 
         // Threads ONNX Runtime uses inside one Run call. Batched MCTS inference runs between the parallel phases,
         // so these threads don't compete with the search; beyond 8 there was no further speedup for batches of 256.
@@ -21,11 +29,23 @@ namespace Agents.Inference
 
         public StateValueNet(string modelPath, int intraOpThreads = 0)
         {
+            string resolvedPath = ResolveModelPath(modelPath);
+            if (!File.Exists(resolvedPath))
+                throw new FileNotFoundException($"Value net not found at \"{resolvedPath}\". Place it in Agents/Artifacts (see StateValueNetModel in Agents.csproj) and rebuild.", resolvedPath);
+
             var options = new SessionOptions() {
                 IntraOpNumThreads = intraOpThreads > 0 ? intraOpThreads : DefaultIntraOpThreads
             };
 
-            _session = new InferenceSession(modelPath, options);
+            _session = new InferenceSession(resolvedPath, options);
+        }
+
+        /// <summary>
+        /// Relative model paths are resolved next to the executable instead of against the working directory
+        /// </summary>
+        private static string ResolveModelPath(string modelPath)
+        {
+            return Path.IsPathRooted(modelPath) ? modelPath : Path.Combine(AppContext.BaseDirectory, modelPath);
         }
 
         public float[] Run(DenseTensor<float> inputTensor)
