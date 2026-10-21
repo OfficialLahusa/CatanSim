@@ -74,7 +74,7 @@ namespace Common.Actions
         public bool IsBoardValid(GameState state)
         {
             bool cardTypesDiffer = InputType != OutputType;
-            bool playerHasInput = state.Players[PlayerIndex].ResourceCards.Contains(InputType, 3);
+            bool playerHasInput = state.Players[PlayerIndex].ResourceCards.Contains(InputType, 2);
             bool bankHasOutput = state.ResourceBank.Contains(OutputType, 1);
 
             // Check port privilege
