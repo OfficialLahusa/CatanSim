@@ -216,8 +216,16 @@ namespace Common
                 if (Players[causingPlayerIdx].VictoryPoints.LongestRoadPoints == 0) return;
 
                 // Check for minimum length
+                // If nobody has a road of at least 5 anymore, the card is set aside and the holder loses the VPs
                 uint globalLongestRoad = Players.Max(state => state.LongestRoadLength);
-                if (globalLongestRoad < 5) return;
+                if (globalLongestRoad < 5)
+                {
+                    foreach (PlayerState player in Players)
+                    {
+                        player.VictoryPoints.LongestRoadPoints = 0;
+                    }
+                    return;
+                }
 
                 bool isLeading = roadLength == globalLongestRoad;
                 bool isTied = Players.Count(state => state.LongestRoadLength == globalLongestRoad) > 1;
