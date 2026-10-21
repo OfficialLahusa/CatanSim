@@ -25,11 +25,10 @@
 		- Benchmark Cheating MCTS vs. Determinized MCTS vs. Random => Wert des Informationsvorteils messen
 		- Schwächen: Strategy Fusion und Non-Locality (v.a. bei Räuber- und Monopoly-Zielwahl)
 	- 3. SO-ISMCTS (Single Observer)
-		- Voraussetzung erfüllt: die Selektion wendet Kopien der Baum-Actions an, verschiedene Determinisierungen pro Iteration verändern den Baum also nicht
 		- Knoten = Information Sets aus Sicht des Root-Spielers, pro Iteration eine Determinisierung an der Root samplen
 		- Subset-armed Bandit: UCT mit Availability Counts statt Parent Visits, da legale Actions je Determinisierung variieren
 		- Output Randomness nur dort branchen, wo der Root-Spieler das Ergebnis beobachtet (kein Spoilern von Dev Bank und beraubten Händen)
-			- Würfel => branchen (36 Paare zu 11 Totals zusammenfassen, OutcomeVariant-Gewichte summieren)
+			- Würfel => branchen (bereits zu 11 Totals zusammengefasst)
 			- Eigener Dev-Kauf, eigener Steal, Steal beim Root-Spieler => pro Karte branchen
 			- Fremder Dev-Kauf, Steal zwischen Gegnern => ein einziger Knoten, Auflösung nur in der Determinisierung
 	- 4. Belief-aware StateValueNet
@@ -45,55 +44,34 @@
 	- Tiles, Edges und Intersections als Struktur statisch speichern und teilen
 	- Playstate (Roads, Settlements, Cities) als Byte-Arrays mit gleichen Indizes abbilden
 - Action für variable Player Trades
+- Regelabweichung: Road-Building-Straßen erst nach dem Würfeln und beliebig später im Zug platzierbar, laut Regelbuch sofort (auch vor dem Würfeln)
+- Client
+	- Edit Mode schreibt direkt ins Board: Building Stock, VPs, Longest Road und Action Stack werden nicht nachgezogen, geleerte Felder behalten einen Owner, Klicks auf ImGui-Fenster über dem Board editieren mit
+	- Font, Texture Atlas und Sounds werden relativ zum Arbeitsverzeichnis geladen (..\..\..\res\...) => AppContext.BaseDirectory nutzen und res/ ins Build-Output kopieren (das ONNX-Modell wird bereits neben der Executable gesucht)
+	- SimulateRandomRollouts: kein Rundenlimit, countdown.Signal nicht im finally (hängt bei Exceptions), Threadanzahl 0 hängt, State-Kopien laufen auf Worker-Threads während die UI den State ändert
+	- Fehlendes Exception Handling beim Auflisten von Verzeichnissen und Schreiben von Saves, Redo entfernt die Action vor der Validierung
+	- Linux-Port: RenderDataImpl.dll (Saffron.Util.ImGuiSFML, nur Windows, ohne Quellcode) durch eigenen C#-Renderer ersetzen, ShowWindow (user32) nur unter Windows aufrufen, Pfade mit Path.Combine bauen
 
 ## Test Suite
-- Testprojekt anlegen (xUnit oder NUnit, referenziert Common und Agents), Tests mit festem Seed
-- Invarianten über Random Games
-	- Bank + Hände = 19 pro Ressource (in Scratch-Harness über 200 Random Games bestätigt)
-	- Dev Cards: Bank + Hände + gespielte = 25
-	- Longest Road: höchstens ein Halter, Halter hat >= 5 und liegt am Maximum, alleiniger Führender mit >= 5 hat die Karte
-	- Largest Army analog (>= 3 Knights)
-	- Building Stock + Gebäude auf dem Board = 15 Roads / 5 Settlements / 4 Cities
-	- VP-Summe passt zu Board, Karten und Sonderkarten
-	- Spiele terminieren innerhalb eines Rundenlimits
-- Testen, ob alle Actions genutzt werden (Histogramm der Action-Typen über Random Games)
-- Apply/Revert-Roundtrip: State nach Apply + Revert == State vorher, für alle Action-Typen
-- GetActionsForState liefert nur Actions mit IsValidFor == true
-- Gezielte Regeltests
-	- 2:1 Trade mit genau 2 Karten möglich
-	- Longest Road: Bruch unter 5, Bruch mit Gleichstand, Set-Aside und spätere Neuvergabe
-	- Bank Shortage (nur ein betroffener Spieler bekommt den Rest)
-	- Discard genau die Hälfte abgerundet
-	- Robber darf nicht auf seinem aktuellen Feld bleiben
-- Output Randomness
-	- Wahrscheinlichkeiten aus GetOutcomeVariants summieren zu 1
-	- Dev Draw proportional zum Bank-Bestand, Steal proportional zur Hand des Opfers, Würfel 1/36
-- Serialisierung
-	- Save-Roundtrip: State gleich, Version gesetzt, Robber auf die Tile-Instanz der Map verankert
-	- Robber-Undo nach dem Laden setzt den Robber korrekt zurück
-	- Ältere Version wird mit UnsupportedSaveFileVersionException abgelehnt
-	- Upgrader v0 -> v1 auf eingecheckter v0-Fixture (sample_dataset ist nicht getrackt): Forward-Replay == Terminal-Sample, Revert == Base State, Upgrade idempotent
-	- Python Fast Loader liest das aktuelle Format
-- Vectorizer-Parität C# / Python
-	- Gleiche YAML-States durch StateVectorizer und state_to_vector.py, Vektoren identisch (hätte die Tile-Transposition gefunden)
-	- StateVectorizer.FeatureDim == FEATURE_DIM == ONNX Input-Dimension
-- Net / ONNX
-	- Paritätscheck aus export_onnx.py als Test
-	- Smoke: frischer State ungefähr uniform, Terminal State gibt dem Gewinner ~1
-- MCTS
-	- MinMaxStats normalisiert auf [0, 1] und lässt Werte ohne Range unverändert
-	- Terminal Leaves nutzen das bekannte Ergebnis statt des Nets
-	- Chance-Knoten werden gemäß OutcomeProbability gesampelt (Häufigkeiten prüfen)
-	- Act auf einem State kurz vor Spielende liefert eine valide Action
-- DatasetCollector
-	- Samples ohne beendete Playouts werden übersprungen, keine NaN-Labels
-	- PlayedActions im Sample k enthalten genau k Actions
 - Belief Tracker (sobald implementiert): wahrer State liegt immer im Support jedes Beliefs
-- CI: dotnet test (und Python-Paritätstest) bei jedem Push über GitHub Actions
+- Übersprungene Rulebook-Tests aktivieren, sobald die Regeln umgesetzt sind
+	- PlayersMayTradeResourcesWithEachOtherOnTheirTurn (Player Trades)
+	- RoadBuildingRoadsArePlacedImmediatelyEvenBeforeTheRoll (Road Building sofort platzieren)
+- Ersten CI-Lauf unter Linux prüfen (bisher lief nichts unter Linux)
 
 ## Agents
-- PlayedActionsCount-Parameter aus Agent.Act entfernen
-	- Feature ist aus Vectorizer und Training raus, der Parameter wird nirgends mehr ausgewertet
+- Datensatz v2 (nächster Server-Run)
+	- Platzierungsverteilung P(1. bis 4.) und finalen VP-Anteil pro Spieler aus denselben Playouts mitschreiben
+	- Leeres Board und Terminal State nicht mehr in jedem Match erzwingen (derzeit 40% der Samples)
+	- Seed, Collector-Einstellungen und Commit-Hash als Metadaten neben dem Datensatz speichern
+	- Thread-Anzahl auf dem Server per Benchmark bestimmen (Messungen bisher nur auf dem 32-Thread-Desktop)
+- Dataset-Pipeline robuster machen
+	- build_dataset_index.py sortiert die Verzeichnisse nicht, Index und Split hängen dadurch vom Dateisystem ab
+	- Fehlende .txt-Labels fallen erst nach der langen Vektorisierung auf, vorher prüfen
+	- RoundCounter unnormalisiert, wird unter bf16-mixed grob quantisiert
+	- Regenerierungs-Snippet in baselines.py verweist auf Funktionen, die es nicht gibt
+	- TurnState initialisiert LastRoll bei neuen Spielen zufällig => Rauschen in den Features während des Setups
+- Agents/env: OpenMP-Konflikt (libiomp5md.dll von conda-MKL und torch), torch läuft nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren oder Duplikat entfernen
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Mehr Playouts
 	- Nach jedem einzelnen Move speichern um Impact gut lernbar zu machen
@@ -109,6 +87,7 @@
 	- Achtung: die Agents werden dort von allen Playout-Threads geteilt, zustandsbehaftete Agents brauchen eine Instanz pro Playout
 	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
 - StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
+	- Wird vom Build neben jedes Programm kopiert (StateValueNetModel in Agents.csproj), ist aber nicht getrackt (artifacts/ in .gitignore): ein frischer Clone hat kein Modell, der Client startet dann ohne Net-Bewertung, Greedy- und MCTS-Agent
 - StateValueNetv2
 	- v2 erstmal auf v1 basiert mit Player/Tile Encoderblöcken, Embeddings statt OneHot, GraphConv auf v3 schieben
 	- State Vectorizer über push/pop Architektur eine Index-Aufschlüsselung generieren lassen
@@ -146,7 +125,6 @@
 		- Dann neue MCTS-Variante mit dem verfeinerten Policy Network erhalten und wiederholen um iterativ besser zu werden
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
-	- Sampelt jetzt erst den Action-Typ, dann die Instanz (vorher nie EndTurn solange Trades möglich waren => 500+ Runden pro Spiel)
 - MCTSAgent
 	- Particle MCTS
 	- Subtree-Reuse nach Gegnerzügen verbessern
@@ -166,6 +144,7 @@
 		- Fertig expandierte Children-Listen als unveränderliches Array veröffentlichen und ohne Lock lesen (derzeit warten alle Threads am ChildLock der Root)
 		- Pro Thread einen Arbeits-State mit Apply/Revert entlang des Pfads nutzen statt pro Iteration den GameState zu kopieren (~19 us und ~39 KB pro Kopie)
 		- Selektion des nächsten Batches mit der Inference des aktuellen überlappen (Pipelining, CPU ist während der Inference sonst idle)
+		- Virtual Loss schon während der Selektion anwenden statt danach (sonst wählen mehrere Threads eines Batches denselben Leaf)
 	- State Value Netzwerkarchitekturen aus Initial Placement Paper prüfen
 	- State Hashes zusätzlich für Validation und Caching?
 - GreedyAgent
