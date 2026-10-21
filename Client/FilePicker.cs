@@ -21,6 +21,9 @@ namespace Client
     {
         static readonly Dictionary<object, FilePicker> _filePickers = new Dictionary<object, FilePicker>();
 
+        // Key this picker is registered under, so that it can unregister itself when cancelled
+        private object? _owner;
+
         public bool SaveMode;
         public string RootFolder;
         public string CurrentFolder;
@@ -48,6 +51,7 @@ namespace Client
             if (!_filePickers.TryGetValue(o, out FilePicker fp))
             {
                 fp = new FilePicker();
+                fp._owner = o;
                 fp.RootFolder = startingPath;
                 fp.CurrentFolder = startingPath;
                 fp.OnlyAllowFolders = onlyAllowFolders;
@@ -114,8 +118,12 @@ namespace Client
                             }
                                 
 
-                            if (ImGui.IsMouseDoubleClicked(0))
+                            // Only a double-click on this file entry confirms the dialog
+                            // (a double-click elsewhere in the list, e.g. on a folder, must not)
+                            if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(0))
                             {
+                                SelectedFile = fse;
+                                OutputFileName = Path.GetFileName(fse);
                                 result = true;
                                 ImGui.CloseCurrentPopup();
                             }
@@ -136,6 +144,10 @@ namespace Client
             {
                 result = false;
                 ImGui.CloseCurrentPopup();
+
+                // Unregister, otherwise the next dialog with the same owner reuses this picker's mode and selection
+                if (_owner != null)
+                    _filePickers.Remove(_owner);
             }
 
             if (OnlyAllowFolders)
