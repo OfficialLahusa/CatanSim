@@ -5,23 +5,41 @@ namespace Common
 {
     public class Board
     {
+        // Tiles, ports and the adjacency never change during a game and are shared by all copies of the board
         public HexMap<Tile> Map { get; set; }
         public List<Intersection> Intersections { get; set; }
         public List<Edge> Edges { get; set; }
         public List<Port> Ports { get; set; }
         public AdjacencyMatrix Adjacency { get; set; }
-        public Tile? Robber;
+
+        // The robber is stored as its position, so a copy only copies three values and the robber always
+        // resolves to the tile inside this board's map (also after deserialization)
+        private bool _hasRobber;
+        private byte _robberX;
+        private byte _robberY;
+
+        // Written first, where it was when the robber was a field, so save files stay byte-identical
+        [YamlMember(Order = -1)]
+        public Tile? Robber
+        {
+            get => _hasRobber ? Map.GetTile(_robberX, _robberY) : null;
+            set
+            {
+                _hasRobber = value != null;
+                _robberX = value?.X ?? 0;
+                _robberY = value?.Y ?? 0;
+            }
+        }
 
         /// <summary>
         /// Index of the robber's tile in Map.Values, or null if there is no robber
         /// </summary>
-        public int? GetRobberTileIndex() => Robber == null ? null : Robber.Y * (int)Map.Width + Robber.X;
+        public int? GetRobberTileIndex() => _hasRobber ? _robberY * (int)Map.Width + _robberX : null;
 
         /// <summary>
-        /// Whether the robber is on the given tile. Compared by position, since the robber may be a
-        /// separate Tile instance after deserialization.
+        /// Whether the robber is on the given tile
         /// </summary>
-        public bool HasRobber(Tile tile) => Robber != null && Robber.X == tile.X && Robber.Y == tile.Y;
+        public bool HasRobber(Tile tile) => _hasRobber && _robberX == tile.X && _robberY == tile.Y;
 
         public Board(HexMap<Tile> map, List<Intersection> intersections, List<Edge> edges, List<Port> ports, AdjacencyMatrix adjacency, Tile? robber)
         {
@@ -39,14 +57,9 @@ namespace Common
         /// <param name="copy">Instance to copy</param>
         public Board(Board copy)
         {
-            Map = new HexMap<Tile>(copy.Map);
-            for (int x = 0; x < copy.Map.Width; x++)
-            {
-                for (int y = 0; y < copy.Map.Height; y++)
-                {
-                    Map.SetTile(x, y, new Tile(copy.Map.GetTile(x, y)));
-                }
-            }
+            // Shared, immutable after generation
+            Map = copy.Map;
+            Ports = copy.Ports;
 
             Intersections = new List<Intersection>();
             foreach (Intersection intersection in copy.Intersections)
@@ -60,15 +73,11 @@ namespace Common
                 Edges.Add(new Edge(edge));
             }
 
-            Ports = new List<Port>();
-            foreach (Port port in copy.Ports)
-            {
-                Ports.Add(new Port(port));
-            }
-
             Adjacency = new AdjacencyMatrix(copy.Adjacency, Map, Intersections, Edges);
 
-            Robber = copy.Robber != null ? Map.GetTile(copy.Robber.X, copy.Robber.Y) : null;
+            _hasRobber = copy._hasRobber;
+            _robberX = copy._robberX;
+            _robberY = copy._robberY;
         }
 
         /// <summary>
@@ -112,7 +121,7 @@ namespace Common
                 && Intersections.SequenceEqual(board.Intersections)
                 && Edges.SequenceEqual(board.Edges)
                 && Ports.SequenceEqual(board.Ports)
-                && Tile.Equals(Robber, board.Robber);
+                && _hasRobber == board._hasRobber && _robberX == board._robberX && _robberY == board._robberY;
         }
 
         public override int GetHashCode()
@@ -122,7 +131,7 @@ namespace Common
                 Intersections.Aggregate(0, (acc, v) => HashCode.Combine(acc, v.GetHashCode())),
                 Edges.Aggregate(0, (acc, v) => HashCode.Combine(acc, v.GetHashCode())),
                 Ports.Aggregate(0, (acc, v) => HashCode.Combine(acc, v.GetHashCode())),
-                Robber);
+                HashCode.Combine(_hasRobber, _robberX, _robberY));
         }
     }
 }

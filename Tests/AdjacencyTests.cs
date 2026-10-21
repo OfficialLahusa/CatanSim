@@ -36,6 +36,28 @@ namespace Tests
         }
 
         [Fact]
+        public void CopiesShareTilesAndPortsButNotTheRobber()
+        {
+            TestUtil.Seed(164);
+            GameState state = TestUtil.NewGame();
+            GameState copy = new GameState(state);
+
+            Assert.Same(state.Board.Map, copy.Board.Map);
+            Assert.Same(state.Board.Ports, copy.Board.Ports);
+            Assert.Same(state.Board.Map.GetTile(state.Board.Robber!.X, state.Board.Robber.Y), copy.Board.Robber);
+
+            Tile target = copy.Board.Map.Values.First(tile => tile.IsLandTile() && !copy.Board.HasRobber(tile));
+            Tile original = state.Board.Robber;
+            copy.Board.Robber = target;
+
+            Assert.True(copy.Board.HasRobber(target));
+            Assert.Equal(Array.IndexOf(copy.Board.Map.Values, target), copy.Board.GetRobberTileIndex());
+            Assert.Same(original, state.Board.Robber);
+            Assert.False(state.Board.HasRobber(target));
+            Assert.False(state.Equals(copy));
+        }
+
+        [Fact]
         public void IndexLookupsMatchObjectLookups()
         {
             TestUtil.Seed(161);

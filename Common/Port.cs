@@ -7,14 +7,15 @@ using static Common.Port;
 
 namespace Common
 {
+    // Ports are shared by all copies of a board, so they never change after creation
     public class Port
     {
         // Tile X coordinate the port is situated in
-        public byte AnchorTileX { get; set; }
-        public byte AnchorTileY { get; set; }
+        public byte AnchorTileX { get; init; }
+        public byte AnchorTileY { get; init; }
 
         // Facing direction inside the tile
-        public Direction.Tile AnchorDirection { get; set; }
+        public Direction.Tile AnchorDirection { get; init; }
 
         public enum TradeType : byte
         {
@@ -26,7 +27,7 @@ namespace Common
             Ore,     // 2:1
         };
 
-        public TradeType Type { get; set; }
+        public TradeType Type { get; init; }
 
         public Port(byte anchorTileX, byte anchorTileY, Direction.Tile dir, TradeType type)
         {

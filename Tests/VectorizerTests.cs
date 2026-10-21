@@ -61,9 +61,9 @@ namespace Tests
                 Tile tile = board.Map.Values[tileIdx];
                 if (board.HasRobber(tile)) continue;
 
-                GameState changed = new GameState(state);
-                Tile changedTile = changed.Board.Map.Values[tileIdx];
-                changedTile.Type = changedTile.Type == Tile.TileType.Ore ? Tile.TileType.Wool : Tile.TileType.Ore;
+                // Tiles are shared between copies, so change the tile on a separately loaded board
+                GameState changed = SaveFileSerializer.Deserialize(SaveFileSerializer.Serialize(new SaveFile(state, [], []))).GameState;
+                changed.Board.Map.SetTile(tile.X, tile.Y, new Tile(tile.X, tile.Y, tile.Type == Tile.TileType.Ore ? Tile.TileType.Wool : Tile.TileType.Ore, tile.Number));
 
                 float[] vector = Vectorize(changed);
                 int[] differing = Enumerable.Range(0, vector.Length).Where(i => vector[i] != baseline[i]).ToArray();

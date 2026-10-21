@@ -122,9 +122,9 @@ namespace Common
                 int blackIdx = Utils.Random.Next(freeBlackNumbers.Count);
                 Tile black = freeBlackNumbers.ElementAt(blackIdx);
                 
-                byte? blackNum = black.Number;
-                black.Number = red.Number;
-                red.Number = blackNum;
+                // Tiles are immutable, so swap the numbers by replacing both tiles
+                map.SetTile(black.X, black.Y, new Tile(black.X, black.Y, black.Type, red.Number));
+                map.SetTile(red.X, red.Y, new Tile(red.X, red.Y, red.Type, black.Number));
             }
 
             // Assign intersections

@@ -90,12 +90,6 @@ namespace Common.Serialization
             // Reattach AdjacencyMatrix to board after deserialization
             save.GameState.Board.Adjacency.Attach(save.GameState.Board);
 
-            // Re-anchor the robber to the tile instance inside the map
-            // (aliases are disabled, so it was deserialized as a separate copy of that tile)
-            Board board = save.GameState.Board;
-            if (board.Robber != null)
-                board.Robber = board.Map.GetTile(board.Robber.X, board.Robber.Y);
-
             return save;
         }
 

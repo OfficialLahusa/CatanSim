@@ -18,8 +18,9 @@ namespace Common
             Desert,
             NonPlayable = 255,
         };
-        public TileType Type { get; set; }
-        public byte? Number { get; set; }
+        // Tiles are shared by all copies of a board, so they never change after creation
+        public TileType Type { get; init; }
+        public byte? Number { get; init; }
         [YamlIgnore]
         public int YieldPoints
         {
