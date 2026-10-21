@@ -4,22 +4,96 @@
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
 - RoadAction.GetActionsForState optimieren (derzeit sehr ineffizient)
     - Caching von Intersection/Edge Ownership (maybe in PlayerState?)
-- Observation Filter (Agents nur die für sie sichtbaren Informationen geben)
-	- "StateView"?
- - In Information Set MCTS (ISMCTS) einlesen
-	- Von Robber gestohlene Karten
-	- Gezogene Development Cards
-	- Discards sind public Info, also nicht nötig!
-	- Bei Game-Tree-Aufbau dafür sorgen, dass die Output Randomness Resolution nicht spoilen kann, was für Dev Cards noch in der Bank sind und was für Karten ein beraubter Spieler hat
+- Hidden Information (Agents sehen derzeit alle Hände, VP-Karten und den Inhalt der Dev Bank, das Net ist darauf trainiert)
+	- Beobachtungsmodell
+		- Verdeckt sind nur: vom Räuber gestohlene Karten (für Unbeteiligte), gezogene Dev Cards (für alle außer Käufer), VP-Karten bis Spielende
+		- Discards, Bank/Port Trades, Builds, Monopoly, Year of Plenty, Handgrößen sind public Info => Resource Bank ist immer öffentlich bekannt
+		- Monopoly macht die Anzahl einer Ressource bei allen Spielern öffentlich
+		- Kleine Information Sets, hohe Disambiguation und Leaf Correlation => Determinisierung funktioniert gut (Long et al.)
+	- 1. Observation Filter / StateView + Belief Tracker in Common
+		- StateView(p): fremde Hände als bekannte Karten + Unknown x k, fremde Dev Cards als Unknown, Dev Bank als öffentlicher Rest
+		- Belief Tracker pro Beobachter, gefüttert mit observation-gefilterten Actions (gleiche Schnittstelle für Simulation Server, HandleAction und Vectorizer)
+		- Unknowns mit Herkunft tracken (aus welchem Steal, Handverteilung des Opfers zu dem Zeitpunkt)
+		- Constraint Propagation bei Ausgaben (Build mit zu wenig bekannten Karten => Unknown aufgelöst), auch rückwirkend für das Opfer
+		- Sampler für Determinisierungen unter der globalen 19-pro-Ressource-Constraint
+		- Versteckte VP als Pool: 5 VP-Karten minus eigene, hypergeometrisch über Bank und fremde Dev Cards verteilt
+		- Test: wahrer State liegt immer im Support jedes Beliefs
+		- Belief-Entropie über Random Games messen, um die Anzahl Determinisierungen festzulegen
+	- 2. Determinized MCTS (PIMC)
+		- N Determinisierungen aus dem Belief samplen, je eine Perfect-Information-MCTS (z.B. eine pro Worker), Root Visit Counts aggregieren
+		- Aktuelles Net bleibt gültig, da weiterhin auf vollständigen States ausgewertet wird
+		- Benchmark Cheating MCTS vs. Determinized MCTS vs. Random => Wert des Informationsvorteils messen
+		- Schwächen: Strategy Fusion und Non-Locality (v.a. bei Räuber- und Monopoly-Zielwahl)
+	- 3. SO-ISMCTS (Single Observer)
+		- Voraussetzung: Actions im Baum nicht mehr teilen/mutieren (History pro Iteration statt im Baum)
+		- Knoten = Information Sets aus Sicht des Root-Spielers, pro Iteration eine Determinisierung an der Root samplen
+		- Subset-armed Bandit: UCT mit Availability Counts statt Parent Visits, da legale Actions je Determinisierung variieren
+		- Output Randomness nur dort branchen, wo der Root-Spieler das Ergebnis beobachtet (kein Spoilern von Dev Bank und beraubten Händen)
+			- Würfel => branchen (36 Paare zu 11 Totals zusammenfassen, OutcomeVariant-Gewichte summieren)
+			- Eigener Dev-Kauf, eigener Steal, Steal beim Root-Spieler => pro Karte branchen
+			- Fremder Dev-Kauf, Steal zwischen Gegnern => ein einziger Knoten, Auflösung nur in der Determinisierung
+	- 4. Belief-aware StateValueNet
+		- Training auf StateView-Inputs (Unknown-Slots), lernt E[Value | Beobachtung] => keine Determinisierung an den Leaves nötig
+		- Views offline durch Replay der PlayedActions durch den Belief Tracker rekonstruieren (Histories im Datensatz sind jetzt korrekt)
+		- Sichtbarkeits-Augmentation an der echten Beobachtungsverteilung ausrichten statt zufällig zu maskieren
+		- Erwartete versteckte VP pro Gegner als Feature
+		- Zusammen mit dem nächsten Datensatz (Placement-Labels) erzeugen
+	- 5. Particle MCTS / POMCP nur bei Bedarf
+		- Bei exaktem Belief Tracker wenig Gewinn gegenüber ISMCTS
+		- Relevant, sobald Player Trades mit Angeboten/Ablehnungen dazukommen (schwer als Constraints abbildbar)
 - GameState in Static und Dynamic unterteilen?
 	- Tiles, Edges und Intersections als Struktur statisch speichern und teilen
 	- Playstate (Roads, Settlements, Cities) als Byte-Arrays mit gleichen Indizes abbilden
 - Action für variable Player Trades
-- Testen, ob alle Actions genutzt werden
-- Testen, ob Bank immer Gesamtsumme behält
+
+## Test Suite
+- Testprojekt anlegen (xUnit oder NUnit, referenziert Common und Agents), Tests mit festem Seed
+- Invarianten über Random Games
+	- Bank + Hände = 19 pro Ressource (in Scratch-Harness über 200 Random Games bestätigt)
+	- Dev Cards: Bank + Hände + gespielte = 25
+	- Longest Road: höchstens ein Halter, Halter hat >= 5 und liegt am Maximum, alleiniger Führender mit >= 5 hat die Karte
+	- Largest Army analog (>= 3 Knights)
+	- Building Stock + Gebäude auf dem Board = 15 Roads / 5 Settlements / 4 Cities
+	- VP-Summe passt zu Board, Karten und Sonderkarten
+	- Spiele terminieren innerhalb eines Rundenlimits
+- Testen, ob alle Actions genutzt werden (Histogramm der Action-Typen über Random Games)
+- Apply/Revert-Roundtrip: State nach Apply + Revert == State vorher, für alle Action-Typen
+- GetActionsForState liefert nur Actions mit IsValidFor == true
+- Gezielte Regeltests
+	- 2:1 Trade mit genau 2 Karten möglich
+	- Longest Road: Bruch unter 5, Bruch mit Gleichstand, Set-Aside und spätere Neuvergabe
+	- Bank Shortage (nur ein betroffener Spieler bekommt den Rest)
+	- Discard genau die Hälfte abgerundet
+	- Robber darf nicht auf seinem aktuellen Feld bleiben
+- Output Randomness
+	- Wahrscheinlichkeiten aus GetOutcomeVariants summieren zu 1
+	- Dev Draw proportional zum Bank-Bestand, Steal proportional zur Hand des Opfers, Würfel 1/36
+- Serialisierung
+	- Save-Roundtrip: State gleich, Version gesetzt, Robber auf die Tile-Instanz der Map verankert
+	- Robber-Undo nach dem Laden setzt den Robber korrekt zurück
+	- Ältere Version wird mit UnsupportedSaveFileVersionException abgelehnt
+	- Upgrader v0 -> v1 auf eingecheckter v0-Fixture (sample_dataset ist nicht getrackt): Forward-Replay == Terminal-Sample, Revert == Base State, Upgrade idempotent
+	- Python Fast Loader liest das aktuelle Format
+- Vectorizer-Parität C# / Python
+	- Gleiche YAML-States durch StateVectorizer und state_to_vector.py, Vektoren identisch (hätte die Tile-Transposition gefunden)
+	- StateVectorizer.FeatureDim == FEATURE_DIM == ONNX Input-Dimension
+- Net / ONNX
+	- Paritätscheck aus export_onnx.py als Test
+	- Smoke: frischer State ungefähr uniform, Terminal State gibt dem Gewinner ~1
+- MCTS
+	- MinMaxStats normalisiert auf [0, 1] und lässt Werte ohne Range unverändert
+	- Terminal Leaves nutzen das bekannte Ergebnis statt des Nets
+	- Chance-Knoten werden gemäß OutcomeProbability gesampelt (Häufigkeiten prüfen)
+	- Act auf einem State kurz vor Spielende liefert eine valide Action
+- DatasetCollector
+	- Samples ohne beendete Playouts werden übersprungen, keine NaN-Labels
+	- PlayedActions im Sample k enthalten genau k Actions
+- Belief Tracker (sobald implementiert): wahrer State liegt immer im Support jedes Beliefs
+- CI: dotnet test (und Python-Paritätstest) bei jedem Push über GitHub Actions
 
 ## Agents
-- PlayedActionsCount aus Agent-Interface entfernen (default 0)
+- PlayedActionsCount-Parameter aus Agent.Act entfernen
+	- Feature ist aus Vectorizer und Training raus, der Parameter wird nirgends mehr ausgewertet
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Mehr Playouts
 	- Nach jedem einzelnen Move speichern um Impact gut lernbar zu machen
@@ -30,16 +104,22 @@
 	- Click auf Node lädt dortiges State
 	- Color Coding nach Anzahl Visits
 - Branching Factor Histogramm aus Playouts generieren
-- HandleAction(Action), ResetToState(GameState) ins Agent-Interface integrieren, um MCTS-Baumupdates zu ermöglichen
+- HandleAction(Action), ResetToState(GameState) im MCTSAgent implementieren, um MCTS-Baumupdates zu ermöglichen
+	- Im Agent-Interface schon vorhanden, im MCTSAgent noch leere Stubs (Act baut jedes Mal einen neuen Baum)
+	- Voraussetzung: Actions im Baum nicht mehr teilen/mutieren (Apply überschreibt History über Threads hinweg)
+	- Neue Root vom Parent abkoppeln, sonst laufen UCT und Backprop über die alte Root weiter
 	- Noch in DatasetGenerator verwenden
 	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
 - StateValueNet ONNX mit Build ausliefern (auf HF hochladen?)
 - StateValueNetv2
 	- v2 erstmal auf v1 basiert mit Player/Tile Encoderblöcken, Embeddings statt OneHot, GraphConv auf v3 schieben
-	- PlayedActionsCount entfernen
 	- State Vectorizer über push/pop Architektur eine Index-Aufschlüsselung generieren lassen
 	- Unzuverlässige Outputs für sehr weit zurückliegende Spieler addressieren
-		- Durch zusätzlichen paarweisen Hinge/Logistic Loss Term auf richtige Reihenfolge zwischen Spieler-Winrates
+		- Ursache sind die Labels: ab 5 VP Rückstand sind 65-87% der Winrates exakt 0 (1000 Playouts lösen < 0.1% nicht auf), das Net ist dort kalibriert, hat aber nichts zu lernen
+		- Paarweiser Hinge/Logistic Loss auf die Reihenfolge der Winrates reicht deshalb nicht (bei Labels = 0 gibt es keine Reihenfolge)
+		- Stattdessen Platzierungsverteilung P(1. bis 4.) pro Spieler als Target oder Auxiliary Head (aus denselben Playouts)
+		- Alternativ/zusätzlich finaler VP-Anteil als Auxiliary Head
+		- Selektionsseite in MCTS bereits über Min-Max-Normalisierung der Q-Werte gelöst
 	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
  - Graph Transformer als Alternative in Betracht ziehen
 	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
@@ -68,9 +148,9 @@
 		- Dann neue MCTS-Variante mit dem verfeinerten Policy Network erhalten und wiederholen um iterativ besser zu werden
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
+	- Sampelt jetzt erst den Action-Typ, dann die Instanz (vorher nie EndTurn solange Trades möglich waren => 500+ Runden pro Spiel)
 - MCTSAgent
 	- Particle MCTS
-	- Terminal States nicht ML-Simulieren
 	- Update und ForceUpdate zum Wiederverwenden von Subtrees nutzen
 	- Wenn gerolled werden muss, direkt die Roll Action zurückgeben und nicht weiterrechnen, um Rechenzeit danach auf weniger Branches zu verteilen
 		- Achtung wegen Dev Cards, die können vor dem Roll gespielt werden
@@ -80,7 +160,11 @@
 		- Initial Placements kriegen eigene Extrazeit
 		- Dann immer das ganze Budget nutzen um seinen Initiativabschnitt fertigzurechnen und dann diesen Pfad auch instantly fertig spielen
 	- Gleichwertige Roll Results zusammenfassen und beim Tree State Update berücksichtigen
+		- Derzeit 36 separate Kinder pro Roll-Gruppe, (1,6) und (6,1) sind getrennte Subtrees
+		- OutcomeVariant trägt jetzt Wahrscheinlichkeiten => 11 Totals mit summierten Gewichten (1/36 bis 6/36)
 		- Deutlich niedrigerer Branching Factor
+		- Achtung: LastRoll.First/Second sind Features im Vectorizer (C# und Python), gleiche Totals ergeben also verschiedene Net-Inputs
+			- Entweder kanonisches Paar pro Total im Baum verwenden oder Vectorizer auf Total umstellen (Retrain nötig)
 		- Updaten auf eine Roll Action mit gleichem Total aber anderem First/Second leicht möglich, da ja nicht die States sondern nur die Actions im Tree hinterlegt sind
 	- State Value Netzwerkarchitekturen aus Initial Placement Paper prüfen
 	- State Hashes zusätzlich für Validation und Caching?
@@ -140,6 +224,11 @@
 - LLMs für Tabletalking => Martinenghi et al.: "LLMs of Catan: Exploring Pragmatic Capabilities of Generative Chatbots Through Prediction and Classification of Dialogue Acts in Boardgames’ Multi-party Dialogues"
 - MCTS Variant Review => https://www.researchgate.net/publication/362115589_Monte_Carlo_Tree_Search_a_review_of_recent_modifications_and_applications
 - Particle MCTS => https://arxiv.org/abs/2605.08982
+- Hidden Information
+	- ISMCTS => Cowling, Powley, Whitehouse: "Information Set Monte Carlo Tree Search" (IEEE TCIAIG 2012)
+	- Strategy Fusion und Non-Locality => Frank, Basin: "Search in Games with Incomplete Information: A Case Study Using Bridge Card Play" (Artificial Intelligence 1998)
+	- Wann Determinisierung funktioniert => Long, Sturtevant, Buro, Furtak: "Understanding the Success of Perfect Information Monte Carlo Sampling in Game Tree Search" (AAAI 2010)
+	- POMCP => Silver, Veness: "Monte-Carlo Planning in Large POMDPs" (NIPS 2010)
 - MCTS Tree State Hashes => https://github.com/uranium62/xxHash
 - Interfacing => https://github.com/dnmfarrell/Settlers-Game-Notation
 - Interfacing => https://en.wikipedia.org/wiki/Universal_Chess_Interface
