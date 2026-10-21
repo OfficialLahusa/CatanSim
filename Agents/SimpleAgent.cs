@@ -121,7 +121,7 @@ namespace Agents
             // Add longest road length and largest army size to incentivize higher lead
             for (int playerIdx = 0; playerIdx < state.Players.Length; playerIdx++)
             {
-                valuation[playerIdx] = roadKnightWeight * (state.Players[playerIdx].LongestRoadLength + state.Players[playerIdx].PlayedKnights);
+                valuation[playerIdx] += roadKnightWeight * (state.Players[playerIdx].LongestRoadLength + state.Players[playerIdx].PlayedKnights);
             }
 
             // Normalize
