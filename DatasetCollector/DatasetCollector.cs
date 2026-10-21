@@ -263,8 +263,8 @@ namespace DatasetCollector
             }
 
             // Without a single finished playout there is no label; skip the sample instead of writing NaNs
-            int evalSum = timesWon.Sum();
-            if (evalSum == 0)
+            double[]? normalizedEvaluation = NormalizeWinCounts(timesWon);
+            if (normalizedEvaluation == null)
             {
                 Console.WriteLine($"\n\nWarning: no playout of sample r{roundIdx}_s{sampleIdx} finished, skipping it.");
                 return;
@@ -277,18 +277,23 @@ namespace DatasetCollector
             File.WriteAllText(Path.Combine(_stateDirectory, sampleName + ".yaml"), saveData);
 
             // Write evaluation to file
-            double[] normalizedEvaluation = new double[PLAYER_COUNT];
-            for (int i = 0; i < normalizedEvaluation.Length; i++)
-            {
-                normalizedEvaluation[i] = (double)timesWon[i] / evalSum;
-            }
-
             StringBuilder evalStringBuilder = new StringBuilder();
             foreach (double evalEntry in  normalizedEvaluation)
             {
                 evalStringBuilder.Append(evalEntry.ToString(CultureInfo.InvariantCulture) + "\n");
             }
             File.WriteAllText(Path.Combine(_evaluationDirectory, sampleName + ".txt"), evalStringBuilder.ToString());
+        }
+
+        /// <summary>
+        /// Win rates from the playout win counts per player, or null if no playout finished
+        /// </summary>
+        internal static double[]? NormalizeWinCounts(IReadOnlyList<int> timesWon)
+        {
+            int evalSum = timesWon.Sum();
+            if (evalSum == 0) return null;
+
+            return timesWon.Select(wins => (double)wins / evalSum).ToArray();
         }
     }
 }

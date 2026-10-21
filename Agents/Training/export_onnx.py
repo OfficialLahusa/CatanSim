@@ -15,8 +15,12 @@ def export(ckpt_path: str, out_path: str, in_dim: int):
     module.eval()
 
     # Kern-Modell statt Lightning-Module für ONNX-Export nötig
-    model = module.model
+    export_model(module.model, out_path, in_dim)
 
+
+def export_model(model: nn.Module, out_path: str, in_dim: int) -> float:
+    """Exportiert ein StateValueNet (im eval-Modus) nach ONNX und prüft die Parität.
+    Gibt die maximale Abweichung zwischen PyTorch und ONNX zurück."""
     dummy = torch.randn(1, in_dim)
     torch.onnx.export(
         model, dummy, out_path,
@@ -46,7 +50,10 @@ def export(ckpt_path: str, out_path: str, in_dim: int):
     with torch.no_grad():
         torch_out1 = model(torch.from_numpy(x1)).numpy()
     onnx_out1 = sess.run(["logits"], {"state": x1})[0]
-    print(f"Max abs diff, batch=1: {np.abs(torch_out1 - onnx_out1).max():.2e}")
+    max_diff1 = np.abs(torch_out1 - onnx_out1).max()
+    print(f"Max abs diff, batch=1: {max_diff1:.2e}")
+
+    return float(max(max_diff, max_diff1))
 
 
 if __name__ == "__main__":
