@@ -69,6 +69,12 @@ namespace Client
         // UI Modals
         private readonly string saveFileModalId = "save-file";
         private readonly string loadFileModalId = "load-file";
+        private readonly string upgradeSaveModalId = "upgrade-save";
+
+        // Older save file waiting for the user's decision in the upgrade modal
+        private string? _pendingUpgradePath;
+        private int _pendingUpgradeVersion;
+        private bool _openUpgradeModal;
 
         // Player Agents
         private Agent[] _agents;
@@ -238,6 +244,37 @@ namespace Client
             }
 
             ImGui.Separator();
+
+            // ReadSaveFile found an older file: ask before converting it
+            if (_openUpgradeModal)
+            {
+                ImGui.OpenPopup(upgradeSaveModalId);
+                _openUpgradeModal = false;
+            }
+
+            bool isUpgradeModalOpen = true;
+            if (ImGui.BeginPopupModal(upgradeSaveModalId, ref isUpgradeModalOpen, ImGuiWindowFlags.AlwaysAutoResize))
+            {
+                ImGui.Text($"\"{Path.GetFileName(_pendingUpgradePath)}\" is a version {_pendingUpgradeVersion} save file.");
+                ImGui.Text($"This build reads version {SaveFile.CurrentVersion}. Upgrade and load it?");
+                ImGui.TextDisabled("The file on disk stays unchanged. Use Save Game afterwards to keep the upgraded copy.");
+                ImGui.Separator();
+
+                if (ImGui.Button("Upgrade and load"))
+                {
+                    UpgradeAndLoadSaveFile(_pendingUpgradePath!);
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.SameLine();
+
+                if (ImGui.Button("Cancel"))
+                {
+                    ImGui.CloseCurrentPopup();
+                }
+
+                ImGui.EndPopup();
+            }
 
             if (ImGui.TreeNode("Save Files"))
             {
@@ -1337,6 +1374,14 @@ namespace Client
                 string saveData = File.ReadAllText(filepath);
                 saveFile = SaveFileSerializer.Deserialize(saveData);
             }
+            catch (UnsupportedSaveFileVersionException e) when (SaveFileUpgrader.CanUpgrade(e.Version))
+            {
+                // Older file: the upgrade modal in the menu asks before converting it
+                _pendingUpgradePath = filepath;
+                _pendingUpgradeVersion = e.Version;
+                _openUpgradeModal = true;
+                return;
+            }
             catch (Exception e)
             {
                 Console.WriteLine($"Could not load save file \"{filepath}\": {e.Message}");
@@ -1344,6 +1389,26 @@ namespace Client
                 return;
             }
 
+            ApplySaveFile(saveFile);
+        }
+
+        private void UpgradeAndLoadSaveFile(string filepath)
+        {
+            try
+            {
+                string upgraded = SaveFileUpgrader.Upgrade(File.ReadAllText(filepath));
+                ApplySaveFile(SaveFileSerializer.Deserialize(upgraded));
+                _eventLog.WriteLine(new ColoredStrEntry($"Upgraded \"{Path.GetFileName(filepath)}\" to save file version {SaveFile.CurrentVersion} and loaded it", Color.Green));
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Could not upgrade save file \"{filepath}\": {e.Message}");
+                _eventLog.WriteLine(new ColoredStrEntry($"Could not upgrade save file: {e.Message}", Color.Red));
+            }
+        }
+
+        private void ApplySaveFile(SaveFile saveFile)
+        {
             _state = saveFile.GameState;
             _playedActions = new(saveFile.PlayedActions);
             _undoHistory = new(saveFile.UndoHistory);

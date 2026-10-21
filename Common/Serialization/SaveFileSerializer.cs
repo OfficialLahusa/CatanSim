@@ -83,8 +83,9 @@ namespace Common.Serialization
             SaveFile save = Deserializer.Deserialize<SaveFile>(yaml);
 
             // Older files are rejected instead of being replayed with silently wrong action histories
+            // (SaveFileUpgrader can convert them first)
             if (save.Version != SaveFile.CurrentVersion)
-                throw new InvalidDataException($"Unsupported save file version {save.Version} (this build reads version {SaveFile.CurrentVersion}).");
+                throw new UnsupportedSaveFileVersionException(save.Version);
 
             // Reattach AdjacencyMatrix to board after deserialization
             save.GameState.Board.Adjacency.Attach(save.GameState.Board);
