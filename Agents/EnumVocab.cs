@@ -28,7 +28,15 @@ namespace Agents
         public float[] OneHot(TEnum? value)
         {
             var vec = new float[Size];
+            WriteOneHot(value, vec);
+            return vec;
+        }
 
+        /// <summary>
+        /// Sets the entry of the value in a zero-initialized destination of length Size
+        /// </summary>
+        public void WriteOneHot(TEnum? value, Span<float> destination)
+        {
             // Handles null or unmapped enum values safely
             if (!value.HasValue || !_index.TryGetValue(value.Value, out int idx))
             {
@@ -38,11 +46,10 @@ namespace Agents
                     $"[state_yaml_to_tensor] WARNING: unseen value '{keyName}' for " +
                     $"field '{Name}'; encoding as all-zero. Consider adding it to the vocabulary."
                 );
-                return vec;
+                return;
             }
 
-            vec[idx] = 1.0f;
-            return vec;
+            destination[idx] = 1.0f;
         }
     }
 }

@@ -237,23 +237,20 @@ namespace Agents.MCTS
             DenseTensor<float> batchFeatures = new DenseTensor<float>([states.Count, StateVectorizer.FeatureDim]);
             Memory<float> memoryBuffer = batchFeatures.Buffer;
 
-            // Parallel Featurization (CPU bound)
+            // Parallel Featurization (CPU bound), written directly into the batch rows
             Parallel.For(0, states.Count, i =>
             {
-                Span<float> destinationSlice = memoryBuffer.Span.Slice((int)i * StateVectorizer.FeatureDim, StateVectorizer.FeatureDim);
-
-                ReadOnlySpan<float> featureVector = _stateVectorizer.Vectorize(states[(int)i]).ToArray();
-                featureVector.CopyTo(destinationSlice);
+                _stateVectorizer.VectorizeInto(states[i], memoryBuffer.Span.Slice(i * StateVectorizer.FeatureDim, StateVectorizer.FeatureDim));
             });
 
             // Run Batched NN Inference
             float[] outputs = _stateValueNet.Run(batchFeatures);
 
             // Compute final scores
-            List<double> results = [];
+            List<double> results = new(states.Count);
             for (int i = 0; i < states.Count; i++)
             {
-                results.Add(ValuationToScore(new ArraySegment<float>(outputs, i * 4, 4).ToArray()));
+                results.Add(ValuationToScore(outputs.AsSpan(i * 4, 4)));
             }
 
             return results;
@@ -264,9 +261,13 @@ namespace Agents.MCTS
             return ValuationToScore(StateValueFunc(state));
         }
 
-        protected float ValuationToScore(float[] valuation)
+        protected float ValuationToScore(ReadOnlySpan<float> valuation)
         {
-            return valuation[PlayerIndex] / valuation.Sum();
+            float sum = 0;
+            foreach (float value in valuation)
+                sum += value;
+
+            return valuation[PlayerIndex] / sum;
         }
 
         protected static float[] StateValueFunc(GameState state)

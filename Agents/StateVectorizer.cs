@@ -1,7 +1,5 @@
 ﻿using Common;
-using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
-using Microsoft.VisualBasic;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +11,14 @@ namespace Agents
 {
     public class StateVectorizer
     {
+        // Length of the feature vector produced by Vectorize for the classic 4-player board
+        public const int FeatureDim = 1609;
+
+        // Enum values are cached, Enum.GetValues allocates a new array on every call
+        private static readonly ResourceCardType[] ResourceTypes = Enum.GetValues<ResourceCardType>();
+        private static readonly DevelopmentCardType[] DevelopmentTypes = Enum.GetValues<DevelopmentCardType>();
+        private static readonly PortPrivileges[] PortPrivilegeFlags = Enum.GetValues<PortPrivileges>().Where(privilege => privilege != PortPrivileges.None).ToArray();
+
         protected EnumVocab<TurnState.RoundType> _roundTypeVocab;
         protected EnumVocab<Tile.TileType> _tileTypeVocab;
         protected EnumVocab<Intersection.BuildingType> _intersectionBuildingTypeVocab;
@@ -26,81 +32,75 @@ namespace Agents
             _edgeBuildingTypeVocab = new EnumVocab<Edge.BuildingType>(nameof(Edge.BuildingType));
         }
 
-        // Length of the feature vector produced by Vectorize for the classic 4-player board
-        public const int FeatureDim = 1609;
-
         public DenseTensor<float> Vectorize(GameState state)
         {
-            List<float> features = new List<float>();
-            
-            if(state.Players.Length != 4)
+            float[] features = new float[FeatureDim];
+            VectorizeInto(state, features);
+
+            return new DenseTensor<float>(features, [1, FeatureDim]);
+        }
+
+        /// <summary>
+        /// Writes the feature vector of the state into the destination (e.g. a row of a batch tensor) without allocating.
+        /// The destination must hold exactly FeatureDim values.
+        /// </summary>
+        public void VectorizeInto(GameState state, Span<float> destination)
+        {
+            if (state.Players.Length != 4)
                 throw new NotImplementedException("Only 4 players are supported for now.");
+            if (destination.Length != FeatureDim)
+                throw new ArgumentException($"The destination must hold exactly {FeatureDim} values.", nameof(destination));
 
-            features.AddRange(EncodeSettings(state));
-            features.AddRange(EncodeTurn(state));
-            features.AddRange(EncodeBoard(state));
-            features.AddRange(EncodeResourceCardSet(state.ResourceBank));
-            features.AddRange(EncodeDevelopmentCardSet(state.DevelopmentBank));
-            features.AddRange(EncodePlayers(state));
+            // One-hot and multi-hot features only set their active entries
+            destination.Clear();
+            FeatureWriter writer = new(destination);
 
-            DenseTensor<float> tensor = new DenseTensor<float>(features.ToArray(), new int[] { 1, features.Count });
+            EncodeSettings(state, ref writer);
+            EncodeTurn(state, ref writer);
+            EncodeBoard(state, ref writer);
+            EncodeResourceCardSet(state.ResourceBank, ref writer);
+            EncodeDevelopmentCardSet(state.DevelopmentBank, ref writer);
+            EncodePlayers(state, ref writer);
 
-            //Console.WriteLine(tensor);
-            //Console.WriteLine("Tensor shape: " + tensor.Dimensions[0] + " x " + tensor.Dimensions[1]);
-
-            return tensor;
+            if (writer.Position != FeatureDim)
+                throw new InvalidOperationException($"The board produced {writer.Position} features instead of {FeatureDim}.");
         }
 
-        protected List<float> EncodeSettings(GameState state)
+        private static void EncodeSettings(GameState state, ref FeatureWriter writer)
         {
-            List<float> features = new List<float>();
-
-            features.Add((float)state.Settings.RobberCardLimit);
-            features.Add((float)state.Settings.VictoryPoints);
-
-            return features;
+            writer.Add(state.Settings.RobberCardLimit);
+            writer.Add(state.Settings.VictoryPoints);
         }
 
-        protected List<float> EncodeTurn(GameState state)
+        private void EncodeTurn(GameState state, ref FeatureWriter writer)
         {
-            List<float> features = new List<float>();
-
-            features.Add((float)state.Turn.RoundCounter);
+            writer.Add(state.Turn.RoundCounter);
 
             // Only the total of the last roll affects the game, so equivalent rolls get identical features
-            features.Add((float)state.Turn.LastRoll.Total);
+            writer.Add(state.Turn.LastRoll.Total);
 
-            float[] playerIdx = new float[state.Players.Length];
-            playerIdx[state.Turn.PlayerIndex] = 1.0f;
-            features.AddRange(playerIdx);
+            writer.OneHot(state.Turn.PlayerIndex, state.Players.Length);
+            writer.OneHot(_roundTypeVocab, state.Turn.TypeOfRound);
+            writer.Add(state.Turn.MustRoll);
 
-            features.AddRange(_roundTypeVocab.OneHot(state.Turn.TypeOfRound));
-            features.Add(BoolFeature(state.Turn.MustRoll));
-
-            float[] awaitedDiscards = new float[state.Players.Length];
-            for(int i = 0; i < state.Players.Length; i++)
+            for (int i = 0; i < state.Players.Length; i++)
             {
-                awaitedDiscards[i] = BoolFeature(state.Turn.AwaitedPlayerDiscards[i]);
+                writer.Add(state.Turn.AwaitedPlayerDiscards[i]);
             }
-            features.AddRange(awaitedDiscards);
 
-            features.Add(BoolFeature(state.Turn.MustMoveRobber));
-            features.Add(BoolFeature(state.Turn.HasPlayedDevelopmentCard));
-
-            return features;
+            writer.Add(state.Turn.MustMoveRobber);
+            writer.Add(state.Turn.HasPlayedDevelopmentCard);
         }
 
-        protected List<float> EncodeBoard(GameState state)
+        private void EncodeBoard(GameState state, ref FeatureWriter writer)
         {
-            List<float> features = new List<float>();
-
             if (state.Board.Robber == null)
                 throw new InvalidOperationException("Board robber is null.");
 
-            features.Add((float)state.Board.Robber.X);
-            features.Add((float)state.Board.Robber.Y);
-            features.AddRange(_tileTypeVocab.OneHot(state.Board.Robber.Type));
-            features.AddRange(HexNumberFeature(state.Board.Robber.Number));
+            writer.Add(state.Board.Robber.X);
+            writer.Add(state.Board.Robber.Y);
+            writer.OneHot(_tileTypeVocab, state.Board.Robber.Type);
+            writer.HexNumber(state.Board.Robber.Number);
 
             // Tiles
             // Row-major (y outer, x inner) to match HexMap.Values storage order and the Python vectorizer
@@ -112,8 +112,8 @@ namespace Agents
                     if (tile == null)
                         throw new InvalidOperationException("Tile is null at position (" + x + ", " + y + ").");
                     // Coordinates not necessary, since position is already encoded in the order of the tiles
-                    features.AddRange(_tileTypeVocab.OneHot(tile.Type));
-                    features.AddRange(HexNumberFeature(tile.Number));
+                    writer.OneHot(_tileTypeVocab, tile.Type);
+                    writer.HexNumber(tile.Number);
                 }
             }
 
@@ -122,8 +122,8 @@ namespace Agents
             {
                 Intersection intersection = state.Board.Intersections[i];
 
-                features.AddRange(_intersectionBuildingTypeVocab.OneHot(intersection.Building));
-                features.AddRange(NullableOwnerOneHot(intersection.Owner, (uint)state.Players.Length));
+                writer.OneHot(_intersectionBuildingTypeVocab, intersection.Building);
+                writer.NullableOwner(intersection.Owner, state.Players.Length);
             }
 
             // Edges
@@ -131,93 +131,127 @@ namespace Agents
             {
                 Edge edge = state.Board.Edges[i];
 
-                features.AddRange(_edgeBuildingTypeVocab.OneHot(edge.Building));
-                features.AddRange(NullableOwnerOneHot(edge.Owner, (uint)state.Players.Length));
+                writer.OneHot(_edgeBuildingTypeVocab, edge.Building);
+                writer.NullableOwner(edge.Owner, state.Players.Length);
             }
-
-            return features;
         }
 
-        protected List<float> EncodePlayers(GameState state)
+        private static void EncodePlayers(GameState state, ref FeatureWriter writer)
         {
-            List<float> features = new List<float>();
             foreach (var player in state.Players)
             {
                 // Victory point trackers
-                features.Add((float)player.VictoryPoints.SettlementPoints);
-                features.Add((float)player.VictoryPoints.CityPoints);
-                features.Add((float)player.VictoryPoints.DevelopmentCardPoints);
-                features.Add((float)player.VictoryPoints.LongestRoadPoints);
-                features.Add((float)player.VictoryPoints.LargestArmyPoints);
+                writer.Add(player.VictoryPoints.SettlementPoints);
+                writer.Add(player.VictoryPoints.CityPoints);
+                writer.Add(player.VictoryPoints.DevelopmentCardPoints);
+                writer.Add(player.VictoryPoints.LongestRoadPoints);
+                writer.Add(player.VictoryPoints.LargestArmyPoints);
 
                 // Contested objective trackers
-                features.Add((float)player.PlayedKnights);
-                features.Add((float)player.LongestRoadLength);
+                writer.Add(player.PlayedKnights);
+                writer.Add(player.LongestRoadLength);
 
                 // Cards
-                features.AddRange(EncodeResourceCardSet(player.ResourceCards));
-                features.AddRange(EncodeDevelopmentCardSet(player.DevelopmentCards));
-                features.AddRange(EncodeDevelopmentCardSet(player.NewDevelopmentCards));
+                EncodeResourceCardSet(player.ResourceCards, ref writer);
+                EncodeDevelopmentCardSet(player.DevelopmentCards, ref writer);
+                EncodeDevelopmentCardSet(player.NewDevelopmentCards, ref writer);
 
                 // Building stock
-                features.Add((float)player.BuildingStock.RemainingRoads);
-                features.Add((float)player.BuildingStock.RemainingSettlements);
-                features.Add((float)player.BuildingStock.RemainingCities);
-                features.Add((float)player.BuildingStock.FreeRoads);
+                writer.Add(player.BuildingStock.RemainingRoads);
+                writer.Add(player.BuildingStock.RemainingSettlements);
+                writer.Add(player.BuildingStock.RemainingCities);
+                writer.Add(player.BuildingStock.FreeRoads);
 
-                // Port privileges (multi-hot encoding)
-                float[] portPrivileges = new float[Enum.GetValues<PortPrivileges>().Length - 1]; // Every flag except None has a feature
-                foreach (PortPrivileges privilege in Enum.GetValues<PortPrivileges>())
+                // Port privileges (multi-hot encoding, every flag except None has a feature indexed by its bit)
+                Span<float> portPrivileges = writer.Reserve(PortPrivilegeFlags.Length);
+                foreach (PortPrivileges privilege in PortPrivilegeFlags)
                 {
-                    if (privilege == PortPrivileges.None)
-                        continue;
-
-                    portPrivileges[BitOperations.TrailingZeroCount((int)privilege)] = player.PortPrivileges.HasFlag(privilege) ? 1.0f : 0.0f;
+                    if (player.PortPrivileges.HasFlag(privilege))
+                        portPrivileges[BitOperations.TrailingZeroCount((int)privilege)] = 1.0f;
                 }
-                features.AddRange(portPrivileges);
             }
-            return features;
         }
 
-        protected List<float> EncodeResourceCardSet(CardSet<ResourceCardType> cardSet)
+        private static void EncodeResourceCardSet(CardSet<ResourceCardType> cardSet, ref FeatureWriter writer)
         {
-            List<float> features = new List<float>();
-            foreach (var resource in Enum.GetValues<ResourceCardType>())
+            foreach (var resource in ResourceTypes)
             {
-                features.Add((float)cardSet.Get(resource));
+                writer.Add(cardSet.Get(resource));
             }
-            return features;
         }
 
-        protected List<float> EncodeDevelopmentCardSet(CardSet<DevelopmentCardType> cardSet)
+        private static void EncodeDevelopmentCardSet(CardSet<DevelopmentCardType> cardSet, ref FeatureWriter writer)
         {
-            List<float> features = new List<float>();
-            foreach (var development in Enum.GetValues<DevelopmentCardType>())
+            foreach (var development in DevelopmentTypes)
             {
-                features.Add((float)cardSet.Get(development));
+                writer.Add(cardSet.Get(development));
             }
-            return features;
         }
 
-        protected float[] NullableOwnerOneHot(sbyte owner, uint playerCount)
+        /// <summary>
+        /// Appends features to a zero-initialized span
+        /// </summary>
+        private ref struct FeatureWriter
         {
-            float[] ownerOneHot = new float[playerCount + 1];
-            ownerOneHot[owner+1] = 1.0f;
-            return ownerOneHot;
-        }
+            private readonly Span<float> _features;
+            public int Position { get; private set; }
 
-        protected float BoolFeature(bool val)
-        {
-            return val ? 1.0f : 0.0f;
-        }
+            public FeatureWriter(Span<float> features)
+            {
+                _features = features;
+                Position = 0;
+            }
 
-        protected float[] HexNumberFeature(byte? number)
-        {
-            if (!number.HasValue)
-                return [0f, 0f];
+            public void Add(float value)
+            {
+                _features[Position++] = value;
+            }
 
-            // 2..12 auf 0..1 abbilden
-            return [((float)number.Value - 2f) / 10f, 1f];
+            public void Add(bool value)
+            {
+                Add(value ? 1.0f : 0.0f);
+            }
+
+            /// <summary>
+            /// Reserves the next features (left at zero) and returns them for writing
+            /// </summary>
+            public Span<float> Reserve(int count)
+            {
+                Span<float> reserved = _features.Slice(Position, count);
+                Position += count;
+                return reserved;
+            }
+
+            public void OneHot(int index, int size)
+            {
+                Reserve(size)[index] = 1.0f;
+            }
+
+            public void OneHot<TEnum>(EnumVocab<TEnum> vocab, TEnum value) where TEnum : struct, Enum
+            {
+                vocab.WriteOneHot(value, Reserve(vocab.Size));
+            }
+
+            /// <summary>
+            /// Owner one-hot with an extra leading slot for "no owner" (-1)
+            /// </summary>
+            public void NullableOwner(sbyte owner, int playerCount)
+            {
+                OneHot(owner + 1, playerCount + 1);
+            }
+
+            public void HexNumber(byte? number)
+            {
+                if (!number.HasValue)
+                {
+                    Reserve(2);
+                    return;
+                }
+
+                // 2..12 auf 0..1 abbilden
+                Add(((float)number.Value - 2f) / 10f);
+                Add(1f);
+            }
         }
     }
 }
