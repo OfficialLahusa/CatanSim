@@ -101,9 +101,10 @@ namespace Agents
             features.AddRange(HexNumberFeature(state.Board.Robber.Number));
 
             // Tiles
-            for (int x = 0; x < state.Board.Map.Width; x++)
+            // Row-major (y outer, x inner) to match HexMap.Values storage order and the Python vectorizer
+            for (int y = 0; y < state.Board.Map.Height; y++)
             {
-                for (int y = 0; y < state.Board.Map.Height; y++)
+                for (int x = 0; x < state.Board.Map.Width; x++)
                 {
                     var tile = state.Board.Map.GetTile(x, y);
                     if (tile == null)
