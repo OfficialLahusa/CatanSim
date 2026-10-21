@@ -35,7 +35,8 @@ namespace Common.Actions
 
             History = new EndTurnActionHistory(
                 state.Players[PlayerIndex].BuildingStock.FreeRoads,
-                state.Players[PlayerIndex].NewDevelopmentCards,
+                // Copy, so that the history never shares a live card set with a player state
+                new CardSet<DevelopmentCardType>(state.Players[PlayerIndex].NewDevelopmentCards),
                 state.Turn.HasPlayedDevelopmentCard
             );
 
