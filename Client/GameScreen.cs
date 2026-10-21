@@ -78,7 +78,7 @@ namespace Client
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
 
         // State value network for win rate evaluation
-        private StateValueNet _stateValueNet = new StateValueNet("state_value_net-0mw2c1bh.onnx");
+        private StateValueNet _stateValueNet = new StateValueNet(StateValueNet.DefaultModelFile);
         private StateVectorizer _stateVectorizer = new StateVectorizer();
         private readonly string[] _valuationTypes = ["State Value Network", "Simple Agent"];
         private int _selectedValuationType = 0;

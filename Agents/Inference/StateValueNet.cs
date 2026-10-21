@@ -10,6 +10,9 @@ namespace Agents.Inference
 {
     public class StateValueNet
     {
+        // File name of the currently deployed model (expected next to the executable)
+        public const string DefaultModelFile = "state_value_net-c5ncwg6j.onnx";
+
         private InferenceSession _session;
 
         public StateValueNet(string modelPath)

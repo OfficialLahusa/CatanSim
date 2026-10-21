@@ -23,7 +23,7 @@ namespace Agents
 
         static GreedyAgent()
         {
-            _stateValueNet = new StateValueNet("state_value_net-0mw2c1bh.onnx");
+            _stateValueNet = new StateValueNet(StateValueNet.DefaultModelFile);
             _stateVectorizer = new StateVectorizer();
         }
 
