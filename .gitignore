@@ -413,3 +413,9 @@ DatasetProcessing/compressed_dataset/win_rates.npy
 /Agents/Training/colonysim
 /Agents/Training/wandb
 /Agents/Training/dataset
+
+# Local tooling config (not synced)
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+.claudeignore
