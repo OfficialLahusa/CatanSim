@@ -96,7 +96,7 @@ namespace Agents
                 {
                     GameState variantStateCopy = new GameState(currentState);
                     actionVariant.Apply(variantStateCopy);
-                    expectedScore += (float)probability * ValuationToScore(StateValueFunc(variantStateCopy));
+                    expectedScore += (float)probability * ScoreState(variantStateCopy);
                 }
 
                 return expectedScore;
@@ -105,7 +105,16 @@ namespace Agents
             // Otherwise evaluate the result of the individual action directly
             GameState stateCopy = new GameState(currentState);
             action.Apply(stateCopy);
-            return ValuationToScore(StateValueFunc(stateCopy));
+            return ScoreState(stateCopy);
+        }
+
+        protected float ScoreState(GameState state)
+        {
+            // Ended matches have a known result (the turn player is the winner), no need to ask the net
+            if (state.HasEnded)
+                return state.Turn.PlayerIndex == PlayerIndex ? 1 : 0;
+
+            return ValuationToScore(StateValueFunc(state));
         }
 
         protected float ValuationToScore(float[] valuation)

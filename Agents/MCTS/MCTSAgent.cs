@@ -108,8 +108,8 @@ namespace Agents.MCTS
             }
 
             // Simulation
-            // Run simulation and get result (win percentage)
-            double result = SimulateML(stateAtLeaf);
+            // Ended matches have a known result, everything else is estimated by the value net
+            double result = stateAtLeaf.HasEnded ? TerminalResult(stateAtLeaf) : SimulateML(stateAtLeaf);
 
             // Backpropagation
             // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root
@@ -141,8 +141,24 @@ namespace Agents.MCTS
             
 
             // Simulation
-            // Run simulation and get result (win percentage)
-            List<double> results = BatchSimulateML(leaves.Select(x => x.stateAtLeaf).ToList());
+            // Ended matches have a known result; only the remaining leaves go through the value net
+            double[] results = new double[batchSize];
+            List<int> pendingIndices = [];
+
+            for (int i = 0; i < batchSize; i++)
+            {
+                if (leaves[i].stateAtLeaf.HasEnded)
+                    results[i] = TerminalResult(leaves[i].stateAtLeaf);
+                else
+                    pendingIndices.Add(i);
+            }
+
+            if (pendingIndices.Count > 0)
+            {
+                List<double> netResults = BatchSimulateML(pendingIndices.Select(i => leaves[i].stateAtLeaf).ToList());
+                for (int k = 0; k < pendingIndices.Count; k++)
+                    results[pendingIndices[k]] = netResults[k];
+            }
 
             Parallel.For(0, (int)batchSize, i =>
             {
@@ -150,6 +166,12 @@ namespace Agents.MCTS
                 // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root
                 _tree.Backpropagate(leaves[i].leafNode, results[i], pathAlreadyMarked: true);
             });
+        }
+
+        protected double TerminalResult(GameState state)
+        {
+            // Players can only win on their own turn, so the turn player of an ended match is the winner
+            return state.Turn.PlayerIndex == PlayerIndex ? 1 : 0;
         }
 
         protected double SimulatePlayout(GameState state)
