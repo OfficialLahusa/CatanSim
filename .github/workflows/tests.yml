@@ -1,0 +1,29 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  dotnet:
+    name: C# test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      # The value net is not tracked in git, so its tests are skipped here
+      - run: dotnet test Tests/Tests.csproj --logger "console;verbosity=normal"
+
+  python:
+    name: Python vectorizer tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # torch is not installed, so the ONNX export and baseline layout tests are skipped here
+      - run: pip install numpy pyyaml
+      - run: python -m unittest discover -s Tests/Python -v
