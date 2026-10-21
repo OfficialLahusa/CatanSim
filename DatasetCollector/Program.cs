@@ -9,7 +9,8 @@ namespace DatasetCollector
             Console.WriteLine("CettlersOfSatan Dataset Collector");
             Console.WriteLine("=================================");
 
-            uint threadCount = ReadDefaultedUInt32("Thread count", (uint)(Environment.ProcessorCount / 2));
+            // Playouts keep scaling up to all logical cores (per-thread random sources, server GC)
+            uint threadCount = ReadDefaultedUInt32("Thread count", (uint)Environment.ProcessorCount);
             uint matchCount = ReadDefaultedUInt32("Match count", 100u);
             uint samplesPerMatch = ReadDefaultedUInt32("Samples per match", 5u);
             uint playoutsPerSample = ReadDefaultedUInt32("Playouts per sample", 1000u);
