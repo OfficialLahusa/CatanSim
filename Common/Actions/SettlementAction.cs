@@ -53,9 +53,7 @@ namespace Common.Actions
             History = new SettlementActionHistory(currentLongestRoadHolder);
 
             // Place settlement
-            Intersection intersection = state.Board.Intersections[IntersectionIndex];
-            intersection.Owner = PlayerIndex;
-            intersection.Building = Intersection.BuildingType.Settlement;
+            state.Board.SetBuilding(IntersectionIndex, Intersection.BuildingType.Settlement, PlayerIndex);
 
             // Remove cards
             CardSet<ResourceCardType> playerCards = state.Players[PlayerIndex].ResourceCards;
@@ -81,20 +79,20 @@ namespace Common.Actions
 
             // Check if the settlement might have broken the longest road, which can only happen if there are two adjacent roads from another player
             int? adjPlayer = null;
-            foreach (Edge adjRoad in state.Board.Adjacency.GetEdges(intersection))
+            foreach (Edge adjRoad in state.Board.Adjacency.GetEdges(state.Board.Intersections[IntersectionIndex]))
             {
-                if (adjRoad.Building == Edge.BuildingType.None || adjRoad.Owner == PlayerIndex) continue;
+                if (state.Board.GetRoad(adjRoad.Index) == Edge.BuildingType.None || state.Board.GetRoadOwner(adjRoad.Index) == PlayerIndex) continue;
 
                 // First road from another player
                 if (adjPlayer == null)
                 {
-                    adjPlayer = adjRoad.Owner;
+                    adjPlayer = state.Board.GetRoadOwner(adjRoad.Index);
                 }
                 // Second road from another player
-                else if (adjPlayer == adjRoad.Owner)
+                else if (adjPlayer == state.Board.GetRoadOwner(adjRoad.Index))
                 {
                     // Recalculate longest road and award VPs accordingly, since it can be broken here
-                    state.CalculateLongestRoad(adjRoad.Owner, true);
+                    state.CalculateLongestRoad(state.Board.GetRoadOwner(adjRoad.Index), true);
                 }
             }
 
@@ -108,9 +106,7 @@ namespace Common.Actions
             if (!HasHistory()) throw new InvalidOperationException();
 
             // Remove settlement
-            Intersection intersection = state.Board.Intersections[IntersectionIndex];
-            intersection.Owner = -1;
-            intersection.Building = Intersection.BuildingType.None;
+            state.Board.SetBuilding(IntersectionIndex, Intersection.BuildingType.None, -1);
 
             // Return cards
             CardSet<ResourceCardType> playerCards = state.Players[PlayerIndex].ResourceCards;
@@ -168,7 +164,7 @@ namespace Common.Actions
         {
             Intersection intersection = state.Board.Intersections[IntersectionIndex];
 
-            bool spaceFree = intersection.Building == Intersection.BuildingType.None;
+            bool spaceFree = state.Board.GetBuilding(intersection.Index) == Intersection.BuildingType.None;
             bool canAfford = state.Players[PlayerIndex].CanAffordSettlement();
             if (!spaceFree || !canAfford) return false;
 
@@ -177,14 +173,14 @@ namespace Common.Actions
             bool hasAdjacentSettlement = false;
             foreach (Edge adjacentRoad in state.Board.Adjacency.GetEdges(intersection))
             {
-                if (adjacentRoad.Owner == PlayerIndex && adjacentRoad.Building != Edge.BuildingType.None)
+                if (state.Board.GetRoadOwner(adjacentRoad.Index) == PlayerIndex && state.Board.GetRoad(adjacentRoad.Index) != Edge.BuildingType.None)
                 {
                     hasAdjacentRoad = true;
                 }
 
                 (Intersection top, Intersection bottom) = state.Board.Adjacency.GetIntersections(adjacentRoad);
 
-                if (top.Building != Intersection.BuildingType.None || bottom.Building != Intersection.BuildingType.None)
+                if (state.Board.GetBuilding(top.Index) != Intersection.BuildingType.None || state.Board.GetBuilding(bottom.Index) != Intersection.BuildingType.None)
                 {
                     hasAdjacentSettlement = true;
                 }
@@ -232,7 +228,7 @@ namespace Common.Actions
 
                 // On port
                 (Intersection top, Intersection bottom) = state.Board.Adjacency.GetIntersections(portEdge);
-                if (settlementIntersection == top || settlementIntersection == bottom)
+                if (settlementIntersection.Index == top.Index || settlementIntersection.Index == bottom.Index)
                 {
                     state.Players[playerIdx].PortPrivileges |= port.Type.GetPortPrivilege();
                     break;
@@ -257,14 +253,14 @@ namespace Common.Actions
                 Edge portEdge = state.Board.Adjacency.GetEdge(landAnchor, port.AnchorDirection.Mirror())!;
                 (Intersection top, Intersection bottom) = state.Board.Adjacency.GetIntersections(portEdge);
 
-                if (top.Building != Intersection.BuildingType.None)
+                if (state.Board.GetBuilding(top.Index) != Intersection.BuildingType.None)
                 {
-                    state.Players[top.Owner].PortPrivileges |= port.Type.GetPortPrivilege();
+                    state.Players[state.Board.GetBuildingOwner(top.Index)].PortPrivileges |= port.Type.GetPortPrivilege();
                 }
 
-                if (bottom.Building != Intersection.BuildingType.None)
+                if (state.Board.GetBuilding(bottom.Index) != Intersection.BuildingType.None)
                 {
-                    state.Players[bottom.Owner].PortPrivileges |= port.Type.GetPortPrivilege();
+                    state.Players[state.Board.GetBuildingOwner(bottom.Index)].PortPrivileges |= port.Type.GetPortPrivilege();
                 }
             }
         }

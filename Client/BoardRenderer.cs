@@ -321,7 +321,7 @@ namespace Client
             foreach (Edge edge in Board.Edges)
             {
                 // Skip edges without roads
-                if (edge.Building == Edge.BuildingType.None) continue;
+                if (Board.GetRoad(edge.Index) == Edge.BuildingType.None) continue;
 
                 // Anchor edge to one of its two neighboring tiles
                 (Tile anchor, Direction.Tile anchorDir) = GetEdgeAnchor(edge);
@@ -339,7 +339,7 @@ namespace Client
                 Vector2f leftOuterDir   = ClientUtils.EulerAngleToVec2f(leftCorner.Rotate(1).ToAngle());
                 Vector2f rightOuterDir  = ClientUtils.EulerAngleToVec2f(rightCorner.Rotate(-1).ToAngle());
 
-                Color playerColor = ColorPalette.GetPlayerColor(edge.Owner);
+                Color playerColor = ColorPalette.GetPlayerColor(Board.GetRoadOwner(edge.Index));
 
                 // Build vertices
                 Vertex left         = new Vertex(tileCenter + SideLength * leftDir, playerColor);
@@ -593,13 +593,14 @@ namespace Client
             // Draw intersection buildings
             foreach (Intersection intersection in Board.Intersections)
             {
-                switch(intersection.Building)
+                Intersection.BuildingType building = Board.GetBuilding(intersection.Index);
+                switch(building)
                 {
                     case Intersection.BuildingType.Settlement:
                     case Intersection.BuildingType.City:
                         _intersectionRect.Position = GetIntersectionCenter(intersection, Board);
-                        _intersectionRect.TextureRect = TextureAtlas.GetTextureRect(intersection.Building == Intersection.BuildingType.Settlement ? TextureAtlas.Sprite.Settlement : TextureAtlas.Sprite.City);
-                        _intersectionRect.FillColor = ColorPalette.GetPlayerColor(intersection.Owner);
+                        _intersectionRect.TextureRect = TextureAtlas.GetTextureRect(building == Intersection.BuildingType.Settlement ? TextureAtlas.Sprite.Settlement : TextureAtlas.Sprite.City);
+                        _intersectionRect.FillColor = ColorPalette.GetPlayerColor(Board.GetBuildingOwner(intersection.Index));
                         target.Draw(_intersectionRect, states);
                         break;
                     default:

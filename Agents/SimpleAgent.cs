@@ -110,11 +110,12 @@ namespace Agents
             // Add yield score
             foreach (Intersection intersection in state.Board.Intersections)
             {
-                if (intersection.Building != Intersection.BuildingType.None)
+                Intersection.BuildingType building = state.Board.GetBuilding(intersection.Index);
+                if (building != Intersection.BuildingType.None)
                 {
-                    float exploitation = intersection.Building == Intersection.BuildingType.Settlement ? 1 : 2;
+                    float exploitation = building == Intersection.BuildingType.Settlement ? 1 : 2;
 
-                    valuation[intersection.Owner] += yieldPointWeight * exploitation * IntersectionValueFunc(intersection, state, true);
+                    valuation[state.Board.GetBuildingOwner(intersection.Index)] += yieldPointWeight * exploitation * IntersectionValueFunc(intersection, state, true);
                 }
             }
 

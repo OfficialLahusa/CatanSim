@@ -4,18 +4,20 @@ using Common.Serialization;
 namespace Tests
 {
     /// <summary>
-    /// The board adjacency: shared between copies, resolved per board, consistent across lookups
+    /// The board adjacency: shared between copies, consistent across lookups
     /// </summary>
     public class AdjacencyTests
     {
         [Fact]
-        public void CopiesShareTheAdjacencyButResolveToTheirOwnObjects()
+        public void CopiesShareTheAdjacencyAndPositionsButNotTheBuildings()
         {
             TestUtil.Seed(160);
             GameState state = TestUtil.NewGame();
             GameState copy = new GameState(state);
 
-            Assert.Equal(state.Board.Adjacency, copy.Board.Adjacency);
+            Assert.Same(state.Board.Adjacency, copy.Board.Adjacency);
+            Assert.Same(state.Board.Intersections, copy.Board.Intersections);
+            Assert.Same(state.Board.Edges, copy.Board.Edges);
 
             for (int i = 0; i < copy.Board.Intersections.Count; i++)
             {
@@ -30,9 +32,12 @@ namespace Tests
                 Assert.Same(copy.Board.Intersections[bottom.Index], bottom);
             }
 
-            // Changing the copy's board leaves the original untouched
-            copy.Board.Edges[0].Building = Edge.BuildingType.Road;
-            Assert.Equal(Edge.BuildingType.None, state.Board.Edges[0].Building);
+            // Changing the copy's buildings and roads leaves the original untouched
+            copy.Board.SetRoad(0, Edge.BuildingType.Road, 0);
+            copy.Board.SetBuilding(0, Intersection.BuildingType.Settlement, 0);
+            Assert.Equal(Edge.BuildingType.None, state.Board.GetRoad(0));
+            Assert.Equal(Intersection.BuildingType.None, state.Board.GetBuilding(0));
+            Assert.Equal(-1, state.Board.GetBuildingOwner(0));
         }
 
         [Fact]

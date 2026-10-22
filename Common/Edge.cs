@@ -7,14 +7,11 @@ using System.Threading.Tasks;
 namespace Common
 {
     /// <summary>
-    /// A side of a tile where roads are built.
-    /// The road and owner are stored in the board's arrays; an Edge is a view onto them for one board.
-    /// Without a board (during map generation) it only describes the position.
+    /// Position of a side of a tile where roads are built.
+    /// Shared by all copies of a board; the road and owner at it are stored in the board (Board.GetRoad, ...).
     /// </summary>
     public class Edge
     {
-        private readonly Board? _board;
-
         public byte Index { get; init; }
         public Direction.Edge Direction { get; init; }
 
@@ -25,51 +22,22 @@ namespace Common
             // Ship = 2 (For future use)
         }
 
-        public BuildingType Building
-        {
-            get => BoundBoard.GetRoad(Index);
-            set => BoundBoard.SetRoad(Index, value, BoundBoard.GetRoadOwner(Index));
-        }
-
-        // -1 => None, 0/1/.. => Player 1/2/..
-        public sbyte Owner
-        {
-            get => BoundBoard.GetRoadOwner(Index);
-            set => BoundBoard.SetRoad(Index, BoundBoard.GetRoad(Index), value);
-        }
-
-        private Board BoundBoard => _board ?? throw new InvalidOperationException("This edge is not bound to a board.");
-
-        /// <summary>
-        /// Position only, as used while a board is generated
-        /// </summary>
         public Edge(byte index, Direction.Edge direction)
         {
             Index = index;
             Direction = direction;
         }
 
-        /// <summary>
-        /// View onto the road and owner at this position of a board
-        /// </summary>
-        public Edge(Board board, byte index, Direction.Edge direction)
-            : this(index, direction)
-        {
-            _board = board;
-        }
-
         public override bool Equals(object? obj)
         {
             return obj is Edge edge
                 && Index == edge.Index
-                && Direction == edge.Direction
-                && Building == edge.Building
-                && Owner == edge.Owner;
+                && Direction == edge.Direction;
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(Direction, Building, Owner);
+            return HashCode.Combine(Index, Direction);
         }
     }
 }

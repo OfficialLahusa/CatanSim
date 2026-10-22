@@ -118,21 +118,17 @@ namespace Agents
             }
 
             // Intersections
-            for (int i = 0; i < state.Board.Intersections.Count; i++)
+            for (int i = 0; i < state.Board.IntersectionCount; i++)
             {
-                Intersection intersection = state.Board.Intersections[i];
-
-                writer.OneHot(_intersectionBuildingTypeVocab, intersection.Building);
-                writer.NullableOwner(intersection.Owner, state.Players.Length);
+                writer.OneHot(_intersectionBuildingTypeVocab, state.Board.GetBuilding(i));
+                writer.NullableOwner(state.Board.GetBuildingOwner(i), state.Players.Length);
             }
 
             // Edges
-            for (int i = 0; i < state.Board.Edges.Count; i++)
+            for (int i = 0; i < state.Board.EdgeCount; i++)
             {
-                Edge edge = state.Board.Edges[i];
-
-                writer.OneHot(_edgeBuildingTypeVocab, edge.Building);
-                writer.NullableOwner(edge.Owner, state.Players.Length);
+                writer.OneHot(_edgeBuildingTypeVocab, state.Board.GetRoad(i));
+                writer.NullableOwner(state.Board.GetRoadOwner(i), state.Players.Length);
             }
         }
 

@@ -29,8 +29,7 @@ namespace Common.Actions
             base.Apply(state);
 
             // Place city
-            Intersection intersection = state.Board.Intersections[IntersectionIndex];
-            intersection.Building = Intersection.BuildingType.City;
+            state.Board.SetBuilding(IntersectionIndex, Intersection.BuildingType.City, PlayerIndex);
 
             // Remove cards
             CardSet<ResourceCardType> playerCards = state.Players[PlayerIndex].ResourceCards;
@@ -58,8 +57,7 @@ namespace Common.Actions
         public override void Revert(GameState state)
         {
             // Remove city
-            Intersection intersection = state.Board.Intersections[IntersectionIndex];
-            intersection.Building = Intersection.BuildingType.Settlement;
+            state.Board.SetBuilding(IntersectionIndex, Intersection.BuildingType.Settlement, PlayerIndex);
 
             // Return cards
             CardSet<ResourceCardType> playerCards = state.Players[PlayerIndex].ResourceCards;
@@ -102,8 +100,8 @@ namespace Common.Actions
         {
             Intersection intersection = state.Board.Intersections[IntersectionIndex];
 
-            bool hasSettlement = intersection.Building == Intersection.BuildingType.Settlement;
-            bool ownsSettlement = intersection.Owner == PlayerIndex;
+            bool hasSettlement = state.Board.GetBuilding(intersection.Index) == Intersection.BuildingType.Settlement;
+            bool ownsSettlement = state.Board.GetBuildingOwner(intersection.Index) == PlayerIndex;
             bool canAfford = state.Players[PlayerIndex].CanAffordCity();
 
             return hasSettlement && ownsSettlement && canAfford;

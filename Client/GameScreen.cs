@@ -1236,15 +1236,17 @@ namespace Client
                 // Click was on intersection
                 if (e.Button == Mouse.Button.Left && dist < _intersectionHitbox.Radius)
                 {
+                    Intersection.BuildingType building = _state.Board.GetBuilding(intersection.Index);
+
                     // Clear previous buildings
-                    if(intersection.Owner != _playerIndex && intersection.Building != Intersection.BuildingType.None)
+                    if(_state.Board.GetBuildingOwner(intersection.Index) != _playerIndex && building != Intersection.BuildingType.None)
                     {
-                        intersection.Building = Intersection.BuildingType.None;
+                        building = Intersection.BuildingType.None;
                     }
                     // Cycle own buildings
                     else
                     {
-                        intersection.Building = intersection.Building switch
+                        building = building switch
                         {
                             Intersection.BuildingType.None => Intersection.BuildingType.Settlement,
                             Intersection.BuildingType.Settlement => Intersection.BuildingType.City,
@@ -1252,18 +1254,18 @@ namespace Client
                             _ => throw new InvalidOperationException()
                         };
 
-                        if (intersection.Building == Intersection.BuildingType.Settlement)
+                        if (building == Intersection.BuildingType.Settlement)
                         {
                             _eventLog.WriteLine(new PlayerEntry(_playerIndex), new StrEntry("placed a settlement"));
                         }
-                        else if(intersection.Building == Intersection.BuildingType.City)
+                        else if(building == Intersection.BuildingType.City)
                         {
                             _eventLog.WriteLine(new PlayerEntry(_playerIndex), new StrEntry("promoted a settlement to a city"));
                         }
                     }
 
                     // Claim intersection for current player
-                    intersection.Owner = (sbyte)_playerIndex;
+                    _state.Board.SetBuilding(intersection.Index, building, (sbyte)_playerIndex);
 
                     // Play place sound
                     _placeSound.Play();
@@ -1300,29 +1302,31 @@ namespace Client
                 // Click was on edge
                 if (e.Button == Mouse.Button.Left && _edgeHitbox.GetLocalBounds().Contains(transformedMousePos.X, transformedMousePos.Y))
                 {
+                    Edge.BuildingType road = _state.Board.GetRoad(edge.Index);
+
                     // Clear previous roads
-                    if(edge.Owner != _playerIndex && edge.Building == Edge.BuildingType.Road)
+                    if(_state.Board.GetRoadOwner(edge.Index) != _playerIndex && road == Edge.BuildingType.Road)
                     {
-                        edge.Building = Edge.BuildingType.None;
+                        road = Edge.BuildingType.None;
                     }
                     // Toggle own roads
                     else
                     {
-                        edge.Building = edge.Building switch
+                        road = road switch
                         {
                             Edge.BuildingType.None => Edge.BuildingType.Road,
                             Edge.BuildingType.Road => Edge.BuildingType.None,
                             _ => throw new InvalidOperationException(),
                         };
 
-                        if(edge.Building == Edge.BuildingType.Road)
+                        if(road == Edge.BuildingType.Road)
                         {
                             _eventLog.WriteLine(new PlayerEntry(_playerIndex), new StrEntry("placed a road"));
                         }
                     }
 
                     // Claim edge for current player
-                    edge.Owner = (sbyte)_playerIndex;
+                    _state.Board.SetRoad(edge.Index, road, (sbyte)_playerIndex);
 
                     // Play place sound
                     _placeSound.Play();

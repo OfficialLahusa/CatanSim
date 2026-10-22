@@ -40,16 +40,14 @@ namespace Common.Actions
             base.Apply(state);
 
             // Place settlement
-            Intersection intersection = state.Board.Intersections[IntersectionIndex];
-            intersection.Owner = PlayerIndex;
-            intersection.Building = Intersection.BuildingType.Settlement;
+            state.Board.SetBuilding(IntersectionIndex, Intersection.BuildingType.Settlement, PlayerIndex);
 
             // Remove piece from stock
             state.Players[PlayerIndex].BuildingStock.RemainingSettlements--;
 
             // Award adjacent resources
             List<ResourceCardType> awardedResources = [];
-            foreach (Tile adjTile in state.Board.Adjacency.GetTiles(intersection))
+            foreach (Tile adjTile in state.Board.Adjacency.GetTiles(state.Board.Intersections[IntersectionIndex]))
             {
                 if(adjTile != null && adjTile.HasYield())
                 {
@@ -77,9 +75,7 @@ namespace Common.Actions
             if (!HasHistory()) throw new InvalidOperationException();
 
             // Remove settlement
-            Intersection intersection = state.Board.Intersections[IntersectionIndex];
-            intersection.Owner = -1;
-            intersection.Building = Intersection.BuildingType.None;
+            state.Board.SetBuilding(IntersectionIndex, Intersection.BuildingType.None, -1);
 
             // Return piece to stock
             state.Players[PlayerIndex].BuildingStock.RemainingSettlements++;
@@ -113,7 +109,7 @@ namespace Common.Actions
         {
             Intersection intersection = state.Board.Intersections[IntersectionIndex];
 
-            bool spaceFree = intersection.Building == Intersection.BuildingType.None;
+            bool spaceFree = state.Board.GetBuilding(intersection.Index) == Intersection.BuildingType.None;
             bool oneSettlementPlaced = state.Players[PlayerIndex].BuildingStock.RemainingSettlements == BuildingStock.MAX_SETTLEMENTS - 1;
             bool oneRoadPlaced = state.Players[PlayerIndex].BuildingStock.RemainingRoads == BuildingStock.MAX_ROADS - 1;
 
@@ -123,7 +119,7 @@ namespace Common.Actions
             {
                 (Intersection top, Intersection bottom) = state.Board.Adjacency.GetIntersections(adjacentRoad);
 
-                if (top.Building != Intersection.BuildingType.None || bottom.Building != Intersection.BuildingType.None)
+                if (state.Board.GetBuilding(top.Index) != Intersection.BuildingType.None || state.Board.GetBuilding(bottom.Index) != Intersection.BuildingType.None)
                 {
                     hasAdjacentSettlement = true;
                 }

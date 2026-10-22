@@ -183,7 +183,7 @@ namespace Common.Actions
             {
                 foreach (Intersection intersection in state.Board.Adjacency.GetIntersections(tile))
                 {
-                    uint yieldCount = intersection.Building switch
+                    uint yieldCount = state.Board.GetBuilding(intersection.Index) switch
                     {
                         Intersection.BuildingType.City => 2,
                         Intersection.BuildingType.Settlement => 1,
@@ -194,7 +194,7 @@ namespace Common.Actions
                     {
                         if (!state.Board.HasRobber(tile))
                         {
-                            yieldSummary[intersection.Owner, CardSet<ResourceCardType>.ToInt(tile.Type.ToCardType())] += yieldCount;
+                            yieldSummary[state.Board.GetBuildingOwner(intersection.Index), CardSet<ResourceCardType>.ToInt(tile.Type.ToCardType())] += yieldCount;
                         }
                         else
                         {

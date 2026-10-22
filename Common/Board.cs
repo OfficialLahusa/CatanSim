@@ -10,8 +10,8 @@ namespace Common
         {
             public HexMap<Tile> Map = null!;
             public List<Port> Ports = null!;
-            public bool[] IntersectionFacesDownwards = [];
-            public Direction.Edge[] EdgeDirections = [];
+            public List<Intersection> Intersections = [];
+            public List<Edge> Edges = [];
         }
 
         private Layout _layout;
@@ -22,10 +22,6 @@ namespace Common
         private Edge.BuildingType[] _roads;
         private sbyte[] _roadOwners;
 
-        // Views onto the arrays above, so code can keep working with Intersection and Edge objects
-        private List<Intersection> _intersections;
-        private List<Edge> _edges;
-
         [YamlMember(Order = 0)]
         public HexMap<Tile> Map
         {
@@ -33,11 +29,17 @@ namespace Common
             set => _layout.Map = value;
         }
 
+        /// <summary>
+        /// Positions of the intersections, shared by all copies of the board (read buildings with GetBuilding)
+        /// </summary>
         [YamlIgnore]
-        public List<Intersection> Intersections => _intersections;
+        public List<Intersection> Intersections => _layout.Intersections;
 
+        /// <summary>
+        /// Positions of the edges, shared by all copies of the board (read roads with GetRoad)
+        /// </summary>
         [YamlIgnore]
-        public List<Edge> Edges => _edges;
+        public List<Edge> Edges => _layout.Edges;
 
         [YamlMember(Order = 3)]
         public List<Port> Ports
@@ -46,6 +48,7 @@ namespace Common
             set => _layout.Ports = value;
         }
 
+        // Shared by all copies of the board
         [YamlMember(Order = 4)]
         public AdjacencyMatrix Adjacency { get; set; }
 
@@ -90,6 +93,10 @@ namespace Common
 
         public sbyte GetBuildingOwner(int intersectionIdx) => _buildingOwners[intersectionIdx];
 
+        public bool HasBuilding(int intersectionIdx) => _buildings[intersectionIdx] != Intersection.BuildingType.None;
+
+        public bool HasBuildingOf(int intersectionIdx, int playerIdx) => HasBuilding(intersectionIdx) && _buildingOwners[intersectionIdx] == playerIdx;
+
         public void SetBuilding(int intersectionIdx, Intersection.BuildingType building, sbyte owner)
         {
             _buildings[intersectionIdx] = building;
@@ -100,15 +107,13 @@ namespace Common
 
         public sbyte GetRoadOwner(int edgeIdx) => _roadOwners[edgeIdx];
 
+        public bool HasRoadOf(int edgeIdx, int playerIdx) => _roads[edgeIdx] != Edge.BuildingType.None && _roadOwners[edgeIdx] == playerIdx;
+
         public void SetRoad(int edgeIdx, Edge.BuildingType road, sbyte owner)
         {
             _roads[edgeIdx] = road;
             _roadOwners[edgeIdx] = owner;
         }
-
-        public bool IntersectionFacesDownwards(int intersectionIdx) => _layout.IntersectionFacesDownwards[intersectionIdx];
-
-        public Direction.Edge GetEdgeDirection(int edgeIdx) => _layout.EdgeDirections[edgeIdx];
 
         // -- Construction --
 
@@ -121,8 +126,8 @@ namespace Common
             {
                 Map = map,
                 Ports = ports,
-                IntersectionFacesDownwards = intersections.OrderBy(intersection => intersection.Index).Select(intersection => intersection.FacesDownwards).ToArray(),
-                EdgeDirections = edges.OrderBy(edge => edge.Index).Select(edge => edge.Direction).ToArray()
+                Intersections = intersections,
+                Edges = edges
             };
 
             _buildings = new Intersection.BuildingType[intersections.Count];
@@ -132,30 +137,22 @@ namespace Common
             Array.Fill(_buildingOwners, (sbyte)-1);
             Array.Fill(_roadOwners, (sbyte)-1);
 
-            _intersections = CreateIntersectionViews();
-            _edges = CreateEdgeViews();
-
-            // Shares the adjacency built during generation, resolving to this board's views
-            Adjacency = new AdjacencyMatrix(adjacency, Map, _intersections, _edges);
+            Adjacency = adjacency;
             Robber = robber;
         }
 
         /// <summary>
-        /// Copy: shares the layout and copies the buildings, roads and robber
+        /// Copy: shares the layout and adjacency, copies the buildings, roads and robber
         /// </summary>
         public Board(Board copy)
         {
             _layout = copy._layout;
+            Adjacency = copy.Adjacency;
 
             _buildings = (Intersection.BuildingType[])copy._buildings.Clone();
             _buildingOwners = (sbyte[])copy._buildingOwners.Clone();
             _roads = (Edge.BuildingType[])copy._roads.Clone();
             _roadOwners = (sbyte[])copy._roadOwners.Clone();
-
-            _intersections = CreateIntersectionViews();
-            _edges = CreateEdgeViews();
-
-            Adjacency = new AdjacencyMatrix(copy.Adjacency, Map, _intersections, _edges);
 
             _hasRobber = copy._hasRobber;
             _robberX = copy._robberX;
@@ -172,25 +169,7 @@ namespace Common
             _buildingOwners = [];
             _roads = [];
             _roadOwners = [];
-            _intersections = [];
-            _edges = [];
             Adjacency = null!;
-        }
-
-        private List<Intersection> CreateIntersectionViews()
-        {
-            List<Intersection> views = new(_buildings.Length);
-            for (int i = 0; i < _buildings.Length; i++)
-                views.Add(new Intersection(this, (byte)i, _layout.IntersectionFacesDownwards[i]));
-            return views;
-        }
-
-        private List<Edge> CreateEdgeViews()
-        {
-            List<Edge> views = new(_roads.Length);
-            for (int i = 0; i < _roads.Length; i++)
-                views.Add(new Edge(this, (byte)i, _layout.EdgeDirections[i]));
-            return views;
         }
 
         // -- Serialization: intersections and edges are written as before, one entry per position --
@@ -214,54 +193,48 @@ namespace Common
         [YamlMember(Alias = "Intersections", Order = 1)]
         public List<IntersectionEntry> IntersectionEntries
         {
-            get => Enumerable.Range(0, _buildings.Length).Select(i => new IntersectionEntry
+            get => Intersections.Select(intersection => new IntersectionEntry
             {
-                Index = (byte)i,
-                FacesDownwards = _layout.IntersectionFacesDownwards[i],
-                Building = _buildings[i],
-                Owner = _buildingOwners[i]
+                Index = intersection.Index,
+                FacesDownwards = intersection.FacesDownwards,
+                Building = _buildings[intersection.Index],
+                Owner = _buildingOwners[intersection.Index]
             }).ToList();
             set
             {
-                _layout.IntersectionFacesDownwards = new bool[value.Count];
+                _layout.Intersections = value.OrderBy(entry => entry.Index).Select(entry => new Intersection(entry.Index, entry.FacesDownwards)).ToList();
                 _buildings = new Intersection.BuildingType[value.Count];
                 _buildingOwners = new sbyte[value.Count];
 
                 foreach (IntersectionEntry entry in value)
                 {
-                    _layout.IntersectionFacesDownwards[entry.Index] = entry.FacesDownwards;
                     _buildings[entry.Index] = entry.Building;
                     _buildingOwners[entry.Index] = entry.Owner;
                 }
-
-                _intersections = CreateIntersectionViews();
             }
         }
 
         [YamlMember(Alias = "Edges", Order = 2)]
         public List<EdgeEntry> EdgeEntries
         {
-            get => Enumerable.Range(0, _roads.Length).Select(i => new EdgeEntry
+            get => Edges.Select(edge => new EdgeEntry
             {
-                Index = (byte)i,
-                Direction = _layout.EdgeDirections[i],
-                Building = _roads[i],
-                Owner = _roadOwners[i]
+                Index = edge.Index,
+                Direction = edge.Direction,
+                Building = _roads[edge.Index],
+                Owner = _roadOwners[edge.Index]
             }).ToList();
             set
             {
-                _layout.EdgeDirections = new Direction.Edge[value.Count];
+                _layout.Edges = value.OrderBy(entry => entry.Index).Select(entry => new Edge(entry.Index, entry.Direction)).ToList();
                 _roads = new Edge.BuildingType[value.Count];
                 _roadOwners = new sbyte[value.Count];
 
                 foreach (EdgeEntry entry in value)
                 {
-                    _layout.EdgeDirections[entry.Index] = entry.Direction;
                     _roads[entry.Index] = entry.Building;
                     _roadOwners[entry.Index] = entry.Owner;
                 }
-
-                _edges = CreateEdgeViews();
             }
         }
 
@@ -290,8 +263,8 @@ namespace Common
                 && (ReferenceEquals(_layout, board._layout)
                     || Map.Equals(board.Map)
                         && Ports.SequenceEqual(board.Ports)
-                        && _layout.IntersectionFacesDownwards.SequenceEqual(board._layout.IntersectionFacesDownwards)
-                        && _layout.EdgeDirections.SequenceEqual(board._layout.EdgeDirections))
+                        && Intersections.SequenceEqual(board.Intersections)
+                        && Edges.SequenceEqual(board.Edges))
                 && _buildings.AsSpan().SequenceEqual(board._buildings)
                 && _buildingOwners.AsSpan().SequenceEqual(board._buildingOwners)
                 && _roads.AsSpan().SequenceEqual(board._roads)

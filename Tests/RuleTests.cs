@@ -159,8 +159,7 @@ namespace Tests
         {
             foreach (int edgeIdx in path.Edges)
             {
-                state.Board.Edges[edgeIdx].Building = Edge.BuildingType.Road;
-                state.Board.Edges[edgeIdx].Owner = (sbyte)playerIdx;
+                state.Board.SetRoad(edgeIdx, Edge.BuildingType.Road, (sbyte)playerIdx);
             }
 
             state.CalculateLongestRoad(playerIdx);
@@ -173,8 +172,7 @@ namespace Tests
         private static void BreakRoad(GameState state, int playerIdx, RoadPath path, int splitAt, int breaker)
         {
             Intersection intersection = state.Board.Intersections[path.Vertices[splitAt]];
-            intersection.Building = Intersection.BuildingType.Settlement;
-            intersection.Owner = (sbyte)breaker;
+            state.Board.SetBuilding(intersection.Index, Intersection.BuildingType.Settlement, (sbyte)breaker);
 
             state.CalculateLongestRoad(playerIdx, checkForBreak: true);
         }
@@ -346,8 +344,7 @@ namespace Tests
 
         private static void PlaceBuilding(GameState state, int intersectionIdx, int playerIdx, Intersection.BuildingType type)
         {
-            state.Board.Intersections[intersectionIdx].Building = type;
-            state.Board.Intersections[intersectionIdx].Owner = (sbyte)playerIdx;
+            state.Board.SetBuilding(intersectionIdx, type, (sbyte)playerIdx);
         }
 
         /// <summary>
@@ -356,12 +353,12 @@ namespace Tests
         private static uint Demand(GameState state, int playerIdx, byte number, ResourceCardType resource)
         {
             uint demand = 0;
-            foreach (Intersection intersection in state.Board.Intersections.Where(i => i.Owner == playerIdx && i.Building != Intersection.BuildingType.None))
+            foreach (Intersection intersection in state.Board.Intersections.Where(i => state.Board.HasBuildingOf(i.Index, playerIdx)))
             {
                 foreach (Tile tile in state.Board.Adjacency.GetTiles(intersection))
                 {
                     if (tile.Number == number && tile.HasYield() && tile.Type.ToCardType() == resource && !state.Board.HasRobber(tile))
-                        demand += intersection.Building == Intersection.BuildingType.City ? 2u : 1u;
+                        demand += state.Board.GetBuilding(intersection.Index) == Intersection.BuildingType.City ? 2u : 1u;
                 }
             }
             return demand;
@@ -565,8 +562,7 @@ namespace Tests
             // No own road yet
             Assert.False(new SettlementAction(0, site.Index).IsValidFor(state));
 
-            road.Building = Edge.BuildingType.Road;
-            road.Owner = 0;
+            state.Board.SetRoad(road.Index, Edge.BuildingType.Road, 0);
             Assert.True(new SettlementAction(0, site.Index).IsValidFor(state));
 
             // A building on a neighboring intersection forbids it
@@ -586,8 +582,7 @@ namespace Tests
 
             Intersection site = state.Board.Intersections.First(i => state.Board.Adjacency.GetTiles(i).Any(t => t.IsLandTile()));
             Edge road = state.Board.Adjacency.GetEdges(site).First();
-            road.Building = Edge.BuildingType.Road;
-            road.Owner = 0;
+            state.Board.SetRoad(road.Index, Edge.BuildingType.Road, 0);
             Assert.True(new SettlementAction(0, site.Index).IsValidFor(state));
 
             state.Players[0].BuildingStock.RemainingSettlements = 0;
@@ -610,7 +605,7 @@ namespace Tests
             Assert.True(city.IsValidFor(state));
             city.Apply(state);
 
-            Assert.Equal(Intersection.BuildingType.City, site.Building);
+            Assert.Equal(Intersection.BuildingType.City, state.Board.GetBuilding(site.Index));
             Assert.Equal(BuildingStock.MAX_SETTLEMENTS, state.Players[0].BuildingStock.RemainingSettlements);
             Assert.Equal(BuildingStock.MAX_CITIES - 1, state.Players[0].BuildingStock.RemainingCities);
             Assert.Equal(2, state.Players[0].VictoryPoints.Total);

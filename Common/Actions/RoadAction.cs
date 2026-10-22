@@ -52,9 +52,7 @@ namespace Common.Actions
             }
 
             // Place road
-            Edge road = state.Board.Edges[EdgeIndex];
-            road.Owner = PlayerIndex;
-            road.Building = Edge.BuildingType.Road;
+            state.Board.SetRoad(EdgeIndex, Edge.BuildingType.Road, PlayerIndex);
 
             // Remove cards and/or building stock
             BuildingStock buildingStock = state.Players[PlayerIndex].BuildingStock;
@@ -96,9 +94,7 @@ namespace Common.Actions
             if (!HasHistory()) throw new InvalidOperationException();
 
             // Remove road
-            Edge road = state.Board.Edges[EdgeIndex];
-            road.Owner = -1;
-            road.Building = Edge.BuildingType.None;
+            state.Board.SetRoad(EdgeIndex, Edge.BuildingType.None, -1);
 
             // Return cards and/or building stock
             BuildingStock buildingStock = state.Players[PlayerIndex].BuildingStock;
@@ -155,7 +151,7 @@ namespace Common.Actions
         {
             Edge road = state.Board.Edges[EdgeIndex];
 
-            bool spaceFree = road.Building == Edge.BuildingType.None;
+            bool spaceFree = state.Board.GetRoad(road.Index) == Edge.BuildingType.None;
             bool canAfford = state.Players[PlayerIndex].CanAffordRoad();
             if (!spaceFree || !canAfford) return false;
 
@@ -163,15 +159,15 @@ namespace Common.Actions
             (Intersection top, Intersection bottom) = state.Board.Adjacency.GetIntersections(road);
 
             // Check if one of the intersections has a building owned by the player
-            bool hasTopBuilding = top.Owner == PlayerIndex && top.Building != Intersection.BuildingType.None;
-            bool hasBottomBuilding = bottom.Owner == PlayerIndex && bottom.Building != Intersection.BuildingType.None;
+            bool hasTopBuilding = state.Board.GetBuildingOwner(top.Index) == PlayerIndex && state.Board.GetBuilding(top.Index) != Intersection.BuildingType.None;
+            bool hasBottomBuilding = state.Board.GetBuildingOwner(bottom.Index) == PlayerIndex && state.Board.GetBuilding(bottom.Index) != Intersection.BuildingType.None;
 
             bool hasDirectAdjBuilding = hasTopBuilding || hasBottomBuilding;
             if (hasDirectAdjBuilding) return true;
 
             // Check if any of the intersections connect to roads of the player
-            bool topBlocked = top.Owner != PlayerIndex && top.Building != Intersection.BuildingType.None;
-            bool bottomBlocked = bottom.Owner != PlayerIndex && bottom.Building != Intersection.BuildingType.None;
+            bool topBlocked = state.Board.GetBuildingOwner(top.Index) != PlayerIndex && state.Board.GetBuilding(top.Index) != Intersection.BuildingType.None;
+            bool bottomBlocked = state.Board.GetBuildingOwner(bottom.Index) != PlayerIndex && state.Board.GetBuilding(bottom.Index) != Intersection.BuildingType.None;
 
             bool topHasAdjRoad = false;
             bool bottomHasAdjRoad = false;
@@ -179,7 +175,7 @@ namespace Common.Actions
             // Check if one of the adjacent roads of the top intersection was built by the player
             foreach (Edge adjacentRoad in state.Board.Adjacency.GetEdges(top))
             {
-                if (adjacentRoad.Owner == PlayerIndex && adjacentRoad.Building != Edge.BuildingType.None)
+                if (state.Board.GetRoadOwner(adjacentRoad.Index) == PlayerIndex && state.Board.GetRoad(adjacentRoad.Index) != Edge.BuildingType.None)
                 {
                     topHasAdjRoad = true;
                     break;
@@ -189,7 +185,7 @@ namespace Common.Actions
             // Check if one of the adjacent roads of the bottom intersection was built by the player
             foreach (Edge adjacentRoad in state.Board.Adjacency.GetEdges(bottom))
             {
-                if (adjacentRoad.Owner == PlayerIndex && adjacentRoad.Building != Edge.BuildingType.None)
+                if (state.Board.GetRoadOwner(adjacentRoad.Index) == PlayerIndex && state.Board.GetRoad(adjacentRoad.Index) != Edge.BuildingType.None)
                 {
                     bottomHasAdjRoad = true;
                     break;

@@ -176,12 +176,12 @@ namespace Tests
 
         public static int CountBuildings(GameState state, int playerIdx, Intersection.BuildingType type)
         {
-            return state.Board.Intersections.Count(intersection => intersection.Owner == playerIdx && intersection.Building == type);
+            return Enumerable.Range(0, state.Board.IntersectionCount).Count(i => state.Board.GetBuildingOwner(i) == playerIdx && state.Board.GetBuilding(i) == type);
         }
 
         public static int CountRoads(GameState state, int playerIdx)
         {
-            return state.Board.Edges.Count(edge => edge.Owner == playerIdx && edge.Building == Edge.BuildingType.Road);
+            return Enumerable.Range(0, state.Board.EdgeCount).Count(e => state.Board.HasRoadOf(e, playerIdx));
         }
     }
 }

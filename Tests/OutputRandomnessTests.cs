@@ -128,8 +128,7 @@ namespace Tests
             Tile target = state.Board.Map.Values.First(tile => tile.IsLandTile() && !state.Board.HasRobber(tile));
             int targetIdx = Array.IndexOf(state.Board.Map.Values, target);
             Intersection corner = state.Board.Adjacency.GetIntersections(target).First();
-            corner.Building = Intersection.BuildingType.Settlement;
-            corner.Owner = 1;
+            state.Board.SetBuilding(corner.Index, Intersection.BuildingType.Settlement, 1);
             TestUtil.GiveCards(state, 1, ResourceCardType.Lumber, 4);
             TestUtil.GiveCards(state, 1, ResourceCardType.Ore, 1);
 

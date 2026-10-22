@@ -28,9 +28,7 @@ namespace Common.Actions
             base.Apply(state);
 
             // Place road
-            Edge road = state.Board.Edges[EdgeIndex];
-            road.Owner = PlayerIndex;
-            road.Building = Edge.BuildingType.Road;
+            state.Board.SetRoad(EdgeIndex, Edge.BuildingType.Road, PlayerIndex);
 
             // Remove piece from stock
             state.Players[PlayerIndex].BuildingStock.RemainingRoads--;
@@ -58,9 +56,7 @@ namespace Common.Actions
         public override void Revert(GameState state)
         {
             // Remove road
-            Edge road = state.Board.Edges[EdgeIndex];
-            road.Owner = -1;
-            road.Building = Edge.BuildingType.None;
+            state.Board.SetRoad(EdgeIndex, Edge.BuildingType.None, -1);
 
             // Return piece to stock
             state.Players[PlayerIndex].BuildingStock.RemainingRoads++;
@@ -94,7 +90,7 @@ namespace Common.Actions
         {
             Edge road = state.Board.Edges[EdgeIndex];
 
-            bool spaceFree = road.Building == Edge.BuildingType.None;
+            bool spaceFree = state.Board.GetRoad(road.Index) == Edge.BuildingType.None;
             bool oneSettlementPlaced = state.Players[PlayerIndex].BuildingStock.RemainingSettlements == BuildingStock.MAX_SETTLEMENTS - 1;
             bool noRoadPlaced = state.Players[PlayerIndex].BuildingStock.RemainingRoads == BuildingStock.MAX_ROADS;
 
@@ -102,8 +98,8 @@ namespace Common.Actions
             (Intersection top, Intersection bottom) = state.Board.Adjacency.GetIntersections(road);
 
             // Check if one of the intersections has a building owned by the player
-            bool hasTopBuilding = top.Owner == PlayerIndex && top.Building != Intersection.BuildingType.None;
-            bool hasBottomBuilding = bottom.Owner == PlayerIndex && bottom.Building != Intersection.BuildingType.None;
+            bool hasTopBuilding = state.Board.GetBuildingOwner(top.Index) == PlayerIndex && state.Board.GetBuilding(top.Index) != Intersection.BuildingType.None;
+            bool hasBottomBuilding = state.Board.GetBuildingOwner(bottom.Index) == PlayerIndex && state.Board.GetBuilding(bottom.Index) != Intersection.BuildingType.None;
 
             // TODO: Irgendwo hier ist was off
             bool hasDirectAdjBuilding = hasTopBuilding || hasBottomBuilding;

@@ -134,7 +134,7 @@ namespace Common.Actions
 
                 foreach (Intersection intersection in state.Board.Adjacency.GetIntersections(tile))
                 {
-                    if (intersection.Owner == TargetPlayerIndex && intersection.Building != Intersection.BuildingType.None)
+                    if (state.Board.GetBuildingOwner(intersection.Index) == TargetPlayerIndex && state.Board.GetBuilding(intersection.Index) != Intersection.BuildingType.None)
                     {
                         isTargetPlayerAdjacent = true;
                         break;
@@ -149,7 +149,7 @@ namespace Common.Actions
 
                 foreach (Intersection intersection in state.Board.Adjacency.GetIntersections(tile))
                 {
-                    if (intersection.Owner != PlayerIndex && intersection.Building != Intersection.BuildingType.None)
+                    if (state.Board.GetBuildingOwner(intersection.Index) != PlayerIndex && state.Board.GetBuilding(intersection.Index) != Intersection.BuildingType.None)
                     {
                         hasOtherAdjacentPlayer = true;
                         break;

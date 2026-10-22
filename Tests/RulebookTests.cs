@@ -144,7 +144,7 @@ namespace Tests
             Intersection neighbor = Neighbors(state, first).First();
             Assert.False(new FirstInitialSettlementAction(1, neighbor.Index).IsValidFor(state));
             Assert.False(new FirstInitialSettlementAction(1, first.Index).IsValidFor(state));
-            Intersection far = LandIntersection(state, i => i.Index != first.Index && !Neighbors(state, first).Contains(i) && !Neighbors(state, i).Any(n => n.Building != Intersection.BuildingType.None));
+            Intersection far = LandIntersection(state, i => i.Index != first.Index && !Neighbors(state, first).Contains(i) && !Neighbors(state, i).Any(n => state.Board.HasBuilding(n.Index)));
             Assert.True(new FirstInitialSettlementAction(1, far.Index).IsValidFor(state));
         }
 
@@ -237,8 +237,7 @@ namespace Tests
             GameState state = TestUtil.EmptyNormalTurn(0, mustRoll: true);
             foreach (Intersection intersection in state.Board.Intersections.Where(i => state.Board.Adjacency.GetTiles(i).Any(t => t.HasYield())).Take(1))
             {
-                intersection.Building = Intersection.BuildingType.City;
-                intersection.Owner = 1;
+                state.Board.SetBuilding(intersection.Index, Intersection.BuildingType.City, 1);
             }
 
             RollTotal(state, 7);
@@ -254,10 +253,8 @@ namespace Tests
             GameState state = TestUtil.EmptyNormalTurn(0, mustRoll: true);
             Tile tile = state.Board.Map.Values.First(t => t.HasYield() && !state.Board.HasRobber(t));
             List<Intersection> corners = state.Board.Adjacency.GetIntersections(tile).ToList();
-            corners[0].Building = Intersection.BuildingType.Settlement;
-            corners[0].Owner = 0;
-            corners[3].Building = Intersection.BuildingType.Settlement;
-            corners[3].Owner = 2;
+            state.Board.SetBuilding(corners[0].Index, Intersection.BuildingType.Settlement, 0);
+            state.Board.SetBuilding(corners[3].Index, Intersection.BuildingType.Settlement, 2);
 
             RollTotal(state, tile.Number!.Value);
 
@@ -334,8 +331,7 @@ namespace Tests
             {
                 Intersection site = LandIntersection(state, _ => true);
                 Edge road = state.Board.Adjacency.GetEdges(site).First();
-                road.Building = Edge.BuildingType.Road;
-                road.Owner = 0;
+                state.Board.SetRoad(road.Index, Edge.BuildingType.Road, 0);
                 return new SettlementAction(0, site.Index);
             });
             AssertCost(CityCost, state => new CityAction(0, OwnSettlement(state).Index));
@@ -394,8 +390,7 @@ namespace Tests
             Assert.True(new RoadAction(0, next!.Index).IsValidFor(state));
 
             // ... but not through an opponent's settlement on that intersection
-            end.Building = Intersection.BuildingType.Settlement;
-            end.Owner = 1;
+            state.Board.SetBuilding(end.Index, Intersection.BuildingType.Settlement, 1);
             Assert.False(new RoadAction(0, next.Index).IsValidFor(state));
 
             // Occupied edges can't be built on
@@ -412,14 +407,13 @@ namespace Tests
             Intersection empty = LandIntersection(state, _ => true);
             Assert.False(new CityAction(0, empty.Index).IsValidFor(state));
 
-            empty.Building = Intersection.BuildingType.Settlement;
-            empty.Owner = 1;
+            state.Board.SetBuilding(empty.Index, Intersection.BuildingType.Settlement, 1);
             Assert.False(new CityAction(0, empty.Index).IsValidFor(state));
 
-            empty.Owner = 0;
+            state.Board.SetBuilding(empty.Index, Intersection.BuildingType.Settlement, 0);
             Assert.True(new CityAction(0, empty.Index).IsValidFor(state));
 
-            empty.Building = Intersection.BuildingType.City;
+            state.Board.SetBuilding(empty.Index, Intersection.BuildingType.City, 0);
             Assert.False(new CityAction(0, empty.Index).IsValidFor(state));
         }
 
@@ -644,8 +638,7 @@ namespace Tests
             (List<int[]> arms, List<int> armEnds, HashSet<int> used) = FindStar(board, armLength: 2);
             foreach (int edge in arms.SelectMany(arm => arm))
             {
-                board.Edges[edge].Building = Edge.BuildingType.Road;
-                board.Edges[edge].Owner = 0;
+                board.SetRoad(edge, Edge.BuildingType.Road, 0);
             }
             state.CalculateLongestRoad(0);
             Assert.Equal(4u, state.Players[0].LongestRoadLength);
@@ -657,8 +650,7 @@ namespace Tests
                 var (p, q) = board.Adjacency.GetIntersections(edge);
                 return !used.Contains((p.Index != end ? p : q).Index);
             })).First(edge => edge != null)!;
-            extension.Building = Edge.BuildingType.Road;
-            extension.Owner = 0;
+            state.Board.SetRoad(extension.Index, Edge.BuildingType.Road, 0);
             state.CalculateLongestRoad(0);
             Assert.Equal(5u, state.Players[0].LongestRoadLength);
             Assert.Equal(2, state.Players[0].VictoryPoints.LongestRoadPoints);
@@ -672,8 +664,7 @@ namespace Tests
             Tile tile = state.Board.Map.Values.First(t => t.IsLandTile());
             foreach (Edge edge in state.Board.Adjacency.GetEdges(tile))
             {
-                edge.Building = Edge.BuildingType.Road;
-                edge.Owner = 0;
+                state.Board.SetRoad(edge.Index, Edge.BuildingType.Road, 0);
             }
 
             state.CalculateLongestRoad(0);
@@ -752,8 +743,7 @@ namespace Tests
         private static Intersection OwnSettlement(GameState state)
         {
             Intersection site = LandIntersection(state, i => state.Board.Adjacency.GetEdges(i).Count == 3 && state.Board.Adjacency.GetTiles(i).All(t => t.IsLandTile()));
-            site.Building = Intersection.BuildingType.Settlement;
-            site.Owner = 0;
+            state.Board.SetBuilding(site.Index, Intersection.BuildingType.Settlement, 0);
             state.Players[0].BuildingStock.RemainingSettlements--;
             state.Players[0].VictoryPoints.SettlementPoints++;
             return site;

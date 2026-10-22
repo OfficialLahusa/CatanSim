@@ -103,8 +103,7 @@ namespace Common
             // Gather all roads owned by the player
             for (int edgeIdx = 0; edgeIdx < Board.Edges.Count; edgeIdx++)
             {
-                if (Board.Edges[edgeIdx].Owner == causingPlayerIdx
-                    && Board.Edges[edgeIdx].Building == Edge.BuildingType.Road)
+                if (Board.HasRoadOf(edgeIdx, causingPlayerIdx))
                 {
                     globalRoadIndices[roadCount] = (byte)edgeIdx;
                     playerRoadMask |= (ushort)(1 << roadCount);
@@ -121,9 +120,7 @@ namespace Common
                 byte edgeIdx = globalRoadIndices[startingRoadIdx];
 
                 // Get adjacent intersection indices
-                (Intersection top, Intersection bottom) = Board.Adjacency.GetIntersections(Board.Edges[edgeIdx]);
-                byte topIdx = top.Index;
-                byte bottomIdx = bottom.Index;
+                (int topIdx, int bottomIdx) = Board.Adjacency.GetIntersectionIndices(edgeIdx);
 
                 uint topLen    = GetMaxPathDFS(causingPlayerIdx, startingRoadIdx, topIdx,    playerRoadMask, roadCount, ref globalRoadIndices);
                 uint bottomLen = GetMaxPathDFS(causingPlayerIdx, startingRoadIdx, bottomIdx, playerRoadMask, roadCount, ref globalRoadIndices);
@@ -153,20 +150,19 @@ namespace Common
             remainingMask &= (ushort)~(1 << playerRoadIdx);
 
             // Terminate if the intersection towards which we are expanding is blocked by another player
-            if (Board.Intersections[currentIntersectionIdx].Building != Intersection.BuildingType.None
-                && Board.Intersections[currentIntersectionIdx].Owner != playerIdx)
+            if (Board.HasBuilding(currentIntersectionIdx) && Board.GetBuildingOwner(currentIntersectionIdx) != playerIdx)
                 return 1;
 
             uint maxDepth = 0;
 
-            foreach (Edge roadAdjToIntersection in Board.Adjacency.GetEdges(Board.Intersections[currentIntersectionIdx]))
+            foreach (byte roadAdjToIntersection in Board.Adjacency.GetEdgeIndices(currentIntersectionIdx))
             {
                 // Don't go back along the road we came from
-                if (roadAdjToIntersection.Index == globalRoadIndices[playerRoadIdx])
+                if (roadAdjToIntersection == globalRoadIndices[playerRoadIdx])
                     continue;
 
                 // Only proceed if the road was built and owned by the player
-                if (roadAdjToIntersection.Owner != playerIdx || roadAdjToIntersection.Building == Edge.BuildingType.None)
+                if (!Board.HasRoadOf(roadAdjToIntersection, playerIdx))
                     continue;
 
                 // Find ouf if the road is in our bitmask of valid remaining player roads
@@ -175,7 +171,7 @@ namespace Common
                 for (int maskBitIdx = 0; maskBitIdx < roadCount; maskBitIdx++)
                 {
                     // Check if this bit of the mask represents the edge we want to branch off along
-                    if (globalRoadIndices[maskBitIdx] == roadAdjToIntersection.Index)
+                    if (globalRoadIndices[maskBitIdx] == roadAdjToIntersection)
                     {
                         // Check if the bit is marked as remaining
                         if ((remainingMask & (ushort)(1 << maskBitIdx)) != 0)
@@ -193,8 +189,8 @@ namespace Common
 
                 // If the player-owned road is a valid branch, continue DFS
                 // Get the next intersection on the other end of the road
-                (Intersection top, Intersection bottom) = Board.Adjacency.GetIntersections(roadAdjToIntersection);
-                int nextIntersectionIdx = top.Index != currentIntersectionIdx ? top.Index : bottom.Index;
+                (int top, int bottom) = Board.Adjacency.GetIntersectionIndices(roadAdjToIntersection);
+                int nextIntersectionIdx = top != currentIntersectionIdx ? top : bottom;
 
                 uint branchDepth = GetMaxPathDFS(playerIdx, maskIdxOfEdge, nextIntersectionIdx, remainingMask, roadCount, ref globalRoadIndices);
 
