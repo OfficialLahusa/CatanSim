@@ -203,15 +203,12 @@ namespace Common.Actions
         {
             List<Action> actions = new List<Action>();
 
-            if (!IsTurnValid(state.Turn, playerIdx)) return actions;
+            if (!IsTurnValid(state.Turn, playerIdx) || !state.Players[playerIdx].CanAffordSettlement()) return actions;
 
-            for (int intersectionIdx = 0; intersectionIdx < state.Board.Intersections.Count; intersectionIdx++)
+            // Same result as IsBoardValid for every intersection, from the board's bitmasks
+            foreach (int intersectionIdx in BitMask.Of(state.Board.GetSettlementSites(playerIdx)))
             {
-                SettlementAction action = new(playerIdx, intersectionIdx);
-                if (action.IsBoardValid(state))
-                {
-                    actions.Add(action);
-                }
+                actions.Add(new SettlementAction(playerIdx, intersectionIdx));
             }
 
             return actions;

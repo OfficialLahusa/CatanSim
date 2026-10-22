@@ -111,15 +111,13 @@ namespace Common.Actions
         {
             List<Action> actions = new List<Action>();
 
-            if (!IsTurnValid(state.Turn, playerIdx)) return actions;
+            if (!IsTurnValid(state.Turn, playerIdx) || !state.Players[playerIdx].CanAffordCity()) return actions;
 
-            for (int intersectionIdx = 0; intersectionIdx < state.Board.Intersections.Count; intersectionIdx++)
+            // Only the player's own buildings can be settlements of the player
+            foreach (int intersectionIdx in BitMask.Of(state.Board.GetBuildingMask(playerIdx)))
             {
-                CityAction action = new(playerIdx, intersectionIdx);
-                if (action.IsBoardValid(state))
-                {
-                    actions.Add(action);
-                }
+                if (state.Board.GetBuilding(intersectionIdx) == Intersection.BuildingType.Settlement)
+                    actions.Add(new CityAction(playerIdx, intersectionIdx));
             }
 
             return actions;

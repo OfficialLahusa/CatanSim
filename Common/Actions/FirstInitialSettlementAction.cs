@@ -94,14 +94,12 @@ namespace Common.Actions
             List<Action> actions = new List<Action>();
 
             if (!IsTurnValid(state.Turn, playerIdx)) return actions;
+            if (state.Players[playerIdx].BuildingStock.RemainingSettlements != BuildingStock.MAX_SETTLEMENTS) return actions;
 
-            for (int intersectionIdx = 0; intersectionIdx < state.Board.Intersections.Count; intersectionIdx++)
+            // Same result as IsBoardValid for every intersection, from the board's bitmasks
+            foreach (int intersectionIdx in BitMask.Of(state.Board.GetFreeBuildingSites()))
             {
-                FirstInitialSettlementAction action = new(playerIdx, intersectionIdx);
-                if (action.IsBoardValid(state))
-                {
-                    actions.Add(action);
-                }
+                actions.Add(new FirstInitialSettlementAction(playerIdx, intersectionIdx));
             }
 
             return actions;

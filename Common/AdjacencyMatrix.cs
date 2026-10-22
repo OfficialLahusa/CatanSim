@@ -333,6 +333,30 @@ namespace Common
             return _topology.GetDerived(this).IntersectionEdges[intersectionIdx];
         }
 
+        /// <summary>
+        /// Mask of the two intersections at the ends of an edge
+        /// </summary>
+        public UInt128 GetIntersectionMask(int edgeIdx)
+        {
+            return _topology.GetDerived(this).EdgeEndMasks[edgeIdx];
+        }
+
+        /// <summary>
+        /// Mask of the edges meeting at an intersection
+        /// </summary>
+        public UInt128 GetEdgeMask(int intersectionIdx)
+        {
+            return _topology.GetDerived(this).IntersectionEdgeMasks[intersectionIdx];
+        }
+
+        /// <summary>
+        /// Mask of the intersections one edge away from an intersection
+        /// </summary>
+        public UInt128 GetNeighborMask(int intersectionIdx)
+        {
+            return _topology.GetDerived(this).IntersectionNeighborMasks[intersectionIdx];
+        }
+
         protected Tile GetTileByIndex(AdjIdx idx)
         {
             int x = (int)(idx % Map.Width);
@@ -465,10 +489,32 @@ namespace Common
             // Stored: Indices of adjacent edges
             public readonly AdjIdx[][] IntersectionEdges;
 
+            // The same lookups as bitmasks (see BitMask)
+            public readonly UInt128[] EdgeEndMasks;
+            public readonly UInt128[] IntersectionEdgeMasks;
+            public readonly UInt128[] IntersectionNeighborMasks;
+
             private Derived((AdjIdx top, AdjIdx bottom)[] edgeEnds, AdjIdx[][] intersectionEdges)
             {
                 EdgeEnds = edgeEnds;
                 IntersectionEdges = intersectionEdges;
+
+                EdgeEndMasks = new UInt128[edgeEnds.Length];
+                for (int edgeIdx = 0; edgeIdx < edgeEnds.Length; edgeIdx++)
+                    EdgeEndMasks[edgeIdx] = BitMask.Bit(edgeEnds[edgeIdx].top) | BitMask.Bit(edgeEnds[edgeIdx].bottom);
+
+                IntersectionEdgeMasks = new UInt128[intersectionEdges.Length];
+                IntersectionNeighborMasks = new UInt128[intersectionEdges.Length];
+                for (int intersectionIdx = 0; intersectionIdx < intersectionEdges.Length; intersectionIdx++)
+                {
+                    foreach (AdjIdx edgeIdx in intersectionEdges[intersectionIdx])
+                    {
+                        IntersectionEdgeMasks[intersectionIdx] |= BitMask.Bit(edgeIdx);
+                        IntersectionNeighborMasks[intersectionIdx] |= EdgeEndMasks[edgeIdx];
+                    }
+
+                    IntersectionNeighborMasks[intersectionIdx] &= ~BitMask.Bit(intersectionIdx);
+                }
             }
 
             public static Derived Compute(AdjacencyMatrix view)

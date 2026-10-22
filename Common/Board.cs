@@ -22,6 +22,13 @@ namespace Common
         private Edge.BuildingType[] _roads;
         private sbyte[] _roadOwners;
 
+        // The same buildings and roads as bitmasks (see BitMask), kept in sync by SetBuilding and SetRoad
+        private UInt128 _buildingMask;
+        private UInt128 _roadMask;
+        // Per player: [2 * player] buildings, [2 * player + 1] roads, grown when a new owner shows up
+        private UInt128[] _playerMasks;
+        private const int DefaultMaskedPlayers = 4;
+
         [YamlMember(Order = 0)]
         public HexMap<Tile> Map
         {
@@ -99,8 +106,22 @@ namespace Common
 
         public void SetBuilding(int intersectionIdx, Intersection.BuildingType building, sbyte owner)
         {
+            UInt128 bit = BitMask.Bit(intersectionIdx);
+
+            if (_buildings[intersectionIdx] != Intersection.BuildingType.None && _buildingOwners[intersectionIdx] >= 0)
+                PlayerMask(2 * _buildingOwners[intersectionIdx]) &= ~bit;
+
             _buildings[intersectionIdx] = building;
             _buildingOwners[intersectionIdx] = owner;
+
+            if (building == Intersection.BuildingType.None)
+            {
+                _buildingMask &= ~bit;
+                return;
+            }
+
+            _buildingMask |= bit;
+            if (owner >= 0) PlayerMask(2 * owner) |= bit;
         }
 
         public Edge.BuildingType GetRoad(int edgeIdx) => _roads[edgeIdx];
@@ -111,8 +132,126 @@ namespace Common
 
         public void SetRoad(int edgeIdx, Edge.BuildingType road, sbyte owner)
         {
+            UInt128 bit = BitMask.Bit(edgeIdx);
+
+            if (_roads[edgeIdx] != Edge.BuildingType.None && _roadOwners[edgeIdx] >= 0)
+                PlayerMask(2 * _roadOwners[edgeIdx] + 1) &= ~bit;
+
             _roads[edgeIdx] = road;
             _roadOwners[edgeIdx] = owner;
+
+            if (road == Edge.BuildingType.None)
+            {
+                _roadMask &= ~bit;
+                return;
+            }
+
+            _roadMask |= bit;
+            if (owner >= 0) PlayerMask(2 * owner + 1) |= bit;
+        }
+
+        // -- Buildings and roads as bitmasks --
+
+        /// <summary>
+        /// Intersections with a building of any player
+        /// </summary>
+        [YamlIgnore]
+        public UInt128 BuildingMask => _buildingMask;
+
+        /// <summary>
+        /// Edges with a road of any player
+        /// </summary>
+        [YamlIgnore]
+        public UInt128 RoadMask => _roadMask;
+
+        public UInt128 GetBuildingMask(int playerIdx) => 2 * playerIdx < _playerMasks.Length ? _playerMasks[2 * playerIdx] : UInt128.Zero;
+
+        public UInt128 GetRoadMask(int playerIdx) => 2 * playerIdx + 1 < _playerMasks.Length ? _playerMasks[2 * playerIdx + 1] : UInt128.Zero;
+
+        /// <summary>
+        /// Intersections at the ends of the player's roads
+        /// </summary>
+        public UInt128 GetRoadEndMask(int playerIdx)
+        {
+            UInt128 ends = UInt128.Zero;
+            foreach (int edgeIdx in BitMask.Of(GetRoadMask(playerIdx)))
+                ends |= Adjacency.GetIntersectionMask(edgeIdx);
+            return ends;
+        }
+
+        /// <summary>
+        /// Free intersections that are not next to a building (distance rule)
+        /// </summary>
+        public UInt128 GetFreeBuildingSites()
+        {
+            UInt128 blocked = _buildingMask;
+            foreach (int intersectionIdx in BitMask.Of(_buildingMask))
+                blocked |= Adjacency.GetNeighborMask(intersectionIdx);
+            return ~blocked & BitMask.Lowest(IntersectionCount);
+        }
+
+        /// <summary>
+        /// Free intersections next to one of the player's roads that satisfy the distance rule
+        /// </summary>
+        public UInt128 GetSettlementSites(int playerIdx)
+        {
+            return GetRoadEndMask(playerIdx) & GetFreeBuildingSites();
+        }
+
+        /// <summary>
+        /// Free edges touching one of the player's buildings, or one of the player's roads at an intersection without an opponent's building
+        /// </summary>
+        public UInt128 GetRoadSites(int playerIdx)
+        {
+            UInt128 ownBuildings = GetBuildingMask(playerIdx);
+            UInt128 opponentBuildings = _buildingMask & ~ownBuildings;
+            UInt128 anchors = ownBuildings | (GetRoadEndMask(playerIdx) & ~opponentBuildings);
+
+            UInt128 sites = UInt128.Zero;
+            foreach (int intersectionIdx in BitMask.Of(anchors))
+                sites |= Adjacency.GetEdgeMask(intersectionIdx);
+            return sites & ~_roadMask;
+        }
+
+        private ref UInt128 PlayerMask(int slot)
+        {
+            if (slot >= _playerMasks.Length)
+                Array.Resize(ref _playerMasks, Math.Max(slot + 1, 2 * _playerMasks.Length));
+            return ref _playerMasks[slot];
+        }
+
+        private void RebuildBuildingMasks()
+        {
+            _buildingMask = UInt128.Zero;
+            for (int slot = 0; slot < _playerMasks.Length; slot += 2) _playerMasks[slot] = UInt128.Zero;
+
+            for (int intersectionIdx = 0; intersectionIdx < _buildings.Length; intersectionIdx++)
+            {
+                if (_buildings[intersectionIdx] == Intersection.BuildingType.None) continue;
+
+                _buildingMask |= BitMask.Bit(intersectionIdx);
+                if (_buildingOwners[intersectionIdx] >= 0) PlayerMask(2 * _buildingOwners[intersectionIdx]) |= BitMask.Bit(intersectionIdx);
+            }
+        }
+
+        private void RebuildRoadMasks()
+        {
+            _roadMask = UInt128.Zero;
+            for (int slot = 1; slot < _playerMasks.Length; slot += 2) _playerMasks[slot] = UInt128.Zero;
+
+            for (int edgeIdx = 0; edgeIdx < _roads.Length; edgeIdx++)
+            {
+                if (_roads[edgeIdx] == Edge.BuildingType.None) continue;
+
+                _roadMask |= BitMask.Bit(edgeIdx);
+                if (_roadOwners[edgeIdx] >= 0) PlayerMask(2 * _roadOwners[edgeIdx] + 1) |= BitMask.Bit(edgeIdx);
+            }
+        }
+
+        private static void EnsureMaskable(int intersectionCount, int edgeCount)
+        {
+            if (intersectionCount > BitMask.Capacity || edgeCount > BitMask.Capacity)
+                throw new NotSupportedException($"Boards are limited to {BitMask.Capacity} intersections and edges.");
         }
 
         // -- Construction --
@@ -130,12 +269,14 @@ namespace Common
                 Edges = edges
             };
 
+            EnsureMaskable(intersections.Count, edges.Count);
             _buildings = new Intersection.BuildingType[intersections.Count];
             _buildingOwners = new sbyte[intersections.Count];
             _roads = new Edge.BuildingType[edges.Count];
             _roadOwners = new sbyte[edges.Count];
             Array.Fill(_buildingOwners, (sbyte)-1);
             Array.Fill(_roadOwners, (sbyte)-1);
+            _playerMasks = new UInt128[2 * DefaultMaskedPlayers];
 
             Adjacency = adjacency;
             Robber = robber;
@@ -153,6 +294,9 @@ namespace Common
             _buildingOwners = (sbyte[])copy._buildingOwners.Clone();
             _roads = (Edge.BuildingType[])copy._roads.Clone();
             _roadOwners = (sbyte[])copy._roadOwners.Clone();
+            _buildingMask = copy._buildingMask;
+            _roadMask = copy._roadMask;
+            _playerMasks = (UInt128[])copy._playerMasks.Clone();
 
             _hasRobber = copy._hasRobber;
             _robberX = copy._robberX;
@@ -169,6 +313,7 @@ namespace Common
             _buildingOwners = [];
             _roads = [];
             _roadOwners = [];
+            _playerMasks = new UInt128[2 * DefaultMaskedPlayers];
             Adjacency = null!;
         }
 
@@ -202,6 +347,7 @@ namespace Common
             }).ToList();
             set
             {
+                EnsureMaskable(value.Count, 0);
                 _layout.Intersections = value.OrderBy(entry => entry.Index).Select(entry => new Intersection(entry.Index, entry.FacesDownwards)).ToList();
                 _buildings = new Intersection.BuildingType[value.Count];
                 _buildingOwners = new sbyte[value.Count];
@@ -211,6 +357,8 @@ namespace Common
                     _buildings[entry.Index] = entry.Building;
                     _buildingOwners[entry.Index] = entry.Owner;
                 }
+
+                RebuildBuildingMasks();
             }
         }
 
@@ -226,6 +374,7 @@ namespace Common
             }).ToList();
             set
             {
+                EnsureMaskable(0, value.Count);
                 _layout.Edges = value.OrderBy(entry => entry.Index).Select(entry => new Edge(entry.Index, entry.Direction)).ToList();
                 _roads = new Edge.BuildingType[value.Count];
                 _roadOwners = new sbyte[value.Count];
@@ -235,6 +384,8 @@ namespace Common
                     _roads[entry.Index] = entry.Building;
                     _roadOwners[entry.Index] = entry.Owner;
                 }
+
+                RebuildRoadMasks();
             }
         }
 
@@ -245,6 +396,9 @@ namespace Common
             Array.Fill(_buildingOwners, (sbyte)-1);
             Array.Fill(_roads, Edge.BuildingType.None);
             Array.Fill(_roadOwners, (sbyte)-1);
+            _buildingMask = UInt128.Zero;
+            _roadMask = UInt128.Zero;
+            Array.Clear(_playerMasks);
 
             // Reset robber
             foreach(Tile tile in Map.Values)

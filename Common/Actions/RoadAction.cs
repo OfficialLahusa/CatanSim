@@ -210,16 +210,12 @@ namespace Common.Actions
         {
             List<Action> actions = [];
 
-            if (!IsTurnValid(state.Turn, playerIdx)) return actions;
+            if (!IsTurnValid(state.Turn, playerIdx) || !state.Players[playerIdx].CanAffordRoad()) return actions;
 
-            for(int edgeIdx = 0; edgeIdx < state.Board.Edges.Count; edgeIdx++)
+            // Same result as IsBoardValid for every edge, from the board's bitmasks
+            foreach (int edgeIdx in BitMask.Of(state.Board.GetRoadSites(playerIdx)))
             {
-                RoadAction action = new(playerIdx, edgeIdx);
-
-                if (action.IsBoardValid(state))
-                {
-                    actions.Add(action);
-                }
+                actions.Add(new RoadAction(playerIdx, edgeIdx));
             }
 
             return actions;
