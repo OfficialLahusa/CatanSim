@@ -33,6 +33,9 @@ namespace Common.Actions
         {
             base.Apply(state);
 
+            // Road Building roads that were not placed yet are given up
+            ForfeitFreeRoads(state);
+
             History = new EndTurnActionHistory(
                 state.Players[PlayerIndex].BuildingStock.FreeRoads,
                 // Copy, so that the history never shares a live card set with a player state
@@ -89,6 +92,8 @@ namespace Common.Actions
 
             // Un-complete match
             state.Turn.TypeOfRound = TurnState.RoundType.Normal;
+
+            ReturnForfeitedFreeRoads(state);
         }
 
         public override bool IsValidFor(GameState state)

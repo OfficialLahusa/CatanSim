@@ -135,7 +135,18 @@ namespace Common.Actions
 
         public override bool IsValidFor(GameState state)
         {
-            return IsTurnValid(state.Turn, PlayerIndex) && IsBoardValid(state);
+            return (IsTurnValid(state.Turn, PlayerIndex) || IsPlacingFreeRoads(state, PlayerIndex)) && IsBoardValid(state);
+        }
+
+        /// <summary>
+        /// Right after a Road Building card the player can place its roads, also before the roll
+        /// (taking any other action gives up the roads that are left)
+        /// </summary>
+        public static bool IsPlacingFreeRoads(GameState state, int playerIdx)
+        {
+            return state.Turn.PlayerIndex == playerIdx
+                && state.Turn.TypeOfRound == TurnState.RoundType.Normal
+                && state.Players[playerIdx].BuildingStock.FreeRoads > 0;
         }
 
         public static bool IsTurnValid(TurnState turn, int playerIdx)
@@ -210,7 +221,8 @@ namespace Common.Actions
         {
             List<Action> actions = [];
 
-            if (!IsTurnValid(state.Turn, playerIdx) || !state.Players[playerIdx].CanAffordRoad()) return actions;
+            if (!IsTurnValid(state.Turn, playerIdx) && !IsPlacingFreeRoads(state, playerIdx)) return actions;
+            if (!state.Players[playerIdx].CanAffordRoad()) return actions;
 
             // Same result as IsBoardValid for every edge, from the board's bitmasks
             foreach (int edgeIdx in BitMask.Of(state.Board.GetRoadSites(playerIdx)))

@@ -3,19 +3,24 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
+using Common.Actions;
 using YamlDotNet.Core;
 using YamlDotNet.RepresentationModel;
+using Action = Common.Actions.Action;
 
 namespace Common.Serialization
 {
     /// <summary>
     /// Converts save files written by older builds to the current SaveFile.CurrentVersion.
-    /// Works on the YAML document itself, so the old layouts never need to be deserializable.
+    /// Layout changes work on the YAML document itself, so the old layouts never need to be deserializable.
     ///
     /// Version history:
     ///   0 (no Version field): RollAction stored its RollResult on the action instead of in its History
     ///                         and RobberActionHistory stored the previous robber tile as a nested Tile.
     ///   1: RollResult lives in RollActionHistory, RobberActionHistory stores PrevRobberTileIndex.
+    ///   2: Road Building roads are placed right after the card (also before the roll) or given up by the next other action.
+    ///      Same layout as 1, but games recorded under the old rule placed them later in the turn, so the upgrade moves them.
     /// </summary>
     public static class SaveFileUpgrader
     {
@@ -45,11 +50,20 @@ namespace Common.Serialization
             if (version == SaveFile.CurrentVersion) return yaml;
             if (!CanUpgrade(version)) throw new UnsupportedSaveFileVersionException(version);
 
-            if (version < 1) UpgradeV0ToV1(root);
+            if (version < 1)
+            {
+                UpgradeV0ToV1(root);
+                yaml = WriteWithVersion(root, 1);
+            }
 
+            return UpgradeV1ToV2(yaml);
+        }
+
+        private static string WriteWithVersion(YamlMappingNode root, int version)
+        {
             // Version goes first, like in freshly written files
             YamlMappingNode upgradedRoot = new();
-            upgradedRoot.Add("Version", SaveFile.CurrentVersion.ToString(CultureInfo.InvariantCulture));
+            upgradedRoot.Add("Version", version.ToString(CultureInfo.InvariantCulture));
             foreach (var (key, value) in root.Children)
             {
                 if (key is YamlScalarNode { Value: "Version" }) continue;
@@ -59,6 +73,116 @@ namespace Common.Serialization
             using StringWriter writer = new();
             new YamlStream(new YamlDocument(upgradedRoot)).Save(writer, assignAnchors: false);
             return writer.ToString();
+        }
+
+        private static string UpgradeV1ToV2(string yaml)
+        {
+            // Same layout: files without a Road Building card only get the new version line, byte for byte otherwise
+            Regex versionLine = new(@"^Version: 1(?=\r?$)", RegexOptions.Multiline);
+            string relabeled = versionLine.IsMatch(yaml) ? versionLine.Replace(yaml, "Version: 2", 1) : WriteWithVersion(LoadRoot(yaml), 2);
+            if (!relabeled.Contains(nameof(RoadBuildingAction))) return relabeled;
+
+            SaveFile save = SaveFileSerializer.Deserialize(relabeled);
+
+            // One chronological sequence: played actions, then the undone ones from the oldest to the newest undo
+            List<Action> sequence = [.. save.PlayedActions, .. Enumerable.Reverse(save.UndoHistory)];
+            int playedCount = save.PlayedActions.Count;
+
+            List<Action> reordered = MoveFreeRoadsBehindTheirCard(sequence);
+            if (reordered.SequenceEqual(sequence)) return relabeled;
+
+            if (!reordered.Take(playedCount).ToHashSet().SetEquals(sequence.Take(playedCount)))
+                throw new InvalidDataException("A Road Building turn is split between the played and the undone actions, so the save file can't be upgraded.");
+
+            // The moved actions are replayed under the current rules, which validates them and renews their histories.
+            // Files written by the client store the current state, other files (e.g. complete recorded games) the starting state.
+            List<Action> replayed = ReplayFrom(new GameState(save.GameState), reordered, out _)
+                ?? ReplayFromCurrentState(save, sequence, reordered, playedCount)
+                ?? throw new InvalidDataException("The recorded Road Building roads can't be placed right after the card, so the save file can't be upgraded.");
+
+            SaveFile upgraded = new(save.GameState, replayed.Take(playedCount).ToList(), Enumerable.Reverse(replayed.Skip(playedCount)).ToList());
+            return SaveFileSerializer.Serialize(upgraded);
+        }
+
+        /// <summary>
+        /// Moves the free roads of every Road Building card to right after the card. Under the old rule they could be placed
+        /// at any time later in the same turn and only Road Building gave free roads, so they are the player's free roads until the end of the turn.
+        /// </summary>
+        private static List<Action> MoveFreeRoadsBehindTheirCard(List<Action> sequence)
+        {
+            List<Action> result = new(sequence.Count);
+            HashSet<int> moved = [];
+
+            for (int i = 0; i < sequence.Count; i++)
+            {
+                if (moved.Contains(i)) continue;
+                result.Add(sequence[i]);
+
+                if (sequence[i] is not RoadBuildingAction card) continue;
+
+                for (int j = i + 1; j < sequence.Count; j++)
+                {
+                    if (sequence[j] is EndTurnAction && sequence[j].PlayerIndex == card.PlayerIndex) break;
+
+                    if (sequence[j] is RoadAction { History.WasFree: true } road && road.PlayerIndex == card.PlayerIndex)
+                    {
+                        result.Add(road);
+                        moved.Add(j);
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Applies copies of the actions in order, or returns null if one of them is not valid
+        /// </summary>
+        private static List<Action>? ReplayFrom(GameState state, List<Action> actions, out GameState finalState)
+        {
+            finalState = state;
+            List<Action> replayed = new(actions.Count);
+
+            try
+            {
+                foreach (Action action in actions)
+                {
+                    Action copy = action.Clone();
+                    if (!copy.IsValidFor(state)) return null;
+                    copy.Apply(state);
+                    replayed.Add(copy);
+                }
+            }
+            catch (Exception e) when (e is InvalidOperationException or ArgumentException)
+            {
+                return null;
+            }
+
+            return replayed;
+        }
+
+        /// <summary>
+        /// Reverts the played actions in their recorded order from the saved state, replays the reordered sequence
+        /// and checks that it arrives at the saved state again. Returns null if it doesn't.
+        /// </summary>
+        private static List<Action>? ReplayFromCurrentState(SaveFile save, List<Action> recorded, List<Action> reordered, int playedCount)
+        {
+            GameState start = new(save.GameState);
+            try
+            {
+                for (int i = playedCount - 1; i >= 0; i--)
+                    recorded[i].Clone().Revert(start);
+            }
+            catch (Exception e) when (e is InvalidOperationException or ArgumentException)
+            {
+                return null;
+            }
+
+            List<Action>? played = ReplayFrom(start, reordered.Take(playedCount).ToList(), out GameState current);
+            if (played == null || !current.Equals(save.GameState)) return null;
+
+            List<Action>? undone = ReplayFrom(new GameState(current), reordered.Skip(playedCount).ToList(), out _);
+            return undone == null ? null : [.. played, .. undone];
         }
 
         private static void UpgradeV0ToV1(YamlMappingNode root)

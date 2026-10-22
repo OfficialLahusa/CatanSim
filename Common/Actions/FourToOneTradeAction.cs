@@ -29,6 +29,9 @@ namespace Common.Actions
         {
             base.Apply(state);
 
+            // Road Building roads that were not placed yet are given up
+            ForfeitFreeRoads(state);
+
             // Remove input from hand
             state.Players[PlayerIndex].ResourceCards.Remove(InputType, 4);
 
@@ -55,6 +58,8 @@ namespace Common.Actions
 
             // Remove output from hand
             state.Players[PlayerIndex].ResourceCards.Remove(OutputType, 1);
+
+            ReturnForfeitedFreeRoads(state);
         }
 
         public override bool IsValidFor(GameState state)

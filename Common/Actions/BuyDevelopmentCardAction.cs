@@ -34,6 +34,9 @@ namespace Common.Actions
         {
             base.Apply(state);
 
+            // Road Building roads that were not placed yet are given up
+            ForfeitFreeRoads(state);
+
             // Remove cards
             CardSet<ResourceCardType> playerCards = state.Players[PlayerIndex].ResourceCards;
             playerCards.Remove(ResourceCardType.Wool, 1);
@@ -115,6 +118,8 @@ namespace Common.Actions
                 // Reset to normal round
                 state.Turn.TypeOfRound = TurnState.RoundType.Normal;
             }
+
+            ReturnForfeitedFreeRoads(state);
         }
 
         public override bool IsValidFor(GameState state)

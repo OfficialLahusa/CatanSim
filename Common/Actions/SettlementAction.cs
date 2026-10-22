@@ -38,6 +38,9 @@ namespace Common.Actions
         {
             base.Apply(state);
 
+            // Road Building roads that were not placed yet are given up
+            ForfeitFreeRoads(state);
+
             // Determine previous longest road holder
             int currentLongestRoadHolder = -1;
 
@@ -144,6 +147,8 @@ namespace Common.Actions
 
             // Un-complete match
             state.Turn.TypeOfRound = TurnState.RoundType.Normal;
+
+            ReturnForfeitedFreeRoads(state);
         }
 
         public override bool IsValidFor(GameState state)

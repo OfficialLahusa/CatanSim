@@ -28,6 +28,9 @@ namespace Common.Actions
         {
             base.Apply(state);
 
+            // Road Building roads that were not placed yet are given up
+            ForfeitFreeRoads(state);
+
             // Place city
             state.Board.SetBuilding(IntersectionIndex, Intersection.BuildingType.City, PlayerIndex);
 
@@ -80,6 +83,8 @@ namespace Common.Actions
 
             // Un-complete match
             state.Turn.TypeOfRound = TurnState.RoundType.Normal;
+
+            ReturnForfeitedFreeRoads(state);
         }
 
         public override bool IsValidFor(GameState state)

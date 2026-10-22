@@ -14,7 +14,7 @@ namespace Common
         /// Format version written into new save files. Bump it whenever a change makes older files replay
         /// incorrectly (e.g. a changed action history layout). Files without the field read as version 0.
         /// </summary>
-        public const int CurrentVersion = 1;
+        public const int CurrentVersion = 2;
 
         public int Version { get; set; }
         public GameState GameState { get; set; }

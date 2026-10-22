@@ -20,6 +20,13 @@ namespace Common.Actions
         // For serialization
         public string ActionType { get => GetType().Name; }
 
+        /// <summary>
+        /// Road Building roads the player had not placed yet when taking this action. They are placed right after the card
+        /// or not at all, so any other action returns them to the stock (only written to save files when non-zero).
+        /// </summary>
+        [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
+        public uint ForfeitedFreeRoads { get; private set; }
+
         public Action(sbyte playerIndex)
         {
             PlayerIndex = playerIndex;
@@ -56,7 +63,8 @@ namespace Common.Actions
         private static MemberInfo[] GetDecisionMembers(Type type)
         {
             IEnumerable<MemberInfo> properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(property => property.Name != "History" && property.Name != nameof(ActionType) && property.GetIndexParameters().Length == 0);
+                .Where(property => property.Name != "History" && property.Name != nameof(ActionType) && property.Name != nameof(ForfeitedFreeRoads)
+                    && property.GetIndexParameters().Length == 0);
             IEnumerable<MemberInfo> fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
 
             return properties.Concat(fields).ToArray();
@@ -68,6 +76,28 @@ namespace Common.Actions
         }
 
         public abstract void Revert(GameState state);
+
+        /// <summary>
+        /// Ends the placement of Road Building roads: unplaced ones go back to the player's stock.
+        /// Called by every action that can be taken while free roads are left, right after validation.
+        /// </summary>
+        protected void ForfeitFreeRoads(GameState state)
+        {
+            BuildingStock stock = state.Players[PlayerIndex].BuildingStock;
+            ForfeitedFreeRoads = stock.FreeRoads;
+            stock.RemainingRoads += stock.FreeRoads;
+            stock.FreeRoads = 0;
+        }
+
+        /// <summary>
+        /// Undoes ForfeitFreeRoads, at the end of Revert
+        /// </summary>
+        protected void ReturnForfeitedFreeRoads(GameState state)
+        {
+            BuildingStock stock = state.Players[PlayerIndex].BuildingStock;
+            stock.RemainingRoads -= ForfeitedFreeRoads;
+            stock.FreeRoads += ForfeitedFreeRoads;
+        }
 
         public abstract bool IsValidFor(GameState state);
 

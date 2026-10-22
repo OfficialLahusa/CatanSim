@@ -1,6 +1,8 @@
 using Common;
 using Common.Actions;
 using Common.Serialization;
+using System.Text.RegularExpressions;
+using YamlDotNet.RepresentationModel;
 using Action = Common.Actions.Action;
 
 namespace Tests
@@ -22,7 +24,7 @@ namespace Tests
                 List<Action> played = TestUtil.PlayRandomGame(state, maxActions: prefix);
 
                 string yaml = SaveFileSerializer.Serialize(new SaveFile(state, played, []));
-                Assert.StartsWith("Version: 1", yaml);
+                Assert.StartsWith($"Version: {SaveFile.CurrentVersion}", yaml);
 
                 SaveFile loaded = SaveFileSerializer.Deserialize(yaml);
                 Assert.Equal(SaveFile.CurrentVersion, loaded.Version);
@@ -76,10 +78,10 @@ namespace Tests
             Assert.Equal(0, missing.Version);
             Assert.True(SaveFileUpgrader.CanUpgrade(0));
 
-            string future = yaml.Replace("Version: 1", "Version: 2");
+            string future = yaml.Replace($"Version: {SaveFile.CurrentVersion}", $"Version: {SaveFile.CurrentVersion + 1}");
             var newer = Assert.Throws<UnsupportedSaveFileVersionException>(() => SaveFileSerializer.Deserialize(future));
-            Assert.Equal(2, newer.Version);
-            Assert.False(SaveFileUpgrader.CanUpgrade(2));
+            Assert.Equal(SaveFile.CurrentVersion + 1, newer.Version);
+            Assert.False(SaveFileUpgrader.CanUpgrade(SaveFile.CurrentVersion + 1));
             Assert.Throws<UnsupportedSaveFileVersionException>(() => SaveFileUpgrader.Upgrade(future));
         }
 
@@ -106,7 +108,7 @@ namespace Tests
             Assert.Throws<UnsupportedSaveFileVersionException>(() => SaveFileSerializer.Deserialize(original));
 
             string upgraded = SaveFileUpgrader.Upgrade(original);
-            Assert.StartsWith("Version: 1", upgraded);
+            Assert.StartsWith($"Version: {SaveFile.CurrentVersion}", upgraded);
             Assert.Equal(upgraded, SaveFileUpgrader.Upgrade(upgraded));
             Assert.DoesNotContain("PrevRobber:", upgraded);
 
@@ -131,6 +133,104 @@ namespace Tests
             for (int i = actions.Count - 1; i >= 0; i--)
                 actions[i].Revert(state);
             Assert.True(state.Equals(baseState));
+        }
+
+        [Fact]
+        public void VersionOneFilesOnlyChangeTheirVersionLine()
+        {
+            TestUtil.Seed(84);
+            GameState state = TestUtil.NewGame();
+            List<Action> played = TestUtil.PlayRandomGame(state, maxActions: 300);
+
+            string current = SaveFileSerializer.Serialize(new SaveFile(state, played, []));
+            string versionOne = new Regex($"^Version: {SaveFile.CurrentVersion}", RegexOptions.Multiline).Replace(current, "Version: 1", 1);
+
+            Assert.Equal(current, SaveFileUpgrader.Upgrade(versionOne));
+        }
+
+        [Fact]
+        public void RoadBuildingRoadsPlacedAfterTheRollUnderTheOldRuleAreMovedBehindTheCard()
+        {
+            (GameState start, GameState end, List<Action> played) = RoadBuildingTurn();
+
+            // Old rule: card, roll, both roads, end of turn
+            string old = AsVersionOneWithOrder(end, played, [0, 3, 1, 2, 4]);
+            SaveFile loaded = SaveFileSerializer.Deserialize(SaveFileUpgrader.Upgrade(old));
+
+            Assert.Equal([typeof(RoadBuildingAction), typeof(RoadAction), typeof(RoadAction), typeof(RollAction), typeof(EndTurnAction)],
+                loaded.PlayedActions.Select(action => action.GetType()));
+            Assert.True(loaded.GameState.Equals(end));
+
+            // The renewed histories undo and redo the whole turn
+            GameState replay = loaded.GameState;
+            for (int i = loaded.PlayedActions.Count - 1; i >= 0; i--)
+                loaded.PlayedActions[i].Revert(replay);
+            Assert.True(replay.Equals(start));
+
+            foreach (Action action in loaded.PlayedActions)
+                action.Apply(replay);
+            Assert.True(replay.Equals(end));
+        }
+
+        [Fact]
+        public void SaveFilesWhoseRoadBuildingRoadsCantBeMovedAreRejected()
+        {
+            (_, GameState end, List<Action> played) = RoadBuildingTurn();
+
+            // The second road extends the first one, so it can't come first
+            string old = AsVersionOneWithOrder(end, played, [0, 3, 2, 1, 4]);
+
+            Assert.Throws<InvalidDataException>(() => SaveFileUpgrader.Upgrade(old));
+        }
+
+        /// <summary>
+        /// Before the roll, player 0 plays Road Building and places two connected roads from a settlement, rolls an 8 and ends the turn
+        /// </summary>
+        private static (GameState start, GameState end, List<Action> played) RoadBuildingTurn()
+        {
+            TestUtil.Seed(85);
+            GameState state = TestUtil.EmptyNormalTurn(0, mustRoll: true);
+            Intersection site = state.Board.Intersections.First(i => state.Board.Adjacency.GetEdges(i).Count == 3 && state.Board.Adjacency.GetTiles(i).All(t => t.IsLandTile()));
+            state.Board.SetBuilding(site.Index, Intersection.BuildingType.Settlement, 0);
+            state.Players[0].BuildingStock.RemainingSettlements--;
+            state.Players[0].VictoryPoints.SettlementPoints++;
+            state.DevelopmentBank.Remove(DevelopmentCardType.RoadBuilding, 1);
+            state.Players[0].DevelopmentCards.Add(DevelopmentCardType.RoadBuilding, 1);
+            GameState start = new(state);
+
+            int first = state.Board.Adjacency.GetEdgeIndices(site.Index)[0];
+            (int top, int bottom) = state.Board.Adjacency.GetIntersectionIndices(first);
+            int far = top == site.Index ? bottom : top;
+            int second = state.Board.Adjacency.GetEdgeIndices(far).ToArray().First(edge => edge != first);
+
+            Action roll = new RollAction(0).GetOutcomeVariants(state, 0).First(variant => ((RollAction)variant.Action).History!.RollResult.Total == 8).Action;
+            List<Action> played = [new RoadBuildingAction(0), new RoadAction(0, first), new RoadAction(0, second), roll, new EndTurnAction(0)];
+            foreach (Action action in played)
+                action.Apply(state);
+
+            return (start, state, played);
+        }
+
+        /// <summary>
+        /// The save file of the state and actions as a version 1 file, with the played actions in the given order
+        /// </summary>
+        private static string AsVersionOneWithOrder(GameState state, List<Action> played, int[] order)
+        {
+            YamlStream stream = new();
+            stream.Load(new StringReader(SaveFileSerializer.Serialize(new SaveFile(state, played, []))));
+            YamlMappingNode root = (YamlMappingNode)stream.Documents[0].RootNode;
+
+            YamlSequenceNode actions = (YamlSequenceNode)root.Children[new YamlScalarNode("PlayedActions")];
+            List<YamlNode> recorded = actions.Children.ToList();
+            actions.Children.Clear();
+            foreach (int i in order)
+                actions.Children.Add(recorded[i]);
+
+            root.Children[new YamlScalarNode("Version")] = new YamlScalarNode("1");
+
+            using StringWriter writer = new();
+            stream.Save(writer, assignAnchors: false);
+            return writer.ToString();
         }
     }
 }

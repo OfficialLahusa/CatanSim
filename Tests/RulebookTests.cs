@@ -510,7 +510,7 @@ namespace Tests
             Assert.Equal(1u, state.Players[0].BuildingStock.RemainingRoads);
         }
 
-        [Fact(Skip = "Known deviation: roads from Road Building can only be placed after the roll and at any time later in the turn, the rulebook places them immediately")]
+        [Fact]
         public void RoadBuildingRoadsArePlacedImmediatelyEvenBeforeTheRoll()
         {
             TestUtil.Seed(119);
@@ -520,7 +520,74 @@ namespace Tests
 
             new RoadBuildingAction(0).Apply(state);
             Assert.NotEmpty(RoadAction.GetActionsForState(state, 0));
-            Assert.Empty(RollAction.GetActionsForState(state, 0));
+
+            for (int i = 0; i < 2; i++)
+                RoadAction.GetActionsForState(state, 0).First().Apply(state);
+
+            // Both roads placed for free, the turn continues with the roll
+            Assert.Equal(2, TestUtil.CountRoads(state, 0));
+            Assert.Equal(0u, state.Players[0].BuildingStock.FreeRoads);
+            Assert.NotEmpty(RollAction.GetActionsForState(state, 0));
+            Assert.Empty(RoadAction.GetActionsForState(state, 0));
+        }
+
+        [Fact]
+        public void RoadBuildingRoadsAreOptionalAndAnyOtherActionGivesUpTheRest()
+        {
+            TestUtil.Seed(124);
+
+            // No road: rolling right after the card returns both to the stock
+            GameState none = TestUtil.EmptyNormalTurn(0, mustRoll: true);
+            OwnSettlement(none);
+            GiveDevelopmentCard(none, 0, DevelopmentCardType.RoadBuilding);
+            new RoadBuildingAction(0).Apply(none);
+            Assert.NotEmpty(RollAction.GetActionsForState(none, 0));
+            RollTotal(none, 8);
+            Assert.Equal(0u, none.Players[0].BuildingStock.FreeRoads);
+            Assert.Equal(BuildingStock.MAX_ROADS, none.Players[0].BuildingStock.RemainingRoads);
+            Assert.Equal(0, TestUtil.CountRoads(none, 0));
+
+            // One road: a trade after it gives up the second, a further road has to be paid for
+            GameState one = TestUtil.EmptyNormalTurn(0);
+            OwnSettlement(one);
+            GiveDevelopmentCard(one, 0, DevelopmentCardType.RoadBuilding);
+            TestUtil.GiveCards(one, 0, ResourceCardType.Ore, 4);
+            TestUtil.GiveCards(one, 0, ResourceCardType.Lumber, 1);
+            new RoadBuildingAction(0).Apply(one);
+            RoadAction.GetActionsForState(one, 0).First().Apply(one);
+            Assert.Equal(1u, one.Players[0].BuildingStock.FreeRoads);
+
+            new FourToOneTradeAction(0, ResourceCardType.Ore, ResourceCardType.Brick).Apply(one);
+            Assert.Equal(0u, one.Players[0].BuildingStock.FreeRoads);
+            Assert.Equal(BuildingStock.MAX_ROADS - 1, one.Players[0].BuildingStock.RemainingRoads);
+
+            RoadAction.GetActionsForState(one, 0).First().Apply(one);
+            Assert.Equal(0u, one.Players[0].ResourceCards.Get(ResourceCardType.Lumber));
+            Assert.Equal(0u, one.Players[0].ResourceCards.Get(ResourceCardType.Brick));
+            Assert.Equal(2, TestUtil.CountRoads(one, 0));
+        }
+
+        [Fact]
+        public void RevertingTheActionAfterRoadBuildingRestoresTheUnplacedRoads()
+        {
+            TestUtil.Seed(126);
+            GameState state = TestUtil.EmptyNormalTurn(0, mustRoll: true);
+            OwnSettlement(state);
+            GiveDevelopmentCard(state, 0, DevelopmentCardType.RoadBuilding);
+
+            new RoadBuildingAction(0).Apply(state);
+            RoadAction.GetActionsForState(state, 0).First().Apply(state);
+            GameState beforeRoll = new GameState(state);
+
+            RollAction roll = (RollAction)RollAction.GetActionsForState(state, 0).Single();
+            roll.Apply(state);
+            Assert.Equal(1u, roll.ForfeitedFreeRoads);
+            Assert.Equal(0u, state.Players[0].BuildingStock.FreeRoads);
+
+            roll.Revert(state);
+            Assert.Equal(beforeRoll, state);
+            Assert.Equal(1u, state.Players[0].BuildingStock.FreeRoads);
+            Assert.NotEmpty(RoadAction.GetActionsForState(state, 0));
         }
 
         [Fact]

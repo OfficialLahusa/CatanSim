@@ -99,6 +99,9 @@ namespace Common.Actions
         {
             base.Apply(state);
 
+            // Road Building roads that were not placed yet are given up
+            ForfeitFreeRoads(state);
+
             // If the action already has a history, reuse the stored RollResult
             // Otherwise, obtain Random RollResult
             RollResult rollResult = HasHistory() ? History!.RollResult : RollResult.GetRandom();
@@ -168,6 +171,8 @@ namespace Common.Actions
             // Update turn state
             state.Turn.LastRoll = History.PrevRollResult;
             state.Turn.MustRoll = true;
+
+            ReturnForfeitedFreeRoads(state);
         }
 
         private (uint[,] yieldSummary, uint robbedYields, uint cappedYields) AwardYields(GameState state, int number, bool previewOnly = false)
