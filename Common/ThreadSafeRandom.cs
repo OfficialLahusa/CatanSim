@@ -48,5 +48,10 @@ namespace Common
         {
             return _random.Value!.Next();
         }
+
+        public double NextDouble()
+        {
+            return _random.Value!.NextDouble();
+        }
     }
 }
