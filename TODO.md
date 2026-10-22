@@ -182,7 +182,10 @@
 	- Map Layout
 
 ## Related Work
-- Catan MCTS => https://www.researchgate.net/publication/220716999_Monte-Carlo_Tree_Search_in_Settlers_of_Catan
+- Catan MCTS => Szita, Chaslot, Spronck: "Monte-Carlo Tree Search in Settlers of Catan" (ACG 2009) https://www.researchgate.net/publication/220716999_Monte-Carlo_Tree_Search_in_Settlers_of_Catan, PDF: https://dke.maastrichtuniversity.nl/pim.nijssen/pub/acg11.pdf
+- Deep Catan => Cazenave et al.: "Deep Catan" https://www.lamsade.dauphine.fr/~cazenave/papers/DeepCatan.pdf
+- LLM-Agents auf Catanatron (AlphaBeta n=2 als stärkste Heuristik-Baseline) => "Agents of Change: Self-Evolving LLM Agents for Strategic Planning" https://arxiv.org/abs/2506.04651
+- Überblick über Catan-Bots (populärwissenschaftlich) => https://sciworthy.com/can-a-computer-learn-to-play-settlers-of-catan/
 - Monte Catano (Rust MCTS) => https://www.reddit.com/r/rust/comments/1sz304o/introducing_monte_catano_the_worlds_strongest/?show=original
 - Catan MCTS mit Trades und interessantem Evaluationsansatz => Monte Carlo Tree Search in the "Settlers of Catan" Strategy Game https://dias.library.tuc.gr/entities/publication/8c6bab5f-58f8-4eb7-9687-0de7e500b65d
 - Initial Placements + Architecture => Papadam, Chalkiadakis: "Adversarial Search and Deep Learning for Strategic Settlement Placement in the “Settlers of Catan”" https://dl.acm.org/doi/10.1007/978-3-031-93930-3_4 
