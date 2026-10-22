@@ -78,7 +78,7 @@ namespace Client
 
         // Player Agents
         private Agent[] _agents;
-        private readonly string[] _agentTypes = ["RandomAgent", "SimpleAgent", "GreedyAgent", "MCTSAgent"];
+        private readonly string[] _agentTypes = ["RandomAgent", "SimpleAgent", "BuilderAgent", "GreedyAgent", "MCTSAgent"];
         private int[] _selectedAgentTypes;
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
@@ -363,7 +363,7 @@ namespace Client
                     if (ImGui.Combo($"##Agent {agentIdx}", ref _selectedAgentTypes[agentIdx], _agentTypes, _agentTypes.Length))
                     {
                         // GreedyAgent and MCTSAgent evaluate states with the value net
-                        if (_selectedAgentTypes[agentIdx] is 2 or 3 && _stateValueNet == null)
+                        if (_selectedAgentTypes[agentIdx] is 3 or 4 && _stateValueNet == null)
                         {
                             _eventLog.WriteLine(new ColoredStrEntry($"{_agentTypes[_selectedAgentTypes[agentIdx]]} needs the value net {StateValueNet.DefaultModelFile}, which is missing", Color.Red));
                             _selectedAgentTypes[agentIdx] = previousAgentType;
@@ -374,8 +374,9 @@ namespace Client
                             {
                                 0 => new RandomAgent(agentIdx),
                                 1 => new SimpleAgent(agentIdx),
-                                2 => new GreedyAgent(agentIdx),
-                                3 => new MCTSAgent(agentIdx, _state),
+                                2 => new BuilderAgent(agentIdx),
+                                3 => new GreedyAgent(agentIdx),
+                                4 => new MCTSAgent(agentIdx, _state),
                                 _ => throw new InvalidOperationException()
                             };
                         }
