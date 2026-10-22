@@ -30,6 +30,24 @@ namespace Agents.MCTS
 
         protected readonly object _treeLock = new object();
 
+        /// <summary>
+        /// Counters of a search: iterations, distinct leaves evaluated (several iterations of a batch can arrive at the same leaf)
+        /// and the time spent selecting, evaluating and backpropagating
+        /// </summary>
+        public record SearchStatistics(long Iterations, long DistinctLeaves, double Seconds, double SelectionSeconds, double EvaluationSeconds, double BackpropagationSeconds)
+        {
+            public double IterationsPerSecond => Iterations / Seconds;
+            public double DistinctLeafShare => Iterations == 0 ? 0 : (double)DistinctLeaves / Iterations;
+        }
+
+        /// <summary>
+        /// Statistics of the last RunForTime call
+        /// </summary>
+        public SearchStatistics? LastSearch { get; private set; }
+
+        private long _distinctLeaves;
+        private readonly Stopwatch _selectionTime = new(), _evaluationTime = new(), _backpropagationTime = new();
+
 
         public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414, double timeLimitSeconds = TIME_LIMIT_SECONDS)
             : base(playerIndex)
@@ -107,6 +125,10 @@ namespace Agents.MCTS
         {
             Console.WriteLine($"Running MCTS for {timeLimitSeconds}s:");
             Stopwatch stopwatch = Stopwatch.StartNew();
+            _distinctLeaves = 0;
+            _selectionTime.Reset();
+            _evaluationTime.Reset();
+            _backpropagationTime.Reset();
 
             uint iterationCounter = 0;
             do
@@ -116,6 +138,8 @@ namespace Agents.MCTS
             }
             while (stopwatch.Elapsed.TotalSeconds < timeLimitSeconds);
 
+            LastSearch = new SearchStatistics(iterationCounter, _distinctLeaves, stopwatch.Elapsed.TotalSeconds,
+                _selectionTime.Elapsed.TotalSeconds, _evaluationTime.Elapsed.TotalSeconds, _backpropagationTime.Elapsed.TotalSeconds);
             Console.WriteLine($"Simulation ran for {iterationCounter} iterations.");
         }
 
@@ -152,6 +176,7 @@ namespace Agents.MCTS
 
             var leaves = new (MCTSNode leafNode, GameState stateAtLeaf)[batchSize];
 
+            _selectionTime.Start();
             Parallel.For(0, (int)batchSize, i =>
             {
                 // Selection
@@ -170,10 +195,12 @@ namespace Agents.MCTS
 
                 leaves[i] = (leafNode, stateAtLeaf);
             });
-            
+            _selectionTime.Stop();
+            _distinctLeaves += leaves.Select(leaf => leaf.leafNode).Distinct().Count();
 
             // Simulation
             // Ended matches have a known result; only the remaining leaves go through the value net
+            _evaluationTime.Start();
             double[] results = new double[batchSize];
             List<int> pendingIndices = [];
 
@@ -191,13 +218,16 @@ namespace Agents.MCTS
                 for (int k = 0; k < pendingIndices.Count; k++)
                     results[pendingIndices[k]] = netResults[k];
             }
+            _evaluationTime.Stop();
 
+            _backpropagationTime.Start();
             Parallel.For(0, (int)batchSize, i =>
             {
                 // Backpropagation
                 // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root
                 tree.Backpropagate(leaves[i].leafNode, results[i], pathAlreadyMarked: true);
             });
+            _backpropagationTime.Stop();
         }
 
         protected double TerminalResult(GameState state)

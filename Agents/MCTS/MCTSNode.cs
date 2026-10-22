@@ -12,7 +12,11 @@ namespace Agents.MCTS
         public MCTSNode? Parent { get; protected set; }
         public Action? LastAction { get; protected set; }
 
+        // Set once selection has applied the node's action and the game was over (or for a terminal root)
         public bool IsTerminal { get; protected set; }
+
+        // Active player of a node that was not expanded yet
+        public const sbyte UnknownPlayer = -1;
 
         private int _visitCount = 0;
         public uint VisitCount
@@ -21,23 +25,32 @@ namespace Agents.MCTS
             set => Volatile.Write(ref _visitCount, (int)value);
         }
 
-        // Sum of binary (1 for win, 0 for loss) or double (win percentage) results
-        private readonly object _scoreLock = new object();
-        private double _totalScore = 0;
+        // Sum of binary (1 for win, 0 for loss) or double (win percentage) results, stored as bits so it can be added to without a lock
+        private long _totalScoreBits = 0;
         public double TotalScore
         {
-            get { lock (_scoreLock) return _totalScore; }
-            set { lock (_scoreLock) _totalScore = value; }
+            get => BitConverter.Int64BitsToDouble(Volatile.Read(ref _totalScoreBits));
+            set => Volatile.Write(ref _totalScoreBits, BitConverter.DoubleToInt64Bits(value));
         }
 
+        // Player to act in the node's state, known for the root and for expanded nodes (UnknownPlayer before)
         public sbyte ActivePlayerIndex { get; set; }
         public bool IsOutputRandomnessGroup { get; set; }
 
         // Probability of this outcome among its siblings (only meaningful for children of a randomness group)
         public double OutcomeProbability { get; set; } = 1.0;
 
+        // Whether the tree's owner picks the next action here (otherwise it is sampled), decided when the node is expanded
+        public bool OwnerDecides { get; private set; }
+
+        // Taken only to expand the node, never to read its children
         public readonly object ChildLock = new object();
-        public List<MCTSNode> Children { get; set; } = new List<MCTSNode>();
+
+        // Published all at once when the node is expanded, so selection can read it without locking
+        private MCTSNode[] _children = [];
+        public IReadOnlyList<MCTSNode> Children => Volatile.Read(ref _children);
+        internal MCTSNode[] ChildArray => Volatile.Read(ref _children);
+        public bool IsExpanded => Volatile.Read(ref _children).Length > 0;
 
         public MCTSNode(sbyte activePlayerIndex, MCTSNode? parent = null, Action? lastAction = null, bool isTerminal = false, bool isOutputRandomnessGroup = false)
         {
@@ -48,7 +61,36 @@ namespace Agents.MCTS
             IsOutputRandomnessGroup = isOutputRandomnessGroup;
         }
 
+        internal void MarkTerminal()
+        {
+            IsTerminal = true;
+        }
+
+        /// <summary>
+        /// Makes the children visible to all threads at once
+        /// </summary>
+        internal void PublishChildren(MCTSNode[] children, bool ownerDecides)
+        {
+            OwnerDecides = ownerDecides;
+            Volatile.Write(ref _children, children);
+        }
+
         public double GetUCT(double explorationParameter, MinMaxStats? valueBounds = null)
+        {
+            // Root node does not have an exploration term
+            if (Parent == null)
+            {
+                uint visits = VisitCount;
+                return visits == 0 ? 1e9 : TotalScore / visits;
+            }
+
+            return GetUCT(explorationParameter, Math.Log(Parent.VisitCount), valueBounds?.GetRange());
+        }
+
+        /// <summary>
+        /// UCT of a child with the logarithm of its parent's visits and the tree's value range read once for all siblings
+        /// </summary>
+        internal double GetUCT(double explorationParameter, double logParentVisits, MinMaxStats.Range? valueRange)
         {
             // Snapshots for thread-safety
             uint visitCountSnapshot = VisitCount;
@@ -61,16 +103,12 @@ namespace Agents.MCTS
 
             double meanValue = totalScoreSnapshot / visitCountSnapshot;
 
-            // Root node does not have an exploration term
-            if (Parent == null)
-                return meanValue;
-
             // Rescale the exploitation term to the range of values seen in the tree, so that it stays
             // comparable to the exploration term even when all values are tiny (player far behind)
-            if (valueBounds != null)
-                meanValue = valueBounds.Normalize(meanValue);
+            if (valueRange != null)
+                meanValue = valueRange.Value.Normalize(meanValue);
 
-            return meanValue + explorationParameter * Math.Sqrt(Math.Log(Parent.VisitCount) / visitCountSnapshot);
+            return meanValue + explorationParameter * Math.Sqrt(logParentVisits / visitCountSnapshot);
         }
 
         /// <summary>
@@ -88,8 +126,13 @@ namespace Agents.MCTS
 
         public void AddResult(double value)
         {
-            lock (_scoreLock)
-                _totalScore += value;
+            long initial, added;
+            do
+            {
+                initial = Volatile.Read(ref _totalScoreBits);
+                added = BitConverter.DoubleToInt64Bits(BitConverter.Int64BitsToDouble(initial) + value);
+            }
+            while (Interlocked.CompareExchange(ref _totalScoreBits, added, initial) != initial);
         }
     }
 }

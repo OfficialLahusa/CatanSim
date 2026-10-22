@@ -102,7 +102,7 @@ namespace Agents.MCTS
 
         protected int GetTreeSizeRec(MCTSNode currentSubtreeRoot)
         {
-            if (currentSubtreeRoot.IsTerminal || currentSubtreeRoot.Children.Count == 0)
+            if (currentSubtreeRoot.IsTerminal || !currentSubtreeRoot.IsExpanded)
             {
                 return 1;
             }
@@ -124,7 +124,7 @@ namespace Agents.MCTS
                 ? subtreeRootState ?? new GameState(RootState)
                 : new GameState(subtreeRootState ?? RootState);
 
-            while (node.Children.Count > 0)
+            while (node.IsExpanded)
             {
                 node = SelectChild(node);
 
@@ -133,6 +133,9 @@ namespace Agents.MCTS
                 if (node.LastAction != null && !node.IsOutputRandomnessGroup)
                 {
                     node.LastAction!.Clone().Apply(state);
+
+                    // Whether a child ends the game is only known once its action was applied
+                    if (state.HasEnded) node.MarkTerminal();
                 }
             }
 
@@ -145,50 +148,58 @@ namespace Agents.MCTS
             // If this node was already concurrently expanded by another thread, return early
             lock(node.ChildLock)
             {
-                if(node.Children.Count > 0)
+                if(node.IsExpanded)
                 {
                     return;
                 }
 
+                // Ended games have no actions
+                if (state.HasEnded)
+                {
+                    node.MarkTerminal();
+                    return;
+                }
+
+                // Children are created without applying their actions: whether they end the game and who acts next is
+                // recorded when selection first applies them (see SelectLeafNode) and when they are expanded themselves
+                node.ActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
+
                 List<Action> actions = GetValidActions(state);
+                List<MCTSNode> children = new(actions.Count);
                 foreach (var action in actions)
                 {
                     // If action has output randomness, get all possible outcomes and group them into a subtree
                     if (action is IOutputRandomnessAction randomAction)
                     {
                         MCTSNode groupNode = new MCTSNode((sbyte)state.Turn.PlayerIndex, node, action, false, true);
-                        node.Children.Add(groupNode);
+                        children.Add(groupNode);
 
                         List<OutcomeVariant> variants = randomAction.GetOutcomeVariants(state, (sbyte)state.Turn.PlayerIndex);
+                        MCTSNode[] outcomes = new MCTSNode[variants.Count];
 
-                        foreach ((Action variant, double probability) in variants)
+                        for (int i = 0; i < variants.Count; i++)
                         {
-                            // Check if node is terminal and who the active player is after the action
-                            variant.Apply(state);
-                            bool isTerminal = state.HasEnded;
-                            sbyte nextActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
-                            variant.Revert(state);
+                            (Action variant, double probability) = variants[i];
 
-                            MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, groupNode, variant, isTerminal)
+                            MCTSNode childNode = new MCTSNode(MCTSNode.UnknownPlayer, groupNode, variant)
                             {
                                 OutcomeProbability = probability
                             };
-                            groupNode.Children.Add(childNode);
+                            outcomes[i] = childNode;
                         }
+
+                        // Outcomes are sampled, never chosen
+                        groupNode.PublishChildren(outcomes, ownerDecides: false);
                     }
                     // Otherwise just add the node directly as a child
                     else
                     {
-                        // Check if node is terminal and who the active player is after the action
-                        action.Apply(state);
-                        bool isTerminal = state.HasEnded;
-                        sbyte nextActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
-                        action.Revert(state);
-
-                        MCTSNode childNode = new MCTSNode(nextActivePlayerIndex, node, action, isTerminal);
-                        node.Children.Add(childNode);
+                        MCTSNode childNode = new MCTSNode(MCTSNode.UnknownPlayer, node, action);
+                        children.Add(childNode);
                     }
                 }
+
+                node.PublishChildren([.. children], HasDecidingPower(node.ActivePlayerIndex, children));
             }
         }
 
@@ -226,33 +237,47 @@ namespace Agents.MCTS
 
         public MCTSNode SelectChild(MCTSNode node)
         {
-            lock(node.ChildLock)
-            {
-                // If the node is a grouped output randomness action, sample an outcome according to its probability
-                if (node.IsOutputRandomnessGroup)
-                {
-                    return SampleOutcome(node.Children);
-                }
+            // Children are published once, complete, so no lock is needed to read them
+            MCTSNode[] children = node.ChildArray;
 
-                // Otherwise, determine if the player this agent is representing currently has deciding power over the next action            
-                // Only select best move if the player has deciding power
-                if (HasDecidingPower(node))
+            // If the node is a grouped output randomness action, sample an outcome according to its probability
+            if (node.IsOutputRandomnessGroup)
+            {
+                return SampleOutcome(children);
+            }
+
+            // Otherwise select random move if the player this agent is representing has no deciding power over the next action
+            // This is to avoid the AI from making intentional bad moves on other players' turns
+            if (!node.OwnerDecides)
+            {
+                return children[_random.Next(children.Length)];
+            }
+
+            // Only select best move if the player has deciding power, in one pass with values shared by all children
+            double logParentVisits = Math.Log(node.VisitCount);
+            MinMaxStats.Range? valueRange = ValueBounds?.GetRange();
+
+            MCTSNode best = children[0];
+            double bestValue = double.NegativeInfinity;
+            foreach (MCTSNode child in children)
+            {
+                // Slight random jitter to break ties (especially important for unexplored nodes)
+                double value = child.GetUCT(_explorationParameter, logParentVisits, valueRange) + _random.NextDouble() * 1e-5;
+                if (value > bestValue)
                 {
-                    // Slight random jitter to break ties (especially important for unexplored nodes)
-                    return node.Children.OrderByDescending(c => c.GetUCT(_explorationParameter, ValueBounds) + _random.NextDouble() * 1e-5).First();
-                }
-                // Otherwise select random move
-                // This is to avoid the AI from making intentional bad moves on other players' turns
-                else
-                {
-                    return node.Children[_random.Next(node.Children.Count)];
+                    best = child;
+                    bestValue = value;
                 }
             }
+
+            return best;
         }
 
-        private MCTSNode SampleOutcome(List<MCTSNode> outcomes)
+        private MCTSNode SampleOutcome(MCTSNode[] outcomes)
         {
-            double total = outcomes.Sum(outcome => outcome.OutcomeProbability);
+            double total = 0;
+            foreach (MCTSNode outcome in outcomes)
+                total += outcome.OutcomeProbability;
             double remaining = _random.NextDouble() * total;
 
             foreach (MCTSNode outcome in outcomes)
@@ -265,15 +290,15 @@ namespace Agents.MCTS
             return outcomes[^1];
         }
 
-        private bool HasDecidingPower(MCTSNode node)
+        private bool HasDecidingPower(sbyte activePlayerIdx, List<MCTSNode> children)
         {
             // A player has deciding power if one of the following is true:
             // - It's the player's turn and nobody has to discard
             // - The player has to discard and nobody with a lower playerIndex has to discard
-            bool isOwnersTurn = node.ActivePlayerIndex == _ownerIdx;
-            bool discardRequired = node.Children.Any(x => x.LastAction != null && x.LastAction is DiscardAction);
-            bool ownerHasToDiscard = node.Children.Any(x => x.LastAction != null && x.LastAction is DiscardAction discardAction && discardAction.PlayerIndex == _ownerIdx);
-            bool previousHasToDiscard = node.Children.Any(x => x.LastAction != null && x.LastAction is DiscardAction discardAction && discardAction.PlayerIndex < _ownerIdx);
+            bool isOwnersTurn = activePlayerIdx == _ownerIdx;
+            bool discardRequired = children.Any(x => x.LastAction != null && x.LastAction is DiscardAction);
+            bool ownerHasToDiscard = children.Any(x => x.LastAction != null && x.LastAction is DiscardAction discardAction && discardAction.PlayerIndex == _ownerIdx);
+            bool previousHasToDiscard = children.Any(x => x.LastAction != null && x.LastAction is DiscardAction discardAction && discardAction.PlayerIndex < _ownerIdx);
 
             bool hasDecidingPower = isOwnersTurn && !discardRequired || ownerHasToDiscard && !previousHasToDiscard;
             return hasDecidingPower;

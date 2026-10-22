@@ -24,17 +24,27 @@ namespace Agents.MCTS
 
         public double Normalize(double value)
         {
-            double min, max;
+            return GetRange().Normalize(value);
+        }
+
+        /// <summary>
+        /// The current range, to normalize several values with one read
+        /// </summary>
+        public Range GetRange()
+        {
             lock (_lock)
+                return new Range(_min, _max);
+        }
+
+        public readonly record struct Range(double Min, double Max)
+        {
+            public double Normalize(double value)
             {
-                min = _min;
-                max = _max;
+                // Without a meaningful range yet (fewer than two distinct values), leave the value as is
+                if (Max <= Min) return value;
+
+                return (value - Min) / (Max - Min);
             }
-
-            // Without a meaningful range yet (fewer than two distinct values), leave the value as is
-            if (max <= min) return value;
-
-            return (value - min) / (max - min);
         }
     }
 }
