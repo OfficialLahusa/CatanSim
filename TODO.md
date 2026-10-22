@@ -59,14 +59,19 @@
 	- Seed, Collector-Einstellungen und Commit-Hash als Metadaten neben dem Datensatz speichern
 	- Thread-Anzahl auf dem Server per Benchmark bestimmen (Messungen bisher nur auf dem 32-Thread-Desktop)
 	- Bisherige Datensätze folgen der alten Road-Building-Regel (Straßen erst nach dem Würfeln, beliebig später im Zug), der nächste Run nutzt die korrigierte
+	- Stärkere Playout-Agents (SimpleAgent/Greedy, gemischt) statt nur Random prüfen: Random-Winrates unterschätzen Pläne, die Random nie ausführt (Städte/Ore, Dev Cards, Ports), und das wirkt direkt auf die Setup-Entscheidungen
+	- Mehr States mit weniger Playouts pro State prüfen (1000 Playouts haben bei 50% noch ~1,6 pp Standardfehler)
 - Dataset-Pipeline robuster machen
 	- build_dataset_index.py sortiert die Verzeichnisse nicht, Index und Split hängen dadurch vom Dateisystem ab
 	- Fehlende .txt-Labels fallen erst nach der langen Vektorisierung auf, vorher prüfen
 	- RoundCounter unnormalisiert, wird unter bf16-mixed grob quantisiert
+		- Das Net nutzt ihn als Abkürzung: nur RoundCounter ändern verschiebt die Winrates im Mittel um 5-10 pp (max 59 pp), der Favorit wechselt in 8-15% der States
+		- Regeln hängen nicht davon ab => in v2 rauswerfen bzw. durch Fortschritts-Features ersetzen (VP auf dem Brett, restlicher Building Stock), verzerrt in MCTS sonst EndTurn gegen Weiterbauen
 	- Regenerierungs-Snippet in baselines.py verweist auf Funktionen, die es nicht gibt
 	- TurnState initialisiert LastRoll bei neuen Spielen zufällig => Rauschen in den Features während des Setups
 - Agents/env: OpenMP-Konflikt (libiomp5md.dll von conda-MKL und torch), torch läuft nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren oder Duplikat entfernen
 - Spezialisierten Datensatz für Initial Placements anlegen
+	- Größter Hebel: im Setup reicht die Suche nicht über den eigenen Zug hinaus (PV = Settlement + Road), die Entscheidung ist praktisch eine 1-Ply-Bewertung des Nets
 	- Mehr Playouts
 	- Nach jedem einzelnen Move speichern um Impact gut lernbar zu machen
 	- Komplett Random ohne Heuristik um unvorteilhafte Positionen nicht unterzurepräsentieren
@@ -83,6 +88,8 @@
 - StateValueNetv2
 	- v2 erstmal auf v1 basiert mit Player/Tile Encoderblöcken, Embeddings statt OneHot, GraphConv auf v3 schieben
 	- State Vectorizer über push/pop Architektur eine Index-Aufschlüsselung generieren lassen
+	- Abgeleitete Features: Produktion pro Spieler und Ressource (Pips, Räuber), Hafenzugang, "kann X bauen"-Flags, alle Counts auf ~[0, 1] skalieren
+	- Aux Head für Runden bis Spielende (Spielfortschritt lernen ohne RoundCounter)
 	- Unzuverlässige Outputs für sehr weit zurückliegende Spieler addressieren
 		- Ursache sind die Labels: ab 5 VP Rückstand sind 65-87% der Winrates exakt 0 (1000 Playouts lösen < 0.1% nicht auf), das Net ist dort kalibriert, hat aber nichts zu lernen
 		- Paarweiser Hinge/Logistic Loss auf die Reihenfolge der Winrates reicht deshalb nicht (bei Labels = 0 gibt es keine Reihenfolge)
@@ -91,15 +98,23 @@
 		- Selektionsseite in MCTS bereits über Min-Max-Normalisierung der Q-Werte gelöst
 	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
  - Graph Transformer als Alternative in Betracht ziehen
+	- Ein Token pro Tile, Intersection, Edge und Spieler plus globaler Token (~150), gelernte Positions-Embeddings pro Slot, Attention Bias nach Graph-Distanz
+	- d=128 mit 4 Layern kostet etwa 1-3x das jetzige MLP
+	- Spieler-symmetrisch: geteilter Player Encoder, Attention zwischen Spielern, Value Head pro Spieler => Spielerrotation eingebaut statt Augmentation
 	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
 	- Data Augmentation basierend auf Spielerposition (alle Spieler random rotieren)
     - Data Augmentation basierend auf Reduktion der Sichtbarkeit (alle Karten ausser die eines Spielers unknown machen, zufällig Karten unknown machen)
+	- Data Augmentation über Brett-Symmetrien (6 Rotationen x Spiegelung = 12x Daten), Permutationstabellen für Tiles, Intersections, Edges und Ports aus der Geometrie berechnen
+	- Evaluation über val KL hinaus: Kalibrierung pro VP-Rückstand, Ranking von Geschwister-States gegen lange Playouts, Quality Bench gegen tiefe Suche, Self-Play bei gleicher Zeit
+	- Inference-Budget: das Net darf ~2-3x teurer werden (kostet laut Quality Bench ~4 Punkte Übereinstimmung), alternativ kleines Net für Leaves und großes für Root/Policy
+	- Reihenfolge: v1.5 (Inputs bereinigen, Aux Heads, Augmentation) => Datensatz v2 => Transformer => Policy Head => Belief-aware
 - PolicyNet
 	- Wahrscheinlichkeitsverteilung darüber welche Moves aus einem State wie erkundenswert sind
 	- Action Space explodiert kombinatorisch, deshalb nicht über ein finite fixed-size Action Space die Verteilung berechnen
 	- Stattdessen ein NN was State und eine Action paarweise als Input bekommt und einen Score ausgibt
 	- Dann über alle Legal Moves aus dem State batched berechnen und Softmax über die Scores berechnen um eine Verteilung zu erhalten
 	- Output dann über PUCT (Predictor UCT) für Exploration benutzen
+	- Auch als Gegnermodell: Gegnerzüge im Tree nach Policy statt gleichverteilt samplen => Setup-PV bekommt echte Tiefe, besserer Subtree-Reuse
 	- Action Encoding
 		- Categorical Embedding für Type der Action
 		- Dann geteilte bedeutungsgleiche Dimensionen für die Parameter, damit jede Dimension immer das gleiche Konzept abbildet
@@ -108,6 +123,7 @@
 		- Roll Result Parameter ignorieren und Output Randomness generell als eine Candidate Action zusammenfassen (wie es im MCTS Tree schon implementiert ist)
 	- State Encoding
 		- Evtl den Rumpf des StateValueNets übernehmen und dann nur einmal für den State berechnen und für alle Candidate Actions wiederverwenden
+		- Mit Transformer-Trunk: Action Tokens per Cross-Attention auf die State Tokens
 	- StateValueNet und PolicyNet in einem Modell kombinieren, welches den Trunk und einen Value- sowie Policy-Head enthält
 		- Für ONNX dynamic_axis nutzen, damit mehrere Actions gleichzeitig gebatched verarbeitet werden können
 		- Man kann auswählen welche der Outputs man berechnen möchte und der jeweils andere wird dann gar nicht berechnet
@@ -131,6 +147,8 @@
 		- Initial Placements kriegen eigene Extrazeit
 		- Dann immer das ganze Budget nutzen um seinen Initiativabschnitt fertigzurechnen und dann diesen Pfad auch instantly fertig spielen
 	- Durchsatz (61k-66k Iterationen/s auf 32 Threads mit Server GC, Inference läuft 95% der Zeit und ist der Engpass)
+		- Quality Bench (30 Positionen, Übereinstimmung mit 20s-Referenz): 2,2s (entspricht den alten 5s) 89% => 5s 93%, Gewinn nur im Setup (87% => 100%), Turns bleiben bei 90%, mittlerer Regret 0,24 => 0,18 pp
+		- => Suche ist für das aktuelle Net fast konvergiert, Stärke begrenzen Net, zufälliges Gegnermodell und Hidden Information
 		- Inference beschleunigen: ONNX Graph Optimization Level und Execution Provider (DirectML, OpenVINO) prüfen, Quantisierung (fp16/int8) nur mit Abgleich der Outputs, kleineres Net
 		- Expansion kostete unter Last (32 Threads, Workstation GC) ~47 us für GetValidActions und ~43 us für Outcome Variants (Roll, Robber, Dev-Kauf), relevant sobald die Inference schneller ist
 		- Spielstärke nach dem Pipelining prüfen (Selektion arbeitet eine Batch hinter den Ergebnissen), z.B. MCTS vor/nach gegeneinander bei gleicher Zeit
