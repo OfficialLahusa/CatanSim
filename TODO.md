@@ -2,8 +2,6 @@
 - UI für manuelles Spielen überarbeiten
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
-- RoadAction.GetActionsForState optimieren (derzeit sehr ineffizient)
-    - Caching von Intersection/Edge Ownership (maybe in PlayerState?)
 - Hidden Information (Agents sehen derzeit alle Hände, VP-Karten und den Inhalt der Dev Bank, das Net ist darauf trainiert)
 	- Beobachtungsmodell
 		- Verdeckt sind nur: vom Räuber gestohlene Karten (für Unbeteiligte), gezogene Dev Cards (für alle außer Käufer), VP-Karten bis Spielende
@@ -40,32 +38,7 @@
 	- 5. Particle MCTS / POMCP nur bei Bedarf
 		- Bei exaktem Belief Tracker wenig Gewinn gegenüber ISMCTS
 		- Relevant, sobald Player Trades mit Angeboten/Ablehnungen dazukommen (schwer als Constraints abbildbar)
-- GameState in Static und Dynamic unterteilen
-	- Messung (Kopie eines GameState nach 400 Actions): 8,5 us / 38,8 KB, davon Board 7,8 us / 37,1 KB und AdjacencyMatrix allein 6,6 us / 28,7 KB, alle 4 PlayerStates nur 0,6 us / 1,5 KB
-	- Dynamischer Board-Teil als Arrays (54 + 54 + 72 + 72 Bytes) kostet 0,1 us / 0,4 KB => Kopie nach dem Split ~1 us / ~2 KB
-	- Ursache: die Adjazenz liefert Objekte eines bestimmten Boards (HashSet<Edge>, Intersection-Instanzen) und muss deshalb pro Kopie neu gebunden werden, ihre Lazy Caches machen außerdem Lesezugriffe zu Schreibzugriffen (PrecomputeAll vor Multithreading nötig)
-	- Statisch (pro Spiel einmal, von allen Kopien geteilt): Tiles (Typ, Zahl, ändern sich nur in der Map-Generierung), Indizes und Ausrichtung von Intersections und Edges, Ports inkl. zugehöriger Intersections, komplette Adjazenz
-	- Dynamisch (wird kopiert): Gebäude und Owner pro Intersection, Straße und Owner pro Edge, Robber als Tile-Index, dazu wie bisher Turn, Banks und Players
-	- Betroffene Stellen (Audit)
-		- ~45 Aufrufe der objektbasierten Adjazenz (SettlementAction, Placement-Actions, RollAction, RobberAction, GameState, SimpleAgent, BoardRenderer, ~45 in Tests)
-		- ~50 Schreibzugriffe auf Building/Owner (7 Actions, Board.Clear, MapGenerator, Edit Mode im GameScreen, ~30 in Tests) und ~120 Lesezugriffe
-		- Longest Road, StateVectorizer und Produktion in RollAction lesen dann direkt die Arrays
-		- Client: ~25 Stellen in BoardRenderer und Edit Mode (gute Gelegenheit, den Edit Mode gleichzeitig konsistent zu machen)
-		- Tests: Helper (PlaceBuilding, BuildRoad, ...) umstellen, die Assertions bleiben gleich
-	- Serialisierung: YAML-Form per Custom Converter exakt beibehalten => keine neue Save-Version, Python-Vectorizer, bestehende Datensätze, Fixtures und Upgrader bleiben gültig
-		- Alternative kompaktes Format nur bei Bedarf (bräuchte Save-Version 2, Upgrader-Schritt, Python-Anpassung, neue Fixtures)
-	- Equals/GetHashCode: geteiltes Layout per Referenz vergleichen, dann die Arrays
-	- Reihenfolge (nach jedem Schritt grüne Tests und ein Profiling-Lauf, je ein Commit)
-		- Profiling nach jedem Schritt ist Pflicht: GameState-Kopie (Zeit und Allokation), Random Playouts (1 Thread und Skalierung bis alle Kerne), MCTS-Iterationen/s mit Phasenaufteilung, jeweils gegen die Werte vor dem Schritt; Ergebnisse in die Commit-Message
-		- 1. Adjazenz indexbasiert, eager berechnet und unveränderlich, von allen Kopien geteilt; dünner Wrapper pro Board übersetzt Indizes zurück in Objekte, damit die Aufrufer unverändert bleiben => ~78% der Kopierkosten weg, PrecomputeAll überflüssig
-		- 2. Tiles und Ports ins geteilte Layout, Robber als Tile-Index (beseitigt auch die "Robber nach dem Laden ein anderes Tile-Objekt"-Fehlerklasse)
-		- 3. Gebäude und Owner als Arrays, Intersection/Edge vorübergehend als Views über die Arrays, YAML-Converter (C#/Python-Paritätsfixtures und Serialisierungstests sichern das Format ab)
-		- 4. Views entfernen, restliche Aufrufer migrieren
-		- 5. Danach: Ownership-Bitmasken pro Spieler (siehe "RoadAction.GetActionsForState optimieren") und MCTS-Selektion neu messen (der Punkt "Arbeits-State pro Thread statt Kopie" ist bei billigen Kopien vermutlich überflüssig)
-	- Erwarteter Effekt (geschätzt): MCTS profitiert am meisten (eine Kopie pro Iteration, Allokation limitiert über Threads), Random Playouts moderat über arraybasierte Adjazenz in den Providern
-	- Hilft auch ISMCTS: Determinisierungen kopieren pro Sample einen State, Konflikte mit StateView/Belief Tracker gibt es keine
 - Action für variable Player Trades
-- Regelabweichung: Road-Building-Straßen erst nach dem Würfeln und beliebig später im Zug platzierbar, laut Regelbuch sofort (auch vor dem Würfeln)
 - Client
 	- Edit Mode schreibt direkt ins Board: Building Stock, VPs, Longest Road und Action Stack werden nicht nachgezogen, geleerte Felder behalten einen Owner, Klicks auf ImGui-Fenster über dem Board editieren mit
 	- Font, Texture Atlas und Sounds werden relativ zum Arbeitsverzeichnis geladen (..\..\..\res\...) => AppContext.BaseDirectory nutzen und res/ ins Build-Output kopieren (das ONNX-Modell wird bereits neben der Executable gesucht)
@@ -77,7 +50,6 @@
 - Belief Tracker (sobald implementiert): wahrer State liegt immer im Support jedes Beliefs
 - Übersprungene Rulebook-Tests aktivieren, sobald die Regeln umgesetzt sind
 	- PlayersMayTradeResourcesWithEachOtherOnTheirTurn (Player Trades)
-	- RoadBuildingRoadsArePlacedImmediatelyEvenBeforeTheRoll (Road Building sofort platzieren)
 - Ersten CI-Lauf unter Linux prüfen (bisher lief nichts unter Linux)
 
 ## Agents
@@ -86,6 +58,7 @@
 	- Leeres Board und Terminal State nicht mehr in jedem Match erzwingen (derzeit 40% der Samples)
 	- Seed, Collector-Einstellungen und Commit-Hash als Metadaten neben dem Datensatz speichern
 	- Thread-Anzahl auf dem Server per Benchmark bestimmen (Messungen bisher nur auf dem 32-Thread-Desktop)
+	- Bisherige Datensätze folgen der alten Road-Building-Regel (Straßen erst nach dem Würfeln, beliebig später im Zug), der nächste Run nutzt die korrigierte
 - Dataset-Pipeline robuster machen
 	- build_dataset_index.py sortiert die Verzeichnisse nicht, Index und Split hängen dadurch vom Dateisystem ab
 	- Fehlende .txt-Labels fallen erst nach der langen Vektorisierung auf, vorher prüfen
@@ -157,13 +130,10 @@
 		- Discards kriegen eigene Extrazeit
 		- Initial Placements kriegen eigene Extrazeit
 		- Dann immer das ganze Budget nutzen um seinen Initiativabschnitt fertigzurechnen und dann diesen Pfad auch instantly fertig spielen
-	- Selektion beschleunigen (derzeit ~58% der Suchzeit, 15.5k-17.5k Iterationen/s; Selektion allein skaliert nur ~1,7x von 1 auf 16 Threads)
-		- Besten Child in einem Durchlauf bestimmen statt OrderByDescending über alle Kinder (Sortierung + Allokation bei jedem Schritt)
-		- HasDecidingPower pro Node bei der Expansion cachen statt dreimal pro SelectChild über die Kinder zu iterieren
-		- Fertig expandierte Children-Listen als unveränderliches Array veröffentlichen und ohne Lock lesen (derzeit warten alle Threads am ChildLock der Root)
-		- Pro Thread einen Arbeits-State mit Apply/Revert entlang des Pfads nutzen statt pro Iteration den GameState zu kopieren (~19 us und ~39 KB pro Kopie)
-		- Selektion des nächsten Batches mit der Inference des aktuellen überlappen (Pipelining, CPU ist während der Inference sonst idle)
-		- Virtual Loss schon während der Selektion anwenden statt danach (sonst wählen mehrere Threads eines Batches denselben Leaf)
+	- Durchsatz (61k-66k Iterationen/s auf 32 Threads mit Server GC, Inference läuft 95% der Zeit und ist der Engpass)
+		- Inference beschleunigen: ONNX Graph Optimization Level und Execution Provider (DirectML, OpenVINO) prüfen, Quantisierung (fp16/int8) nur mit Abgleich der Outputs, kleineres Net
+		- Expansion kostete unter Last (32 Threads, Workstation GC) ~47 us für GetValidActions und ~43 us für Outcome Variants (Roll, Robber, Dev-Kauf), relevant sobald die Inference schneller ist
+		- Spielstärke nach dem Pipelining prüfen (Selektion arbeitet eine Batch hinter den Ergebnissen), z.B. MCTS vor/nach gegeneinander bei gleicher Zeit
 	- State Value Netzwerkarchitekturen aus Initial Placement Paper prüfen
 	- State Hashes zusätzlich für Validation und Caching?
 - GreedyAgent
