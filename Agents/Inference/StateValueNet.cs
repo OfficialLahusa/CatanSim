@@ -21,9 +21,10 @@ namespace Agents.Inference
         // The model file is not tracked in git, so a fresh clone builds without it
         public static bool IsDefaultModelAvailable => File.Exists(DefaultModelPath);
 
-        // Threads ONNX Runtime uses inside one Run call. Batched MCTS inference runs between the parallel phases,
-        // so these threads don't compete with the search; beyond 8 there was no further speedup for batches of 256.
-        public static readonly int DefaultIntraOpThreads = Math.Clamp(Environment.ProcessorCount / 2, 1, 8);
+        // Threads ONNX Runtime uses inside one Run call. The MCTS agent evaluates one batch while it selects the next,
+        // so half of the logical cores run the value net and half the search (more threads starve the search, at all
+        // cores both slow down by half; measured with batches of 256 on 32 logical cores).
+        public static readonly int DefaultIntraOpThreads = Math.Max(1, Environment.ProcessorCount / 2);
 
         private InferenceSession _session;
 
