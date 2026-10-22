@@ -6,6 +6,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 	 <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The MCTS agent and the parallel rollouts allocate on all cores; with the workstation GC the search runs ~30% slower -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
   </PropertyGroup>
 
   <ItemGroup>
