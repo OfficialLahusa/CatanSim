@@ -46,6 +46,9 @@ namespace Agents.MCTS
         /// </summary>
         public SearchStatistics? LastSearch { get; private set; }
 
+        // Leaves of a batch with their features, written by the selecting threads so the evaluation only runs the value net
+        private sealed record LeafBatch((MCTSNode leafNode, GameState stateAtLeaf)[] Leaves, DenseTensor<float> Features);
+
         private long _distinctLeaves;
         private readonly Stopwatch _selectionTime = new(), _evaluationTime = new(), _backpropagationTime = new(), _evaluationWaitTime = new();
 
@@ -137,31 +140,31 @@ namespace Agents.MCTS
 
             // Pipelined batches: while the value net evaluates one batch, the previous one is backpropagated and the next one selected.
             // Selection therefore runs one batch behind on results, but the visits of the batch in evaluation are already counted.
-            (MCTSNode leafNode, GameState stateAtLeaf)[]? evaluatedLeaves = null;
+            LeafBatch? evaluatedBatch = null;
             Task<double[]>? evaluation = null;
 
             uint iterationCounter = 0;
             do
             {
-                var selectedLeaves = SelectBatch(tree, BATCH_SIZE);
+                LeafBatch selectedBatch = SelectBatch(tree, BATCH_SIZE);
 
                 _evaluationWaitTime.Start();
                 double[]? previousResults = evaluation?.Result;
                 _evaluationWaitTime.Stop();
 
-                var previousLeaves = evaluatedLeaves;
-                evaluatedLeaves = selectedLeaves;
-                evaluation = Task.Run(() => EvaluateBatch(selectedLeaves));
+                LeafBatch? previousBatch = evaluatedBatch;
+                evaluatedBatch = selectedBatch;
+                evaluation = Task.Run(() => EvaluateBatch(selectedBatch));
 
-                if (previousLeaves != null)
-                    BackpropagateBatch(tree, previousLeaves, previousResults!);
+                if (previousBatch != null)
+                    BackpropagateBatch(tree, previousBatch, previousResults!);
 
                 iterationCounter += BATCH_SIZE;
             }
             while (stopwatch.Elapsed.TotalSeconds < timeLimitSeconds);
 
             _evaluationWaitTime.Start();
-            BackpropagateBatch(tree, evaluatedLeaves, evaluation.Result);
+            BackpropagateBatch(tree, evaluatedBatch, evaluation.Result);
             _evaluationWaitTime.Stop();
 
             LastSearch = new SearchStatistics(iterationCounter, _distinctLeaves, stopwatch.Elapsed.TotalSeconds,
@@ -201,13 +204,15 @@ namespace Agents.MCTS
             // Only called while Act holds a tree
             MCTSTree tree = _tree!;
 
-            var leaves = SelectBatch(tree, batchSize);
-            BackpropagateBatch(tree, leaves, EvaluateBatch(leaves));
+            LeafBatch batch = SelectBatch(tree, batchSize);
+            BackpropagateBatch(tree, batch, EvaluateBatch(batch));
         }
 
-        private (MCTSNode leafNode, GameState stateAtLeaf)[] SelectBatch(MCTSTree tree, uint batchSize)
+        private LeafBatch SelectBatch(MCTSTree tree, uint batchSize)
         {
             var leaves = new (MCTSNode leafNode, GameState stateAtLeaf)[batchSize];
+            DenseTensor<float> features = new DenseTensor<float>([(int)batchSize, StateVectorizer.FeatureDim]);
+            Memory<float> featureBuffer = features.Buffer;
 
             _selectionTime.Start();
             Parallel.For(0, (int)batchSize, i =>
@@ -227,45 +232,44 @@ namespace Agents.MCTS
                 tree.MarkPendingPath(leafNode);
 
                 leaves[i] = (leafNode, stateAtLeaf);
+
+                // Featurize right away, on the same thread (ended matches don't need the value net, their row stays empty)
+                if (!stateAtLeaf.HasEnded)
+                    _stateVectorizer.VectorizeInto(stateAtLeaf, featureBuffer.Span.Slice(i * StateVectorizer.FeatureDim, StateVectorizer.FeatureDim));
             });
             _selectionTime.Stop();
             _distinctLeaves += leaves.Select(leaf => leaf.leafNode).Distinct().Count();
 
-            return leaves;
+            return new LeafBatch(leaves, features);
         }
 
         /// <summary>
-        /// Results of the leaves of a batch. Only reads the leaf states, so it can run while the tree is in use.
+        /// Results of the leaves of a batch. Only reads the batch, so it can run while the tree is in use.
         /// </summary>
-        private double[] EvaluateBatch((MCTSNode leafNode, GameState stateAtLeaf)[] leaves)
+        private double[] EvaluateBatch(LeafBatch batch)
         {
             // Simulation
-            // Ended matches have a known result; only the remaining leaves go through the value net
+            // Ended matches have a known result, everything else is estimated by the value net in one batched run
             _evaluationTime.Start();
+            var leaves = batch.Leaves;
             double[] results = new double[leaves.Length];
-            List<int> pendingIndices = [];
+
+            float[]? outputs = leaves.Any(leaf => !leaf.stateAtLeaf.HasEnded) ? _stateValueNet.Run(batch.Features) : null;
 
             for (int i = 0; i < leaves.Length; i++)
             {
-                if (leaves[i].stateAtLeaf.HasEnded)
-                    results[i] = TerminalResult(leaves[i].stateAtLeaf);
-                else
-                    pendingIndices.Add(i);
-            }
-
-            if (pendingIndices.Count > 0)
-            {
-                List<double> netResults = BatchSimulateML(pendingIndices.Select(i => leaves[i].stateAtLeaf).ToList());
-                for (int k = 0; k < pendingIndices.Count; k++)
-                    results[pendingIndices[k]] = netResults[k];
+                results[i] = leaves[i].stateAtLeaf.HasEnded
+                    ? TerminalResult(leaves[i].stateAtLeaf)
+                    : ValuationToScore(outputs.AsSpan(i * 4, 4));
             }
             _evaluationTime.Stop();
 
             return results;
         }
 
-        private void BackpropagateBatch(MCTSTree tree, (MCTSNode leafNode, GameState stateAtLeaf)[] leaves, double[] results)
+        private void BackpropagateBatch(MCTSTree tree, LeafBatch batch, double[] results)
         {
+            var leaves = batch.Leaves;
             _backpropagationTime.Start();
             Parallel.For(0, leaves.Length, i =>
             {
@@ -305,31 +309,6 @@ namespace Agents.MCTS
                 //Console.WriteLine("In sim state hash: " + state.GetHashCode());
             }
             return state.Turn.PlayerIndex == PlayerIndex ? 1 : 0;
-        }
-
-        protected List<double> BatchSimulateML(List<GameState> states)
-        {
-            // Featurize all states
-            DenseTensor<float> batchFeatures = new DenseTensor<float>([states.Count, StateVectorizer.FeatureDim]);
-            Memory<float> memoryBuffer = batchFeatures.Buffer;
-
-            // Parallel Featurization (CPU bound), written directly into the batch rows
-            Parallel.For(0, states.Count, i =>
-            {
-                _stateVectorizer.VectorizeInto(states[i], memoryBuffer.Span.Slice(i * StateVectorizer.FeatureDim, StateVectorizer.FeatureDim));
-            });
-
-            // Run Batched NN Inference
-            float[] outputs = _stateValueNet.Run(batchFeatures);
-
-            // Compute final scores
-            List<double> results = new(states.Count);
-            for (int i = 0; i < states.Count; i++)
-            {
-                results.Add(ValuationToScore(outputs.AsSpan(i * 4, 4)));
-            }
-
-            return results;
         }
 
         protected double SimulateML(GameState state)
