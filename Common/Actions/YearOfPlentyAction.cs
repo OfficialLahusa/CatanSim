@@ -104,22 +104,24 @@ namespace Common.Actions
 
             if(!IsTurnValid(state.Turn, playerIdx)) return actions;
 
-            foreach (var firstChoice in CardSet<ResourceCardType>.Values)
+            // Only a card that wasn't bought this turn can be played (the same check as in IsBoardValid, done once)
+            PlayerState player = state.Players[playerIdx];
+            if (player.DevelopmentCards.Get(DevelopmentCardType.YearOfPlenty) <= player.NewDevelopmentCards.Get(DevelopmentCardType.YearOfPlenty)) return actions;
+
+            foreach (ResourceCardType firstChoice in CardTypeExtensions.ResourceTypes)
             {
-                if (firstChoice == ResourceCardType.Unknown) continue;
-
-                foreach (var secondChoice in CardSet<ResourceCardType>.Values)
+                foreach (ResourceCardType secondChoice in CardTypeExtensions.ResourceTypes)
                 {
-                    if (secondChoice == ResourceCardType.Unknown) continue;
-
                     // Avoid adding the same pair twice
                     if (firstChoice > secondChoice) continue;
 
-                    YearOfPlentyAction action = new(playerIdx, firstChoice, secondChoice);
+                    bool bankHasCards = firstChoice == secondChoice
+                        ? state.ResourceBank.Contains(firstChoice, 2)
+                        : state.ResourceBank.Contains(firstChoice, 1) && state.ResourceBank.Contains(secondChoice, 1);
 
-                    if (action.IsBoardValid(state))
+                    if (bankHasCards)
                     {
-                        actions.Add(action);
+                        actions.Add(new YearOfPlentyAction(playerIdx, firstChoice, secondChoice));
                     }
                 }
             }

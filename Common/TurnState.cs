@@ -28,7 +28,7 @@ namespace Common
         [YamlIgnore]
         public bool MustDiscard
         {
-            get { return AwaitedPlayerDiscards.Any(x => x); }
+            get { return Array.IndexOf(AwaitedPlayerDiscards, true) >= 0; }
         }
         public bool MustMoveRobber { get; set; }
 

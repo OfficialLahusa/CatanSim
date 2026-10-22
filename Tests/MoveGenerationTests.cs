@@ -55,8 +55,20 @@ namespace Tests
             {
                 sbyte playerIdx = (sbyte)random.Next(4);
                 GameState state = TestUtil.EmptyNormalTurn(playerIdx);
-                foreach (ResourceCardType type in CardSet<ResourceCardType>.Values.Where(t => t != ResourceCardType.Unknown))
-                    TestUtil.GiveCards(state, playerIdx, type, 3);
+                foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
+                {
+                    TestUtil.GiveCards(state, playerIdx, type, (uint)random.Next(6));
+                    if (random.Next(4) == 0) state.ResourceBank.Remove(type, state.ResourceBank.Get(type) - (uint)random.Next(3));
+                }
+                state.Players[playerIdx].PortPrivileges = (PortPrivileges)random.Next(64);
+                foreach (DevelopmentCardType card in new[] { DevelopmentCardType.YearOfPlenty, DevelopmentCardType.Monopoly })
+                {
+                    if (random.Next(2) == 0) continue;
+                    state.DevelopmentBank.Remove(card, 1);
+                    state.Players[playerIdx].DevelopmentCards.Add(card, 1);
+                    if (random.Next(3) == 0) state.Players[playerIdx].NewDevelopmentCards.Add(card, 1);
+                }
+                state.Turn.MustMoveRobber = random.Next(4) == 0;
 
                 // Overwrites included, so buildings and roads also change owner or disappear again
                 int writes = random.Next(1, 60);
@@ -205,6 +217,38 @@ namespace Tests
                 Enumerable.Range(0, intersections).Where(i => new FirstInitialSettlementAction(playerIdx, i).IsValidFor(state)), context, "first setup settlements");
             AssertSame(SecondInitialSettlementAction.GetActionsForState(state, playerIdx).Cast<SecondInitialSettlementAction>().Select(a => a.IntersectionIndex),
                 Enumerable.Range(0, intersections).Where(i => new SecondInitialSettlementAction(playerIdx, i).IsValidFor(state)), context, "second setup settlements");
+
+            // Robber: tile and victim (none = -1) as one number
+            AssertSame(RobberAction.GetActionsForState(state, playerIdx).Cast<RobberAction>().Select(a => a.TargetTileIndex * 8 + (a.TargetPlayerIndex ?? -1) + 1),
+                from tile in Enumerable.Range(0, state.Board.Map.Length)
+                from target in Enumerable.Range(-1, state.Players.Length + 1)
+                where new RobberAction(playerIdx, tile, target < 0 ? null : (sbyte)target).IsValidFor(state)
+                select tile * 8 + target + 1, context, "robber moves");
+
+            // Trades: input and output as one number
+            ResourceCardType[] resources = CardTypeExtensions.ResourceTypes;
+            AssertSame(FourToOneTradeAction.GetActionsForState(state, playerIdx).Cast<FourToOneTradeAction>().Select(a => (int)a.InputType * 8 + (int)a.OutputType),
+                from input in resources from output in resources where new FourToOneTradeAction(playerIdx, input, output).IsValidFor(state) select (int)input * 8 + (int)output,
+                context, "4:1 trades");
+            AssertSame(ThreeToOneTradeAction.GetActionsForState(state, playerIdx).Cast<ThreeToOneTradeAction>().Select(a => (int)a.InputType * 8 + (int)a.OutputType),
+                from input in resources from output in resources where new ThreeToOneTradeAction(playerIdx, input, output).IsValidFor(state) select (int)input * 8 + (int)output,
+                context, "3:1 trades");
+            AssertSame(TwoToOneTradeAction.GetActionsForState(state, playerIdx).Cast<TwoToOneTradeAction>().Select(a => (int)a.InputType * 8 + (int)a.OutputType),
+                from input in resources from output in resources where new TwoToOneTradeAction(playerIdx, input, output).IsValidFor(state) select (int)input * 8 + (int)output,
+                context, "2:1 trades");
+
+            // Development cards: Year of Plenty pairs (second choice null = 7) and Monopoly resources
+            IEnumerable<int> plenty = from first in resources from second in resources
+                                      where first <= second && new YearOfPlentyAction(playerIdx, first, second).IsValidFor(state)
+                                      select (int)first * 8 + (int)second;
+            if (state.ResourceBank.Count() == 1)
+                plenty = plenty.Concat(resources.Where(r => state.ResourceBank.Get(r) == 1 && new YearOfPlentyAction(playerIdx, r, null).IsValidFor(state)).Select(r => (int)r * 8 + 7));
+            AssertSame(YearOfPlentyAction.GetActionsForState(state, playerIdx).Cast<YearOfPlentyAction>().Select(a => (int)a.FirstChoice * 8 + (int)(a.SecondChoice ?? (ResourceCardType)7)),
+                plenty, context, "Year of Plenty choices");
+            AssertSame(MonopolyAction.GetActionsForState(state, playerIdx).Cast<MonopolyAction>().Select(a => (int)a.ChosenType),
+                resources.Where(r => new MonopolyAction(playerIdx, r).IsValidFor(state)).Select(r => (int)r), context, "Monopoly choices");
+            AssertSame(EndTurnAction.GetActionsForState(state, playerIdx).Select(_ => 0),
+                new EndTurnAction(playerIdx).IsValidFor(state) ? [0] : [], context, "end of turn");
         }
 
         private static void AssertSame(IEnumerable<int> generated, IEnumerable<int> bruteForce, string context, string what)

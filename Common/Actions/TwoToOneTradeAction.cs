@@ -83,39 +83,37 @@ namespace Common.Actions
             bool bankHasOutput = state.ResourceBank.Contains(OutputType, 1);
 
             // Check port privilege
-            bool hasPort = state.Players[PlayerIndex].PortPrivileges.HasFlag(InputType switch
-            {
-                ResourceCardType.Lumber => PortPrivileges.LumberTwoToOne,
-                ResourceCardType.Brick  => PortPrivileges.BrickTwoToOne,
-                ResourceCardType.Wool   => PortPrivileges.WoolTwoToOne,
-                ResourceCardType.Grain  => PortPrivileges.GrainTwoToOne,
-                ResourceCardType.Ore    => PortPrivileges.OreTwoToOne,
-                _ => throw new InvalidOperationException(),
-            });
+            bool hasPort = state.Players[PlayerIndex].PortPrivileges.HasFlag(RequiredPort(InputType));
 
             return cardTypesDiffer && playerHasInput && bankHasOutput && hasPort;
         }
+
+        private static PortPrivileges RequiredPort(ResourceCardType inputType) => inputType switch
+        {
+            ResourceCardType.Lumber => PortPrivileges.LumberTwoToOne,
+            ResourceCardType.Brick  => PortPrivileges.BrickTwoToOne,
+            ResourceCardType.Wool   => PortPrivileges.WoolTwoToOne,
+            ResourceCardType.Grain  => PortPrivileges.GrainTwoToOne,
+            ResourceCardType.Ore    => PortPrivileges.OreTwoToOne,
+            _ => throw new InvalidOperationException(),
+        };
 
         public static List<Action> GetActionsForState(GameState state, sbyte playerIdx)
         {
             List<Action> actions = [];
 
-            if(!IsTurnValid(state.Turn, playerIdx)) return actions;
+            if (!IsTurnValid(state.Turn, playerIdx)) return actions;
 
-            foreach (var inputType in CardSet<ResourceCardType>.Values)
+            // The trades IsBoardValid accepts, without creating the rejected ones
+            CardSet<ResourceCardType> hand = state.Players[playerIdx].ResourceCards;
+            foreach (ResourceCardType inputType in CardTypeExtensions.ResourceTypes)
             {
-                if(inputType == ResourceCardType.Unknown) continue;
+                if (!hand.Contains(inputType, 2) || !state.Players[playerIdx].PortPrivileges.HasFlag(RequiredPort(inputType))) continue;
 
-                foreach (var outputType in CardSet<ResourceCardType>.Values)
+                foreach (ResourceCardType outputType in CardTypeExtensions.ResourceTypes)
                 {
-                    if (outputType == ResourceCardType.Unknown) continue;
-
-                    TwoToOneTradeAction action = new(playerIdx, inputType, outputType);
-
-                    if (action.IsBoardValid(state))
-                    {
-                        actions.Add(action);
-                    }
+                    if (outputType != inputType && state.ResourceBank.Contains(outputType, 1))
+                        actions.Add(new TwoToOneTradeAction(playerIdx, inputType, outputType));
                 }
             }
 

@@ -183,16 +183,31 @@ namespace Common.Actions
 
             if(!IsTurnValid(state.Turn, playerIdx)) return actions;
 
+            // The actions IsBoardValid accepts for every tile and target, without creating the rejected ones
             for(int tileIdx = 0; tileIdx < state.Board.Map.Length; tileIdx++)
             {
-                for(sbyte targetPlayerIdx = -1; targetPlayerIdx < state.Players.Length; targetPlayerIdx++)
-                {
-                    RobberAction action = new(playerIdx, tileIdx, targetPlayerIdx < 0 ? null : targetPlayerIdx);
+                Tile tile = state.Board.Map.Values[tileIdx];
+                if (!tile.IsLandTile() || state.Board.HasRobber(tile)) continue;
 
-                    if(action.IsBoardValid(state))
-                    {
-                        actions.Add(action);
-                    }
+                // Bit per other owner of a building on the tile (a building without owner counts as someone else)
+                UInt128 corners = state.Board.Adjacency.GetCornerMask(tile) & state.Board.BuildingMask;
+                int otherOwners = 0;
+                for (int ownerIdx = 0; ownerIdx < state.Players.Length && corners != UInt128.Zero; ownerIdx++)
+                {
+                    UInt128 owned = corners & state.Board.GetBuildingMask(ownerIdx);
+                    if (owned != UInt128.Zero && ownerIdx != playerIdx) otherOwners |= 1 << ownerIdx;
+                    corners &= ~owned;
+                }
+                if (corners != UInt128.Zero) otherOwners |= 1 << 31;
+
+                // Without victims the robber steals from nobody, otherwise from one of them
+                if (otherOwners == 0)
+                    actions.Add(new RobberAction(playerIdx, tileIdx, null));
+
+                for(sbyte targetPlayerIdx = 0; targetPlayerIdx < state.Players.Length; targetPlayerIdx++)
+                {
+                    if ((otherOwners & (1 << targetPlayerIdx)) != 0)
+                        actions.Add(new RobberAction(playerIdx, tileIdx, targetPlayerIdx));
                 }
             }
 

@@ -278,6 +278,14 @@ namespace Common
             }
         }
 
+        /// <summary>
+        /// Mask of the intersections at the corners of a tile
+        /// </summary>
+        public UInt128 GetCornerMask(Tile tile)
+        {
+            return _topology.GetDerived(this).TileCornerMasks[GetIndexByTile(tile)];
+        }
+
         public (Intersection top, Intersection bottom) GetIntersections(Edge edge)
         {
             (int top, int bottom) = GetIntersectionIndices(edge.Index);
@@ -494,10 +502,15 @@ namespace Common
             public readonly UInt128[] IntersectionEdgeMasks;
             public readonly UInt128[] IntersectionNeighborMasks;
 
-            private Derived((AdjIdx top, AdjIdx bottom)[] edgeEnds, AdjIdx[][] intersectionEdges)
+            // Dim 1: Source tile
+            // Stored: Mask of the intersections at its corners
+            public readonly UInt128[] TileCornerMasks;
+
+            private Derived((AdjIdx top, AdjIdx bottom)[] edgeEnds, AdjIdx[][] intersectionEdges, UInt128[] tileCornerMasks)
             {
                 EdgeEnds = edgeEnds;
                 IntersectionEdges = intersectionEdges;
+                TileCornerMasks = tileCornerMasks;
 
                 EdgeEndMasks = new UInt128[edgeEnds.Length];
                 for (int edgeIdx = 0; edgeIdx < edgeEnds.Length; edgeIdx++)
@@ -559,7 +572,19 @@ namespace Common
                     intersectionEdges[intersection.Index] = adjacentEdges.ToArray();
                 }
 
-                return new Derived(edgeEnds, intersectionEdges);
+                var tileCornerMasks = new UInt128[view._topology.TileToIntersection.Length];
+                for (int tileIdx = 0; tileIdx < tileCornerMasks.Length; tileIdx++)
+                {
+                    if (view._topology.TileToIntersection[tileIdx] == null) continue;
+
+                    foreach (AdjIdx intersectionIdx in view._topology.TileToIntersection[tileIdx])
+                    {
+                        if (intersectionIdx != NO_ADJACENCY)
+                            tileCornerMasks[tileIdx] |= BitMask.Bit(intersectionIdx);
+                    }
+                }
+
+                return new Derived(edgeEnds, intersectionEdges, tileCornerMasks);
             }
         }
 

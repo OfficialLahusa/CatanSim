@@ -257,6 +257,12 @@ namespace Common
 
     public static class CardTypeExtensions
     {
+        /// <summary>
+        /// The five resource types, without Unknown
+        /// </summary>
+        public static readonly ResourceCardType[] ResourceTypes =
+            [ResourceCardType.Lumber, ResourceCardType.Brick, ResourceCardType.Wool, ResourceCardType.Grain, ResourceCardType.Ore];
+
         public static string GetName(this ResourceCardType type)
         {
             return type switch

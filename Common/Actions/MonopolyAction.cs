@@ -122,17 +122,12 @@ namespace Common.Actions
 
             if (!IsTurnValid(state.Turn, playerIdx)) return actions;
 
-            foreach (var resourceType in CardSet<ResourceCardType>.Values)
+            // Validity doesn't depend on the chosen resource, so one check covers all of them (Unknown is never offered)
+            if (!new MonopolyAction(playerIdx, CardTypeExtensions.ResourceTypes[0]).IsBoardValid(state)) return actions;
+
+            foreach (ResourceCardType resourceType in CardTypeExtensions.ResourceTypes)
             {
-                // Do not allow monopoly on unknown resource type
-                if (resourceType == ResourceCardType.Unknown) continue;
-
-                MonopolyAction action = new(playerIdx, resourceType);
-
-                if(action.IsBoardValid(state))
-                {
-                    actions.Add(action);
-                }
+                actions.Add(new MonopolyAction(playerIdx, resourceType));
             }
 
             return actions;

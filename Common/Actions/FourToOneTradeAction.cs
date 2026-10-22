@@ -91,20 +91,16 @@ namespace Common.Actions
 
             if (!IsTurnValid(state.Turn, playerIdx)) return actions;
 
-            foreach (var inputType in CardSet<ResourceCardType>.Values)
+            // The trades IsBoardValid accepts, without creating the rejected ones
+            CardSet<ResourceCardType> hand = state.Players[playerIdx].ResourceCards;
+            foreach (ResourceCardType inputType in CardTypeExtensions.ResourceTypes)
             {
-                if (inputType == ResourceCardType.Unknown) continue;
+                if (!hand.Contains(inputType, 4)) continue;
 
-                foreach (var outputType in CardSet<ResourceCardType>.Values)
+                foreach (ResourceCardType outputType in CardTypeExtensions.ResourceTypes)
                 {
-                    if (outputType == ResourceCardType.Unknown) continue;
-
-                    FourToOneTradeAction action = new(playerIdx, inputType, outputType);
-
-                    if (action.IsBoardValid(state))
-                    {
-                        actions.Add(action);
-                    }
+                    if (outputType != inputType && state.ResourceBank.Contains(outputType, 1))
+                        actions.Add(new FourToOneTradeAction(playerIdx, inputType, outputType));
                 }
             }
 
