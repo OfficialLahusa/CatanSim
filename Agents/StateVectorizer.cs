@@ -12,7 +12,10 @@ namespace Agents
     public class StateVectorizer : IStateVectorizer
     {
         // Length of the feature vector produced by Vectorize for the classic 4-player board
-        public const int FeatureDim = 1609;
+        public const int FeatureDim = 1608;
+
+        // The setup rounds count the round counter up to 2, so the first normal round is 2
+        private const int FirstNormalRound = 2;
 
         // Enum values are cached, Enum.GetValues allocates a new array on every call
         private static readonly ResourceCardType[] ResourceTypes = Enum.GetValues<ResourceCardType>();
@@ -76,10 +79,11 @@ namespace Agents
 
         private void EncodeTurn(GameState state, ref FeatureWriter writer)
         {
-            writer.Add(state.Turn.RoundCounter);
-
-            // Only the total of the last roll affects the game, so equivalent rolls get identical features
-            writer.Add(state.Turn.LastRoll.Total);
+            // The round counter is not encoded by design: no rule depends on it, and a net trained with it used it as a
+            // shortcut for game progress that doesn't carry over to stronger play (the board, hands and VP show progress)
+            // Only the total of the last roll affects the game, so equivalent rolls get identical features.
+            // Before anyone rolled, the last roll is a random placeholder and encoded as 0.
+            writer.Add(HasRolled(state.Turn) ? state.Turn.LastRoll.Total : 0);
 
             writer.OneHot(state.Turn.PlayerIndex, state.Players.Length);
             writer.OneHot(_roundTypeVocab, state.Turn.TypeOfRound);
@@ -93,6 +97,16 @@ namespace Agents
             writer.Add(state.Turn.MustMoveRobber);
             writer.Add(state.Turn.HasPlayedDevelopmentCard);
         }
+
+        /// <summary>
+        /// Whether the last roll is a real roll: not during the setup rounds and not in the first normal turn before its roll
+        /// </summary>
+        private static bool HasRolled(TurnState turn) => turn.TypeOfRound switch
+        {
+            TurnState.RoundType.FirstInitial or TurnState.RoundType.SecondInitial => false,
+            TurnState.RoundType.Normal => !(turn.RoundCounter == FirstNormalRound && turn.PlayerIndex == 0 && turn.MustRoll),
+            _ => true
+        };
 
         private void EncodeBoard(GameState state, ref FeatureWriter writer)
         {

@@ -43,6 +43,32 @@ namespace Tests
         }
 
         [Fact]
+        public void TheLastRollCountsOnlyOnceSomeoneRolled()
+        {
+            TestUtil.Seed(94);
+            GameState state = TestUtil.NewGame();
+
+            float[] WithRoll(GameState s, byte total)
+            {
+                GameState changed = new GameState(s);
+                changed.Turn.LastRoll = new RollResult { First = (byte)(total - 1), Second = 1 };
+                return Vectorize(changed);
+            }
+
+            // During setup the last roll is a random placeholder
+            Assert.Equal(WithRoll(state, 5), WithRoll(state, 9));
+
+            // So it is in the first normal turn before its roll
+            Assert.True(TestUtil.PlayUntil(state, s => s.Turn.TypeOfRound == TurnState.RoundType.Normal));
+            Assert.True(state.Turn.MustRoll);
+            Assert.Equal(WithRoll(state, 5), WithRoll(state, 9));
+
+            // After the roll it counts
+            Assert.True(TestUtil.PlayUntil(state, s => !s.Turn.MustRoll));
+            Assert.NotEqual(WithRoll(state, 5), WithRoll(state, 9));
+        }
+
+        [Fact]
         public void TileFeaturesFollowTheMapStorageOrder()
         {
             TestUtil.Seed(92);

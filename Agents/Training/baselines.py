@@ -29,9 +29,9 @@ import torch.nn.functional as F
 # below were computed via state_yaml_to_tensor.get_feature_layout() against
 # the current encoding -- do not hand-edit; if the encoding changes,
 # regenerate these via the snippet at the bottom of this file instead.
-PLAYER_BLOCK_STARTS = [1469, 1504, 1539, 1574]
+PLAYER_BLOCK_STARTS = [1468, 1503, 1538, 1573]
 VP_FIELDS_PER_PLAYER = 5  # first 5 floats of each player block
-EXPECTED_VECTOR_DIM = 1609
+EXPECTED_VECTOR_DIM = 1608
 
 VP_SMOOTHING_ALPHA = 1.0  # Laplace smoothing: avoids exact-zero probabilities
                           # (e.g. a player with 0 VP) and naturally falls back

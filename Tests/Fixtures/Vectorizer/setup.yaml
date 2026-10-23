@@ -6,7 +6,7 @@ GameState:
   Turn:
     RoundCounter: 1
     LastRoll:
-      First: 5
+      First: 3
       Second: 6
     PlayerIndex: 3
     TypeOfRound: SecondInitial
@@ -20,8 +20,8 @@ GameState:
     HasPlayedDevelopmentCard: false
   Board:
     Robber:
-      X: 4
-      Y: 3
+      X: 2
+      Y: 1
       Type: Desert
       Number: 
     Map:
@@ -64,45 +64,45 @@ GameState:
         Number: 
       - X: 2
         Y: 1
-        Type: Wool
-        Number: 6
+        Type: Desert
+        Number: 
       - X: 3
         Y: 1
-        Type: Wool
-        Number: 11
+        Type: Brick
+        Number: 6
       - X: 4
         Y: 1
+        Type: Lumber
+        Number: 10
+      - X: 5
+        Y: 1
+        Type: Water
+        Number: 
+      - X: 6
+        Y: 1
+        Type: NonPlayable
+        Number: 
+      - X: 0
+        Y: 2
+        Type: Water
+        Number: 
+      - X: 1
+        Y: 2
+        Type: Brick
+        Number: 11
+      - X: 2
+        Y: 2
+        Type: Lumber
+        Number: 9
+      - X: 3
+        Y: 2
+        Type: Ore
+        Number: 9
+      - X: 4
+        Y: 2
         Type: Wool
         Number: 2
       - X: 5
-        Y: 1
-        Type: Water
-        Number: 
-      - X: 6
-        Y: 1
-        Type: NonPlayable
-        Number: 
-      - X: 0
-        Y: 2
-        Type: Water
-        Number: 
-      - X: 1
-        Y: 2
-        Type: Lumber
-        Number: 9
-      - X: 2
-        Y: 2
-        Type: Ore
-        Number: 4
-      - X: 3
-        Y: 2
-        Type: Ore
-        Number: 8
-      - X: 4
-        Y: 2
-        Type: Lumber
-        Number: 9
-      - X: 5
         Y: 2
         Type: Water
         Number: 
@@ -116,24 +116,24 @@ GameState:
         Number: 
       - X: 1
         Y: 3
-        Type: Brick
-        Number: 3
-      - X: 2
-        Y: 3
-        Type: Grain
-        Number: 11
-      - X: 3
-        Y: 3
-        Type: Grain
+        Type: Lumber
         Number: 5
-      - X: 4
+      - X: 2
         Y: 3
-        Type: Desert
-        Number: 
-      - X: 5
+        Type: Grain
+        Number: 8
+      - X: 3
+        Y: 3
+        Type: Grain
+        Number: 12
+      - X: 4
         Y: 3
         Type: Wool
-        Number: 12
+        Number: 3
+      - X: 5
+        Y: 3
+        Type: Grain
+        Number: 3
       - X: 6
         Y: 3
         Type: Water
@@ -144,20 +144,20 @@ GameState:
         Number: 
       - X: 1
         Y: 4
-        Type: Ore
+        Type: Wool
         Number: 10
       - X: 2
         Y: 4
-        Type: Grain
-        Number: 5
+        Type: Ore
+        Number: 11
       - X: 3
         Y: 4
-        Type: Brick
-        Number: 10
+        Type: Lumber
+        Number: 6
       - X: 4
         Y: 4
-        Type: Lumber
-        Number: 8
+        Type: Brick
+        Number: 4
       - X: 5
         Y: 4
         Type: Water
@@ -176,15 +176,15 @@ GameState:
         Number: 
       - X: 2
         Y: 5
-        Type: Grain
-        Number: 3
+        Type: Ore
+        Number: 8
       - X: 3
         Y: 5
-        Type: Brick
-        Number: 6
+        Type: Grain
+        Number: 5
       - X: 4
         Y: 5
-        Type: Lumber
+        Type: Wool
         Number: 4
       - X: 5
         Y: 5
@@ -267,16 +267,16 @@ GameState:
       Owner: -1
     - Index: 10
       FacesDownwards: false
-      Building: Settlement
-      Owner: 1
+      Building: None
+      Owner: -1
     - Index: 11
       FacesDownwards: true
       Building: None
       Owner: -1
     - Index: 12
       FacesDownwards: false
-      Building: Settlement
-      Owner: 0
+      Building: None
+      Owner: -1
     - Index: 13
       FacesDownwards: true
       Building: None
@@ -287,8 +287,8 @@ GameState:
       Owner: -1
     - Index: 15
       FacesDownwards: true
-      Building: None
-      Owner: -1
+      Building: Settlement
+      Owner: 2
     - Index: 16
       FacesDownwards: false
       Building: None
@@ -327,16 +327,16 @@ GameState:
       Owner: -1
     - Index: 25
       FacesDownwards: false
-      Building: Settlement
-      Owner: 2
+      Building: None
+      Owner: -1
     - Index: 26
       FacesDownwards: true
       Building: None
       Owner: -1
     - Index: 27
       FacesDownwards: false
-      Building: None
-      Owner: -1
+      Building: Settlement
+      Owner: 3
     - Index: 28
       FacesDownwards: true
       Building: None
@@ -423,20 +423,20 @@ GameState:
       Owner: -1
     - Index: 49
       FacesDownwards: true
-      Building: None
-      Owner: -1
+      Building: Settlement
+      Owner: 1
     - Index: 50
       FacesDownwards: false
       Building: None
       Owner: -1
     - Index: 51
       FacesDownwards: true
-      Building: Settlement
-      Owner: 3
-    - Index: 52
-      FacesDownwards: false
       Building: None
       Owner: -1
+    - Index: 52
+      FacesDownwards: false
+      Building: Settlement
+      Owner: 0
     - Index: 53
       FacesDownwards: true
       Building: None
@@ -492,12 +492,12 @@ GameState:
       Owner: -1
     - Index: 12
       Direction: LeftTop
-      Building: Road
-      Owner: 1
+      Building: None
+      Owner: -1
     - Index: 13
       Direction: UpDown
-      Building: Road
-      Owner: 0
+      Building: None
+      Owner: -1
     - Index: 14
       Direction: RightTop
       Building: None
@@ -508,8 +508,8 @@ GameState:
       Owner: -1
     - Index: 16
       Direction: UpDown
-      Building: None
-      Owner: -1
+      Building: Road
+      Owner: 2
     - Index: 17
       Direction: RightTop
       Building: None
@@ -584,8 +584,8 @@ GameState:
       Owner: -1
     - Index: 35
       Direction: LeftTop
-      Building: Road
-      Owner: 2
+      Building: None
+      Owner: -1
     - Index: 36
       Direction: UpDown
       Building: None
@@ -596,8 +596,8 @@ GameState:
       Owner: -1
     - Index: 38
       Direction: LeftTop
-      Building: None
-      Owner: -1
+      Building: Road
+      Owner: 3
     - Index: 39
       Direction: UpDown
       Building: None
@@ -704,8 +704,8 @@ GameState:
       Owner: -1
     - Index: 65
       Direction: LeftTop
-      Building: None
-      Owner: -1
+      Building: Road
+      Owner: 1
     - Index: 66
       Direction: UpDown
       Building: None
@@ -716,16 +716,16 @@ GameState:
       Owner: -1
     - Index: 68
       Direction: LeftTop
-      Building: Road
-      Owner: 3
+      Building: None
+      Owner: -1
     - Index: 69
       Direction: UpDown
       Building: None
       Owner: -1
     - Index: 70
       Direction: RightTop
-      Building: None
-      Owner: -1
+      Building: Road
+      Owner: 0
     - Index: 71
       Direction: LeftTop
       Building: None
@@ -734,19 +734,19 @@ GameState:
     - AnchorTileX: 0
       AnchorTileY: 2
       AnchorDirection: East
-      Type: Generic
+      Type: Ore
     - AnchorTileX: 1
       AnchorTileY: 0
       AnchorDirection: SouthEast
-      Type: Ore
+      Type: Lumber
     - AnchorTileX: 3
       AnchorTileY: 0
       AnchorDirection: SouthWest
-      Type: Wool
+      Type: Generic
     - AnchorTileX: 5
       AnchorTileY: 1
       AnchorDirection: SouthWest
-      Type: Lumber
+      Type: Wool
     - AnchorTileX: 6
       AnchorTileY: 3
       AnchorDirection: West
@@ -758,15 +758,15 @@ GameState:
     - AnchorTileX: 3
       AnchorTileY: 6
       AnchorDirection: NorthWest
-      Type: Brick
+      Type: Grain
     - AnchorTileX: 1
       AnchorTileY: 6
       AnchorDirection: NorthEast
-      Type: Generic
+      Type: Brick
     - AnchorTileX: 0
       AnchorTileY: 4
       AnchorDirection: East
-      Type: Grain
+      Type: Generic
     Adjacency:
       TileToTile:
       - - 255
@@ -1872,76 +1872,6 @@ GameState:
       RemainingSettlements: 4
       RemainingCities: 4
       FreeRoads: 0
-    PortPrivileges: LumberTwoToOne
-  - VictoryPoints:
-      SettlementPoints: 1
-      CityPoints: 0
-      DevelopmentCardPoints: 0
-      LongestRoadPoints: 0
-      LargestArmyPoints: 0
-    PlayedKnights: 0
-    LongestRoadLength: 1
-    ResourceCards:
-      Unknown: 0
-      Lumber: 0
-      Brick: 0
-      Wool: 0
-      Grain: 0
-      Ore: 0
-    DevelopmentCards:
-      Unknown: 0
-      Knight: 0
-      RoadBuilding: 0
-      YearOfPlenty: 0
-      Monopoly: 0
-      VictoryPoint: 0
-    NewDevelopmentCards:
-      Unknown: 0
-      Knight: 0
-      RoadBuilding: 0
-      YearOfPlenty: 0
-      Monopoly: 0
-      VictoryPoint: 0
-    BuildingStock:
-      RemainingRoads: 14
-      RemainingSettlements: 4
-      RemainingCities: 4
-      FreeRoads: 0
-    PortPrivileges: None
-  - VictoryPoints:
-      SettlementPoints: 1
-      CityPoints: 0
-      DevelopmentCardPoints: 0
-      LongestRoadPoints: 0
-      LargestArmyPoints: 0
-    PlayedKnights: 0
-    LongestRoadLength: 1
-    ResourceCards:
-      Unknown: 0
-      Lumber: 0
-      Brick: 0
-      Wool: 0
-      Grain: 0
-      Ore: 0
-    DevelopmentCards:
-      Unknown: 0
-      Knight: 0
-      RoadBuilding: 0
-      YearOfPlenty: 0
-      Monopoly: 0
-      VictoryPoint: 0
-    NewDevelopmentCards:
-      Unknown: 0
-      Knight: 0
-      RoadBuilding: 0
-      YearOfPlenty: 0
-      Monopoly: 0
-      VictoryPoint: 0
-    BuildingStock:
-      RemainingRoads: 14
-      RemainingSettlements: 4
-      RemainingCities: 4
-      FreeRoads: 0
     PortPrivileges: None
   - VictoryPoints:
       SettlementPoints: 1
@@ -1978,29 +1908,99 @@ GameState:
       RemainingCities: 4
       FreeRoads: 0
     PortPrivileges: BrickTwoToOne
+  - VictoryPoints:
+      SettlementPoints: 1
+      CityPoints: 0
+      DevelopmentCardPoints: 0
+      LongestRoadPoints: 0
+      LargestArmyPoints: 0
+    PlayedKnights: 0
+    LongestRoadLength: 1
+    ResourceCards:
+      Unknown: 0
+      Lumber: 0
+      Brick: 0
+      Wool: 0
+      Grain: 0
+      Ore: 0
+    DevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    NewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    BuildingStock:
+      RemainingRoads: 14
+      RemainingSettlements: 4
+      RemainingCities: 4
+      FreeRoads: 0
+    PortPrivileges: OreTwoToOne
+  - VictoryPoints:
+      SettlementPoints: 1
+      CityPoints: 0
+      DevelopmentCardPoints: 0
+      LongestRoadPoints: 0
+      LargestArmyPoints: 0
+    PlayedKnights: 0
+    LongestRoadLength: 1
+    ResourceCards:
+      Unknown: 0
+      Lumber: 0
+      Brick: 0
+      Wool: 0
+      Grain: 0
+      Ore: 0
+    DevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    NewDevelopmentCards:
+      Unknown: 0
+      Knight: 0
+      RoadBuilding: 0
+      YearOfPlenty: 0
+      Monopoly: 0
+      VictoryPoint: 0
+    BuildingStock:
+      RemainingRoads: 14
+      RemainingSettlements: 4
+      RemainingCities: 4
+      FreeRoads: 0
+    PortPrivileges: None
 PlayedActions:
-- IntersectionIndex: 12
+- IntersectionIndex: 52
   PlayerIndex: 0
   ActionType: FirstInitialSettlementAction
-- EdgeIndex: 13
+- EdgeIndex: 70
   PlayerIndex: 0
   ActionType: FirstInitialRoadAction
-- IntersectionIndex: 10
+- IntersectionIndex: 49
   PlayerIndex: 1
   ActionType: FirstInitialSettlementAction
-- EdgeIndex: 12
+- EdgeIndex: 65
   PlayerIndex: 1
   ActionType: FirstInitialRoadAction
-- IntersectionIndex: 25
+- IntersectionIndex: 15
   PlayerIndex: 2
   ActionType: FirstInitialSettlementAction
-- EdgeIndex: 35
+- EdgeIndex: 16
   PlayerIndex: 2
   ActionType: FirstInitialRoadAction
-- IntersectionIndex: 51
+- IntersectionIndex: 27
   PlayerIndex: 3
   ActionType: FirstInitialSettlementAction
-- EdgeIndex: 68
+- EdgeIndex: 38
   PlayerIndex: 3
   ActionType: FirstInitialRoadAction
 UndoHistory: []

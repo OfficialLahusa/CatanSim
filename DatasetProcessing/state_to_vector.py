@@ -1,5 +1,5 @@
 """
-Convert GameState YAML snapshots into a flat fixed-length (currently 1609) numeric feature vector.
+Convert GameState YAML snapshots into a flat fixed-length (currently 1608) numeric feature vector.
 
 Design notes
 ------------
@@ -22,6 +22,12 @@ Design notes
 - Numbers that can be legitimately absent (hex `Number` on water/desert
   tiles) are encoded as (normalized_value, present_flag) pairs so "no
   number" isn't confused with "number == 2".
+- The round counter is not encoded (no rule depends on it, and the net used
+  it as a shortcut), and the last roll is 0 before anyone rolled (until then
+  it is a random placeholder).
+- Counts stay unscaled: a net trained on counts divided to about [0, 1] was
+  clearly worse, most likely because the small count features get drowned
+  out by the many binary board features.
 - Output ordering is 100% deterministic given a fixed board (Width/Height,
   hex count, intersection/edge count, player count), so tensors from
   different snapshots of the *same* map/player-count are directly
@@ -36,7 +42,10 @@ import numpy as np
 import yaml
 
 # Total size of the final GameState feature vector
-FEATURE_DIM = 1609
+FEATURE_DIM = 1608
+
+# The setup rounds count the round counter up to 2, so the first normal round is 2
+FIRST_NORMAL_ROUND = 2
 
 # --------------------------------------------------------------------------
 # Vocabularies for categorical fields.
@@ -206,11 +215,16 @@ def encode_settings(settings: Dict[str, Any]) -> List[float]:
 
 def encode_turn(turn: Dict[str, Any], num_players: int) -> List[float]:
     feats: List[float] = []
-    feats.append(float(turn["RoundCounter"]))
 
-    # Only the total of the last roll affects the game, so equivalent rolls get identical features
-    last_roll = turn.get("LastRoll") or {}
-    feats.append(float((last_roll.get("First") or 0) + (last_roll.get("Second") or 0)))
+    # The round counter is not encoded by design: no rule depends on it, and a net trained with it used it as a
+    # shortcut for game progress that doesn't carry over to stronger play (the board, hands and VP show progress).
+    # Only the total of the last roll affects the game, so equivalent rolls get identical features.
+    # Before anyone rolled, the last roll is a random placeholder and encoded as 0.
+    if has_rolled(turn):
+        last_roll = turn.get("LastRoll") or {}
+        feats.append(float((last_roll.get("First") or 0) + (last_roll.get("Second") or 0)))
+    else:
+        feats.append(0.0)
 
     # PlayerIndex as one-hot (categorical, not ordinal).
     player_idx = turn["PlayerIndex"]
@@ -231,6 +245,16 @@ def encode_turn(turn: Dict[str, Any], num_players: int) -> List[float]:
     feats.extend(bool_feature(turn["MustMoveRobber"]))
     feats.extend(bool_feature(turn["HasPlayedDevelopmentCard"]))
     return feats
+
+
+def has_rolled(turn: Dict[str, Any]) -> bool:
+    """Whether the last roll is a real roll: not during the setup rounds and not in the first normal turn before its roll"""
+    round_type = turn["TypeOfRound"]
+    if round_type in ("FirstInitial", "SecondInitial"):
+        return False
+    if round_type == "Normal":
+        return not (turn["RoundCounter"] == FIRST_NORMAL_ROUND and turn["PlayerIndex"] == 0 and turn["MustRoll"])
+    return True
 
 
 def encode_board(board: Dict[str, Any], num_players: int) -> List[float]:

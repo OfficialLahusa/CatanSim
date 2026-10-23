@@ -62,7 +62,7 @@ class VectorizerParityTest(unittest.TestCase):
             )
 
     def test_equivalent_rolls_give_identical_vectors(self):
-        state = load_state_yaml(fixture_files()[-1])["GameState"]
+        state = load_state_yaml(os.path.join(FIXTURES, "midgame.yaml"))["GameState"]
 
         a = copy.deepcopy(state)
         b = copy.deepcopy(state)
@@ -72,6 +72,24 @@ class VectorizerParityTest(unittest.TestCase):
 
         b["Turn"]["LastRoll"] = {"First": 2, "Second": 6}
         self.assertNotEqual(state_to_feature_vector(a), state_to_feature_vector(b))
+
+
+    def test_the_last_roll_counts_only_once_someone_rolled(self):
+        def with_roll(state, total):
+            changed = copy.deepcopy(state)
+            changed["Turn"]["LastRoll"] = {"First": total - 1, "Second": 1}
+            return state_to_feature_vector(changed)
+
+        # During setup and in the first normal turn before its roll, the last roll is a random placeholder
+        setup = load_state_yaml(os.path.join(FIXTURES, "setup.yaml"))["GameState"]
+        self.assertEqual(with_roll(setup, 5), with_roll(setup, 9))
+
+        first_turn = copy.deepcopy(setup)
+        first_turn["Turn"].update({"TypeOfRound": "Normal", "RoundCounter": 2, "PlayerIndex": 0, "MustRoll": True})
+        self.assertEqual(with_roll(first_turn, 5), with_roll(first_turn, 9))
+
+        first_turn["Turn"]["MustRoll"] = False
+        self.assertNotEqual(with_roll(first_turn, 5), with_roll(first_turn, 9))
 
 
 class SaveFileLoadingTest(unittest.TestCase):
