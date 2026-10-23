@@ -2,6 +2,8 @@ import os
 import glob
 from datetime import datetime
 
+from playout_results import load_match_seeds
+
 def rreplace(s, old, new, n):
     """Replace the n rightmost occurrences of a string in the given string"""
     li = s.rsplit(old, n)
@@ -11,7 +13,8 @@ def build_dataset_index(base_path):
     # Subdirectories im Base Path finden und prüfen, ob sie .yaml-Files enthalten
     # Außerdem prüfen, ob es zu jedem .yaml-GameState eine gleichnamige .txt-Datei mit den zugehörigen Win Percentages gibt 
     non_empty_subdirs = []
-    for subdir in next(os.walk(base_path))[1]:
+    # Sortiert, damit Index und Split nicht von der Reihenfolge im Dateisystem abhängen
+    for subdir in sorted(next(os.walk(base_path))[1]):
         yaml_files = glob.glob(os.path.join(base_path, subdir, "input/*.yaml"))
         txt_files = glob.glob(os.path.join(base_path, subdir, "output/*.txt"))
         if len(yaml_files) > 0:
@@ -48,11 +51,14 @@ def build_dataset_index(base_path):
     # Index aus nicht-leeren Subdirectories aufbauen
     index = []
 
-    next_group_idx = -1
+    # Gruppen-IDs: der Match-Seed, sofern der Collector Rohergebnisse geschrieben hat (eindeutig auch über mehrere Runs hinweg),
+    # sonst der Run-Index im Subdirectory. Beide werden auf fortlaufende Indices abgebildet.
+    group_indices = {}
     next_idx = 0
 
     for subdir in non_empty_subdirs:
         subdir_name = os.path.basename(subdir)
+        match_seeds = load_match_seeds(os.path.join(base_path, subdir))
 
         # Dateien in Subdir auflisten
         files = glob.glob(os.path.join(base_path, subdir, "input/*.yaml"))
@@ -78,24 +84,17 @@ def build_dataset_index(base_path):
 
         #print(*files_in_subdir, sep="\n")
 
-        last_seen_run = -1
         # Dateinamen gruppieren und indizieren
         for entry in files_in_subdir:
             full_path, run_idx_in_subdir, state_idx_in_run = entry
-            group_idx = None
-            entry_idx = None
+            entry_name = os.path.splitext(os.path.basename(full_path))[0]
 
-            # Schauen ob wir noch an der gleichen Gruppe sitzen, sonst neuen Index zuweisen
-            if run_idx_in_subdir != last_seen_run:
-                next_group_idx += 1
-                last_seen_run = run_idx_in_subdir
-            group_idx = next_group_idx
+            group_key = ("seed", match_seeds[entry_name]) if entry_name in match_seeds else ("run", subdir_name, run_idx_in_subdir)
+            group_idx = group_indices.setdefault(group_key, len(group_indices))
 
             # Entry neuen Index geben
             entry_idx = next_idx
             next_idx += 1
-            
-            entry_name = os.path.splitext(os.path.basename(full_path))[0]
 
             # Zu Index hinzufügen (Idx, GroupIdx, SubDir, EntryName)
             index.append([entry_idx, group_idx, subdir_name, entry_name])

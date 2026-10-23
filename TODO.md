@@ -54,37 +54,17 @@
 
 ## Agents
 - Datensatz v2 (nächster Server-Run)
-	- Agents für Matches und Playouts: gemischte Population statt nur Random (z.B. 30% Random, 35% SimpleAgent-ε, 35% BuilderAgent-ε, ε = 10-20% zufällige Moves, Agent pro Sitz zufällig)
-		- Random-Winrates unterschätzen Pläne, die Random nie ausführt (Städte/Ore, Dev Cards, Ports), und das wirkt direkt auf die Setup-Entscheidungen
-		- Gemessen (je 2000 Spiele): BuilderAgent gewinnt 100% gegen 3 Random und 91% gegen 3 SimpleAgents, Playouts sind 1,6-4x schneller als Random
-	- Pro Playout die Rohergebnisse speichern (Gewinner, finale VP pro Spieler, Spiellänge in Runden), Labels erst in Python ableiten
-		- Daraus Platzierungsverteilung P(1. bis 4.) (Gleichstände anteilig verteilen), finalen VP-Anteil und Runden bis Spielende
-		- Später neue Labels ohne neuen Run möglich, Anzahl beendeter Playouts zum Gewichten bleibt erhalten
-	- Sampling: k States pro Match gleichverteilt über alle Positionen 0..N, leeres Board und Terminal State eingeschlossen
-		- Beide nur noch mit der normalen Wahrscheinlichkeit k/(N+1) statt garantiert (derzeit 40% der Samples bei k=5)
-		- Terminal States ohne Playouts labeln (Gewinner, finale VP und Platzierung stehen fest)
-		- Feste k pro Match statt fester Wahrscheinlichkeit pro State (mehr Maps, weniger korrelierte Samples), dafür Position im Match und Matchlänge pro Sample speichern, um beim Training umgewichten zu können
+	- Collector ist fertig: gemischte Agents mit ε, k States pro Match gleichverteilt, Rohergebnisse pro Playout, Match-Seeds als Gruppen, metadata.json, --threads auto
+		- Aufruf z.B. DatasetCollector --matches 200000 --samples 5 --playouts 300 --threads auto (alle Optionen mit --help)
+		- Gemessen auf dem Desktop (32 Threads, 300 Playouts): ~74k Playouts/s mit dem Default-Mix, ~35k nur mit Random
 	- Mehr States mit weniger Playouts pro State (z.B. 300 statt 1000, bei 50% ~2,9 statt ~1,6 pp Standardfehler), plus kleines Präzisions-Set (20-50k States mit 2000+ Playouts) für Evaluation und Kalibrierung
-	- Seeds und Gruppen: zufälliger Run-Seed, daraus pro Match ein Seed (z.B. SplitMix64(Run-Seed, Match-Index)), den der Collector direkt als Gruppen-ID pro Sample schreibt
-		- Ersetzt die Gruppierung in build_dataset_index.py (hängt bisher von der Verzeichnisreihenfolge ab), Gruppen bleiben beim Zusammenführen mehrerer Runs eindeutig
-		- Match-Seed reproduziert Map und Match (Playouts laufen parallel und bleiben nicht reproduzierbar)
-	- Seed, Collector-Einstellungen und Commit-Hash als Metadaten neben dem Datensatz speichern
-	- Kalibrierungsmodus im Collector: kurze zeitbegrenzte Läufe mit den echten Einstellungen und mehreren Thread-Anzahlen (z.B. alle, 3/4, 1/2, 1/4 der logischen Kerne), die schnellste übernehmen
-		- Abgebrochene Matches am Ende jedes Laufs verwerfen statt zu Ende zu spielen, Ausgabe in ein temporäres Verzeichnis
-		- Messrauschen beachten (±8-15% zwischen Läufen auf dem Desktop), Kandidaten notfalls wiederholen
-	- Einstellungen als Kommandozeilenargumente statt interaktiver Abfrage (Server-Run in tmux/nohup)
-	- Vektor-Bereinigung (RoundCounter raus, LastRoll-Fix, Counts skalieren) vor dem Run, Vektorizer dafür versionieren (Layout v1 für das aktuelle Net, v2 für den neuen Datensatz), damit kein Zwischenschritt mit neuem Modell nötig ist
-		- Die YAML-Samples erlauben späteres Neu-Vektorisieren, die Chunks wären dann veraltet
-	- Platzbedarf: ~185 KB pro Sample (82% Action History), 1M Samples ~185 GB und 2M Dateien
+	- Platzbedarf: ~185 KB pro Sample (82% Action History), 1M Samples ~185 GB und 2M Dateien, Playout-Records 12 Byte pro Playout
 	- Bisherige Datensätze folgen der alten Road-Building-Regel (Straßen erst nach dem Würfeln, beliebig später im Zug), der nächste Run nutzt die korrigierte
+	- Training auf die neuen Labels umstellen: playout_results.py liefert Platzierungsverteilung, VP-Anteil und Runden bis Spielende, train.py nutzt bisher nur win_rates.npy
+		- Umgewichten nach Position im Match / Matchlänge und nach Anzahl beendeter Playouts prüfen
 - Dataset-Pipeline robuster machen
-	- build_dataset_index.py sortiert die Verzeichnisse nicht, Index und Split hängen dadurch vom Dateisystem ab
 	- Fehlende .txt-Labels fallen erst nach der langen Vektorisierung auf, vorher prüfen
-	- RoundCounter unnormalisiert, wird unter bf16-mixed grob quantisiert
-		- Das Net nutzt ihn als Abkürzung: nur RoundCounter ändern verschiebt die Winrates im Mittel um 5-10 pp (max 59 pp), der Favorit wechselt in 8-15% der States
-		- Regeln hängen nicht davon ab => in v2 rauswerfen bzw. durch Fortschritts-Features ersetzen (VP auf dem Brett, restlicher Building Stock), verzerrt in MCTS sonst EndTurn gegen Weiterbauen
 	- Regenerierungs-Snippet in baselines.py verweist auf Funktionen, die es nicht gibt
-	- TurnState initialisiert LastRoll bei neuen Spielen zufällig => Rauschen in den Features während des Setups
 - Agents/env: OpenMP-Konflikt (libiomp5md.dll von conda-MKL und torch), torch läuft nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren oder Duplikat entfernen
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Größter Hebel: im Setup reicht die Suche nicht über den eigenen Zug hinaus (PV = Settlement + Road), die Entscheidung ist praktisch eine 1-Ply-Bewertung des Nets
@@ -97,14 +77,12 @@
 	- Click auf Node lädt dortiges State
 	- Color Coding nach Anzahl Visits
 - Branching Factor Histogramm aus Playouts generieren
-- HandleAction(Action), ResetToState(GameState) noch im DatasetCollector aufrufen
-	- Dort laufen derzeit nur zustandslose RandomAgents, nötig sobald zustandsbehaftete Agents (z.B. MCTS) Daten erzeugen
-	- Achtung: die Agents werden dort von allen Playout-Threads geteilt, zustandsbehaftete Agents brauchen eine Instanz pro Playout
-	- Update immer erst aufrufen, wenn die Action schon ihre History in der authoritativen Simulation erhalten hat, damit es deterministisch ist
 - StateValueNetv2
 	- v2 erstmal auf v1 basiert mit Player/Tile Encoderblöcken, Embeddings statt OneHot, GraphConv auf v3 schieben
 	- State Vectorizer über push/pop Architektur eine Index-Aufschlüsselung generieren lassen
-	- Abgeleitete Features: Produktion pro Spieler und Ressource (Pips, Räuber), Hafenzugang, "kann X bauen"-Flags, alle Counts auf ~[0, 1] skalieren
+	- Abgeleitete Features: Produktion pro Spieler und Ressource (Pips, Räuber), Hafenzugang, "kann X bauen"-Flags
+	- Counts nur zusammen mit Input-Normalisierung skalieren (z.B. Standardisierung pro Feature oder separater Count-Encoder)
+		- Nur skalieren (/10 bis /19) hat das jetzige MLP klar verschlechtert: val KL 0.087 => 0.094, im MCTS 13:17 gegen das alte Net
 	- Aux Head für Runden bis Spielende (Spielfortschritt lernen ohne RoundCounter)
 	- Unzuverlässige Outputs für sehr weit zurückliegende Spieler addressieren
 		- Ursache sind die Labels: ab 5 VP Rückstand sind 65-87% der Winrates exakt 0 (1000 Playouts lösen < 0.1% nicht auf), das Net ist dort kalibriert, hat aber nichts zu lernen

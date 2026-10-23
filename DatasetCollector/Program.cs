@@ -1,47 +1,45 @@
-﻿using Common;
-
-namespace DatasetCollector
+﻿namespace DatasetCollector
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static int Main(string[] args)
         {
             Console.WriteLine("CettlersOfSatan Dataset Collector");
             Console.WriteLine("=================================");
 
-            // Playouts keep scaling up to all logical cores (per-thread random sources, server GC)
-            uint threadCount = ReadDefaultedUInt32("Thread count", (uint)Environment.ProcessorCount);
-            uint matchCount = ReadDefaultedUInt32("Match count", 100u);
-            uint samplesPerMatch = ReadDefaultedUInt32("Samples per match", 5u);
-            uint playoutsPerSample = ReadDefaultedUInt32("Playouts per sample", 1000u);
-            int seed = ReadDefaultedInt32("Seed", Guid.NewGuid().GetHashCode());
-
-            Utils.Random = new ThreadSafeRandom(seed);
-
-            DatasetCollector collector = new DatasetCollector(threadCount, matchCount, samplesPerMatch, playoutsPerSample);
-            collector.Collect();
-        }
-
-        private static uint ReadDefaultedUInt32(string prompt, uint defaultValue)
-        {
-            Console.Write($"{prompt} (default {defaultValue}): ");
-            string? input = Console.ReadLine();
-            if (string.IsNullOrEmpty(input))
+            CommandLine commandLine;
+            try
             {
-                return defaultValue;
+                commandLine = CommandLine.Parse(args);
             }
-            return Convert.ToUInt32(input);
-        }
-
-        private static int ReadDefaultedInt32(string prompt, int defaultValue)
-        {
-            Console.Write($"{prompt} (default {defaultValue}): ");
-            string? input = Console.ReadLine();
-            if (string.IsNullOrEmpty(input))
+            catch (Exception e) when (e is ArgumentException or FormatException or OverflowException)
             {
-                return defaultValue;
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine();
+                Console.Error.WriteLine(CommandLine.Usage);
+                return 1;
             }
-            return Convert.ToInt32(input);
+
+            if (commandLine.ShowHelp)
+            {
+                Console.WriteLine(CommandLine.Usage);
+                return 0;
+            }
+
+            CollectorSettings settings = commandLine.Settings;
+            if (commandLine.CalibrateThreads)
+            {
+                int threads = ThreadCalibration.FindBestThreadCount(settings, commandLine.CalibrationTime, Console.Out);
+                if (commandLine.CalibrateOnly)
+                {
+                    Console.WriteLine($"\nFastest: --threads {threads}");
+                    return 0;
+                }
+                settings = settings with { Threads = threads };
+            }
+
+            CollectionResult result = new DatasetCollector(settings).Collect();
+            return result.Errors > 0 ? 2 : 0;
         }
     }
 }

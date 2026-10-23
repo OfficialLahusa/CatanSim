@@ -2,6 +2,7 @@ using Agents;
 using Common;
 using Common.Actions;
 using Common.Serialization;
+using DatasetCollector;
 using System.Buffers.Binary;
 using System.Globalization;
 using Action = Common.Actions.Action;
@@ -21,84 +22,185 @@ namespace Tests
         }
 
         [Fact]
-        public void CollectedSamplesAreConsistentGamePrefixesWithValidLabels()
+        public void EverySampleIsAGamePrefixWithMatchingLabelsAndRecords()
         {
-            TestUtil.Seed(150);
-            string workingDirectory = Path.Combine(Path.GetTempPath(), "catansim-collector-" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(workingDirectory);
-            string previousDirectory = Environment.CurrentDirectory;
+            // More samples than positions: every position of the match is sampled, the empty board and the ended match included
+            var settings = new CollectorSettings { Threads = 1, Matches = 1, SamplesPerMatch = 100_000, PlayoutsPerSample = 3, Seed = 150 };
+            string datasetDirectory = CollectIntoTemporaryDirectory(settings, out CollectionResult result);
 
             try
             {
-                // The collector writes relative to the working directory
-                Environment.CurrentDirectory = workingDirectory;
-                new DatasetCollector.DatasetCollector(threadCount: 2, matchCount: 2, samplesPerMatch: 4, playoutsPerSample: 6).Collect();
-            }
-            finally
-            {
-                Environment.CurrentDirectory = previousDirectory;
-            }
-
-            try
-            {
-                string datasetDirectory = Directory.GetDirectories(Path.Combine(workingDirectory, "datasets")).Single();
+                List<SampleRecord> records = ReadSampleRecords(datasetDirectory);
                 string[] samples = Directory.GetFiles(Path.Combine(datasetDirectory, "input"), "*.yaml");
-                Assert.Equal(8, samples.Length);
+                Assert.Equal(records.Count, samples.Length);
+                Assert.Equal(records.Count, result.Samples);
+                Assert.Equal(records[0].MatchLength + 1, records.Count);
+                Assert.Equal(Enumerable.Range(0, records.Count), records.Select(record => record.Position).Order());
 
-                foreach (int match in new[] { 0, 1 })
+                GameState? baseState = null;
+                foreach (SampleRecord record in records)
                 {
-                    List<(SaveFile save, double[] label)> matchSamples = samples
-                        .Where(path => Path.GetFileName(path).StartsWith($"r{match}_"))
-                        .OrderBy(path => path)
-                        .Select(path => (SaveFileSerializer.Deserialize(File.ReadAllText(path)),
-                            File.ReadAllLines(Path.Combine(datasetDirectory, "output", Path.GetFileNameWithoutExtension(path) + ".txt"))
-                                .Where(line => line.Length > 0).Select(line => double.Parse(line, CultureInfo.InvariantCulture)).ToArray()))
-                        .ToList();
-
-                    // Sample 0 is the empty board, the last one the ended game
-                    Assert.Empty(matchSamples[0].save.PlayedActions);
-                    Assert.True(matchSamples[^1].save.GameState.HasEnded);
+                    SaveFile save = SaveFileSerializer.Deserialize(File.ReadAllText(Path.Combine(datasetDirectory, "input", record.Name + ".yaml")));
+                    double[] label = File.ReadAllLines(Path.Combine(datasetDirectory, "output", record.Name + ".txt"))
+                        .Where(line => line.Length > 0).Select(line => double.Parse(line, CultureInfo.InvariantCulture)).ToArray();
 
                     // Each sample stores exactly the actions that led to it: reverting them always reaches the same base state
-                    GameState? baseState = null;
-                    int previousCount = -1;
-                    foreach ((SaveFile save, double[] label) in matchSamples)
+                    Assert.Equal(record.Position, save.PlayedActions.Count);
+                    GameState state = new GameState(save.GameState);
+                    for (int i = save.PlayedActions.Count - 1; i >= 0; i--)
+                        save.PlayedActions[i].Revert(state);
+                    baseState ??= state;
+                    Assert.True(state.Equals(baseState), "a sample's action log does not lead back to the match's base state");
+
+                    Assert.Equal(Seeds.Derive(settings.Seed, 0), record.Group);
+                    Assert.Equal(save.GameState.Turn.RoundCounter, record.Round);
+                    Assert.Equal(record.Position == record.MatchLength, record.Terminal);
+                    Assert.Equal(record.Terminal, save.GameState.HasEnded);
+                    Assert.Equal(TestUtil.PlayerCount, label.Length);
+                    Assert.Equal(1.0, label.Sum(), 9);
+
+                    if (record.Terminal)
                     {
-                        Assert.True(save.PlayedActions.Count > previousCount);
-                        previousCount = save.PlayedActions.Count;
-
-                        GameState state = new GameState(save.GameState);
-                        for (int i = save.PlayedActions.Count - 1; i >= 0; i--)
-                            save.PlayedActions[i].Revert(state);
-
-                        baseState ??= state;
-                        Assert.True(state.Equals(baseState), "a sample's action log does not lead back to the match's base state");
-
-                        Assert.Equal(TestUtil.PlayerCount, label.Length);
-                        Assert.All(label, value => Assert.True(double.IsFinite(value) && value >= 0));
-                        Assert.Equal(1.0, label.Sum(), 9);
+                        // The ended match needs no playouts, its label goes entirely to its winner
+                        Assert.Empty(record.Playouts);
+                        Assert.Equal(save.GameState.Turn.PlayerIndex, record.MatchWinner);
+                        Assert.Equal(1.0, label[record.MatchWinner], 9);
+                        Assert.Equal(save.GameState.Players.Select(player => player.VictoryPoints.Total), record.MatchVictoryPoints);
                     }
-
-                    // The ended game's label goes entirely to its winner
-                    (SaveFile last, double[] lastLabel) = matchSamples[^1];
-                    Assert.Equal(1.0, lastLabel[last.GameState.Turn.PlayerIndex], 9);
+                    else
+                    {
+                        // The label is the win rate over the recorded playouts, whose winners reached the victory points
+                        Assert.Equal(settings.PlayoutsPerSample, record.Playouts.Count);
+                        Assert.Equal(record.Playouts.Count(playout => playout.Winner >= 0), record.Finished);
+                        for (int p = 0; p < TestUtil.PlayerCount; p++)
+                            Assert.Equal((double)record.Playouts.Count(playout => playout.Winner == p) / record.Finished, label[p], 9);
+                        Assert.All(record.Playouts.Where(playout => playout.Winner >= 0), playout =>
+                        {
+                            Assert.True(playout.VictoryPoints[playout.Winner] >= save.GameState.Settings.VictoryPoints);
+                            Assert.True(playout.EndRound >= record.Round);
+                            Assert.All(playout.Agents, kind => Assert.True(kind <= (int)AgentKind.Builder));
+                        });
+                    }
                 }
 
                 // Every sample has exactly one row in the vector chunks, equal to the vector of its state as float16
                 Dictionary<string, Half[]> vectors = ReadVectorChunks(Path.Combine(datasetDirectory, "vectors"));
-                Assert.Equal(samples.Select(Path.GetFileNameWithoutExtension).Order(), vectors.Keys.Order());
+                Assert.Equal(records.Select(record => record.Name).Order(), vectors.Keys.Order());
 
                 StateVectorizer vectorizer = new();
                 foreach (string path in samples)
                 {
                     float[] expected = vectorizer.Vectorize(SaveFileSerializer.Deserialize(File.ReadAllText(path)).GameState).ToArray();
-                    Half[] row = vectors[Path.GetFileNameWithoutExtension(path)!];
-                    Assert.Equal(expected.Select(value => (Half)value), row);
+                    Assert.Equal(expected.Select(value => (Half)value), vectors[Path.GetFileNameWithoutExtension(path)!]);
                 }
+
+                string metadata = File.ReadAllText(Path.Combine(datasetDirectory, "metadata.json"));
+                Assert.Contains("\"status\": \"finished\"", metadata);
+                Assert.Contains("\"seed\": \"150\"", metadata);
             }
             finally
             {
-                Directory.Delete(workingDirectory, recursive: true);
+                DeleteTemporaryDirectory(datasetDirectory);
+            }
+        }
+
+        [Fact]
+        public void TheSameSeedGivesTheSameDatasetWithAnyThreadCount()
+        {
+            var settings = new CollectorSettings { Matches = 6, SamplesPerMatch = 3, PlayoutsPerSample = 4, Seed = 151 };
+            string single = CollectIntoTemporaryDirectory(settings with { Threads = 1 }, out _);
+            string multiple = CollectIntoTemporaryDirectory(settings with { Threads = 3 }, out _);
+
+            try
+            {
+                // Save files and labels are identical, and so are the playouts of every sample (in whatever worker file)
+                foreach (string kind in new[] { "input", "output" })
+                {
+                    string[] files = Directory.GetFiles(Path.Combine(single, kind)).Select(path => Path.GetFileName(path)).Order().ToArray();
+                    Assert.Equal(files, Directory.GetFiles(Path.Combine(multiple, kind)).Select(path => Path.GetFileName(path)).Order());
+                    foreach (string file in files)
+                        Assert.Equal(File.ReadAllBytes(Path.Combine(single, kind, file)), File.ReadAllBytes(Path.Combine(multiple, kind, file)));
+                }
+
+                Dictionary<string, SampleRecord> a = ReadSampleRecords(single).ToDictionary(record => record.Name);
+                Dictionary<string, SampleRecord> b = ReadSampleRecords(multiple).ToDictionary(record => record.Name);
+                Assert.Equal(a.Keys.Order(), b.Keys.Order());
+                foreach (string name in a.Keys)
+                    Assert.Equal(a[name].Playouts, b[name].Playouts);
+
+                // A match seed reproduces its match
+                ulong matchSeed = Seeds.Derive(settings.Seed, 2);
+                var first = DatasetCollector.DatasetCollector.PlayMatch(matchSeed, 2, settings.Agents, false);
+                var second = DatasetCollector.DatasetCollector.PlayMatch(matchSeed, 2, settings.Agents, false);
+                Assert.Equal(SaveFileSerializer.Serialize(first.playedActions), SaveFileSerializer.Serialize(second.playedActions));
+                Assert.Equal(first.playedActions.Count, a.Values.First(record => record.Group == matchSeed).MatchLength);
+            }
+            finally
+            {
+                DeleteTemporaryDirectory(single);
+                DeleteTemporaryDirectory(multiple);
+            }
+        }
+
+        [Fact]
+        public void SampledPositionsAreDistinctAndUniform()
+        {
+            TestUtil.Seed(153);
+            int[] counts = new int[10];
+            const int draws = 20_000;
+            for (int i = 0; i < draws; i++)
+            {
+                int[] positions = DatasetCollector.DatasetCollector.SamplePositions(lastPosition: 9, count: 4);
+                Assert.Equal(positions.Order(), positions);
+                Assert.Equal(4, positions.Distinct().Count());
+                foreach (int position in positions) counts[position]++;
+            }
+
+            // Every position, the first and the last included, has the chance k/(N+1) = 0.4
+            Assert.All(counts, count => Assert.InRange(count / (double)draws, 0.38, 0.42));
+
+            // With fewer positions than samples, all are taken
+            Assert.Equal([0, 1, 2], DatasetCollector.DatasetCollector.SamplePositions(lastPosition: 2, count: 5));
+        }
+
+        [Fact]
+        public void TheCommandLineSetsEverySetting()
+        {
+            var commandLine = CommandLine.Parse(["--matches", "7", "--samples", "3", "--playouts", "50", "--threads", "5", "--seed", "18446744073709551615",
+                "--agents", "builder=1", "--exploration", "0.05-0.1", "--center-desert", "--output", "out", "--name", "run"]);
+            CollectorSettings settings = commandLine.Settings;
+
+            Assert.Equal((7, 3, 50, 5, ulong.MaxValue, true, "out", "run"),
+                (settings.Matches, settings.SamplesPerMatch, settings.PlayoutsPerSample, settings.Threads, settings.Seed, settings.CenterDesert, settings.OutputDirectory, settings.Name));
+            Assert.Equal(new AgentMix(0, 0, 1, 0.05, 0.1), settings.Agents);
+            Assert.False(commandLine.CalibrateThreads);
+
+            Assert.True(CommandLine.Parse(["--threads", "auto"]).CalibrateThreads);
+            Assert.True(CommandLine.Parse(["--calibrate"]).CalibrateOnly);
+            Assert.Equal(AgentMix.Default, CommandLine.Parse([]).Settings.Agents);
+            Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--agents", "random=0"]));
+            Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--unknown"]));
+
+            Assert.Equal([32, 24, 16, 8], ThreadCalibration.Candidates(32));
+            Assert.Equal([1], ThreadCalibration.Candidates(1));
+        }
+
+        [Fact]
+        public void ACancelledRunAbandonsItsMatches()
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "catansim-collector-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var settings = new CollectorSettings { Threads = 2, Matches = 1000, PlayoutsPerSample = 1000, Seed = 154, OutputDirectory = directory, Name = "cancelled" };
+                CollectionResult result = new DatasetCollector.DatasetCollector(settings, TextWriter.Null).Collect(new CancellationToken(canceled: true));
+
+                Assert.True(result.Cancelled);
+                Assert.Equal(0, result.Samples);
+                Assert.Contains("\"status\": \"cancelled\"", File.ReadAllText(Path.Combine(directory, "cancelled", "metadata.json")));
+            }
+            finally
+            {
+                DeleteTemporaryDirectory(directory);
             }
         }
 
@@ -172,6 +274,68 @@ namespace Tests
             {
                 Directory.Delete(directory, recursive: true);
             }
+        }
+
+        private record PlayoutRecord(int Winner, int[] VictoryPoints, int[] Agents, int EndRound)
+        {
+            public virtual bool Equals(PlayoutRecord? other) => other != null && Winner == other.Winner && EndRound == other.EndRound
+                && VictoryPoints.SequenceEqual(other.VictoryPoints) && Agents.SequenceEqual(other.Agents);
+
+            public override int GetHashCode() => HashCode.Combine(Winner, EndRound);
+        }
+
+        private record SampleRecord(string Name, ulong Group, int Position, int MatchLength, int Round, bool Terminal, int Finished,
+            int MatchWinner, int[] MatchVictoryPoints, List<PlayoutRecord> Playouts);
+
+        /// <summary>
+        /// The sample lines of all workers with their playout records
+        /// </summary>
+        private static List<SampleRecord> ReadSampleRecords(string datasetDirectory)
+        {
+            const int recordSize = SampleRecordWriter.PlayoutRecordSize;
+            List<SampleRecord> records = [];
+
+            foreach (string csvPath in Directory.GetFiles(Path.Combine(datasetDirectory, "samples"), "*.csv"))
+            {
+                byte[] playouts = File.ReadAllBytes(Path.Combine(datasetDirectory, "playouts", Path.GetFileNameWithoutExtension(csvPath) + ".bin"));
+                string[] lines = File.ReadAllLines(csvPath);
+                Assert.Equal(SampleRecordWriter.Header, lines[0]);
+                string[] header = lines[0].Split(',');
+
+                foreach (string line in lines.Skip(1))
+                {
+                    Dictionary<string, string> row = header.Zip(line.Split(',')).ToDictionary(pair => pair.First, pair => pair.Second);
+                    int offset = int.Parse(row["playout_offset"]), count = int.Parse(row["playouts"]);
+                    Assert.True((offset + count) * recordSize <= playouts.Length);
+
+                    List<PlayoutRecord> samplePlayouts = Enumerable.Range(offset, count).Select(i =>
+                    {
+                        byte[] record = playouts[(i * recordSize)..((i + 1) * recordSize)];
+                        return new PlayoutRecord((sbyte)record[0], record[1..5].Select(b => (int)b).ToArray(), record[5..9].Select(b => (int)b).ToArray(),
+                            BinaryPrimitives.ReadUInt16LittleEndian(record.AsSpan(9)));
+                    }).ToList();
+
+                    records.Add(new SampleRecord(row["name"], ulong.Parse(row["group"]), int.Parse(row["position"]), int.Parse(row["match_length"]),
+                        int.Parse(row["round"]), row["terminal"] == "1", int.Parse(row["finished"]), int.Parse(row["match_winner"]),
+                        row["match_vp"].Split('/').Select(int.Parse).ToArray(), samplePlayouts));
+                }
+            }
+            return records;
+        }
+
+        private static string CollectIntoTemporaryDirectory(CollectorSettings settings, out CollectionResult result)
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "catansim-collector-" + Guid.NewGuid().ToString("N"));
+            var collector = new DatasetCollector.DatasetCollector(settings with { OutputDirectory = directory, Name = "dataset" }, TextWriter.Null);
+            result = collector.Collect();
+            return collector.DatasetDirectory;
+        }
+
+        private static void DeleteTemporaryDirectory(string directory)
+        {
+            // A collected dataset lies in its own temporary directory
+            string root = Path.GetFileName(directory) == "dataset" ? Path.GetDirectoryName(directory)! : directory;
+            if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
         }
 
         /// <summary>
