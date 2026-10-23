@@ -134,9 +134,9 @@ namespace DatasetCollector
 
             sampleIndices.UnionWith(possibleSampleIndices.Take(remainingSampleCount));
 
-            // States bei den gegebenen Indices kopieren, jeweils mit den bis dahin gespielten Actions
+            // States bei den gegebenen Indices kopieren, jeweils mit der Anzahl der bis dahin gespielten Actions
             GameState playState = new GameState(baseState);
-            List<(GameState state, List<Action> previousActions)> statesToSample = [(new GameState(playState), [])];
+            List<(GameState state, int previousActionCount)> statesToSample = [(new GameState(playState), 0)];
 
             for (int actionIdx = 0; actionIdx < playedActions.Count; actionIdx++)
             {
@@ -146,15 +146,18 @@ namespace DatasetCollector
 
                 if (sampleIndices.Contains(actionIdx + 1))
                 {
-                    statesToSample.Add((new GameState(playState), playedActions.GetRange(0, actionIdx + 1)));
+                    statesToSample.Add((new GameState(playState), actionIdx + 1));
                 }
             }
+
+            // The actions of the match are serialized once for the save files of all its samples
+            MatchSaveFiles saveFiles = new MatchSaveFiles(playedActions);
 
             // Dann für diese States jeweils die gegebene Anzahl Playouts spielen und Input sowie normalisierten Output als Dateien speichern
             for (int sampleIdx = 0; sampleIdx < statesToSample.Count; sampleIdx++)
             {
-                (GameState sampleState, List<Action> previousActions) = statesToSample[sampleIdx];
-                CollectSample(sampleState, previousActions, matchIdx, sampleIdx, vectors);
+                (GameState sampleState, int previousActionCount) = statesToSample[sampleIdx];
+                CollectSample(sampleState, previousActionCount, saveFiles, matchIdx, sampleIdx, vectors);
             }
         }
 
@@ -185,7 +188,7 @@ namespace DatasetCollector
             }
         }
 
-        private void CollectSample(GameState sampleState, List<Action> previousActions, int matchIdx, int sampleIdx, VectorChunkWriter vectors)
+        private void CollectSample(GameState sampleState, int previousActionCount, MatchSaveFiles saveFiles, int matchIdx, int sampleIdx, VectorChunkWriter vectors)
         {
             int[] timesWon = new int[PLAYER_COUNT];
 
@@ -221,10 +224,9 @@ namespace DatasetCollector
                 return;
             }
 
-            // Write GameState to file
+            // Write GameState to file, with the actions that led to it
             string sampleName = $"r{matchIdx}_s{sampleIdx}";
-            SaveFile saveFile = new SaveFile(sampleState, previousActions, []);
-            string saveData = SaveFileSerializer.Serialize(saveFile);
+            string saveData = saveFiles.Build(sampleState, previousActionCount);
             File.WriteAllText(Path.Combine(_stateDirectory, sampleName + ".yaml"), saveData);
 
             // Write evaluation to file

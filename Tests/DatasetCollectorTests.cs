@@ -1,5 +1,6 @@
 using Agents;
 using Common;
+using Common.Actions;
 using Common.Serialization;
 using System.Buffers.Binary;
 using System.Globalization;
@@ -99,6 +100,43 @@ namespace Tests
             {
                 Directory.Delete(workingDirectory, recursive: true);
             }
+        }
+
+        [Fact]
+        public void AssembledSaveFilesAreIdenticalToSerializingEachSample()
+        {
+            TestUtil.Seed(152);
+            HashSet<string> actionTypes = [];
+
+            for (int game = 0; game < 6; game++)
+            {
+                GameState start = TestUtil.NewGame();
+                List<Action> played = TestUtil.PlayRandomGame(new GameState(start));
+                actionTypes.UnionWith(played.Select(action => action.GetType().Name));
+                var saveFiles = new DatasetCollector.MatchSaveFiles(played);
+
+                // Replay copies, so the recorded actions and their histories stay as the game left them
+                GameState state = new GameState(start);
+                for (int count = 0; count <= played.Count; count++)
+                {
+                    if (count > 0) played[count - 1].Clone().Apply(state);
+
+                    // The whole game covers every action that occurred, the other lengths where the history is cut
+                    if (count <= 2 || count % 50 == 0 || count == played.Count)
+                    {
+                        string expected = SaveFileSerializer.Serialize(new SaveFile(state, played.GetRange(0, count), []));
+                        Assert.True(expected == saveFiles.Build(state, count), $"game {game}: assembled file with {count} actions differs");
+                    }
+                }
+
+                // Every file was assembled, none serialized on its own
+                Assert.Equal(0, saveFiles.FallbackCount);
+            }
+
+            // The random games included actions with nested sequences in their histories
+            Assert.Contains(nameof(RollAction), actionTypes);
+            Assert.Contains(nameof(DiscardAction), actionTypes);
+            Assert.Contains(nameof(RobberAction), actionTypes);
         }
 
         [Fact]
