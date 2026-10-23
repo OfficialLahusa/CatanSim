@@ -1,10 +1,9 @@
 ﻿using Agents;
 using Common;
-using Common.Actions;
 using Common.Serialization;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using Action = Common.Actions.Action;
@@ -20,13 +19,10 @@ namespace DatasetCollector
         private readonly uint _samplesPerMatch;
         private readonly uint _playoutsPerSample;
 
-        private GameState _baseState;
-        private Stack<Action> _playedActions;
-
         // Map generator options
         private bool _centerDesert = false;
 
-        // Agents
+        // Agents (stateless, so the workers share them)
         private Agent[] _agents;
         public const int PLAYER_COUNT = 4;
 
@@ -34,6 +30,15 @@ namespace DatasetCollector
         string _datasetName;
         string _stateDirectory;
         string _evaluationDirectory;
+        string _vectorDirectory;
+
+        // Progress and problems of all workers
+        private int _nextMatchIdx = -1;
+        private int _finishedMatches;
+        private int _writtenSamples;
+        private int _skippedSamples;
+        private int _errorCount;
+        private Exception? _firstError;
 
         public DatasetCollector(uint threadCount, uint matchCount, uint samplesPerMatch, uint playoutsPerSample)
         {
@@ -41,9 +46,6 @@ namespace DatasetCollector
             _matchCount = matchCount;
             _samplesPerMatch = samplesPerMatch;
             _playoutsPerSample = playoutsPerSample;
-
-            _baseState = new GameState(MapGenerator.GenerateRandomClassic(_centerDesert), PLAYER_COUNT);
-            _playedActions = [];
 
             _agents = new Agent[PLAYER_COUNT];
 
@@ -55,207 +57,159 @@ namespace DatasetCollector
             _datasetName = $"m{_matchCount}_s{_samplesPerMatch}_p{_playoutsPerSample}_{DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss")}";
             _stateDirectory = Path.Combine("datasets", _datasetName, "input");
             _evaluationDirectory = Path.Combine("datasets", _datasetName, "output");
+            _vectorDirectory = Path.Combine("datasets", _datasetName, "vectors");
         }
 
         public void Collect()
         {
             // Create output directories
-            
             Directory.CreateDirectory(_stateDirectory);
             Directory.CreateDirectory(_evaluationDirectory);
+            Directory.CreateDirectory(_vectorDirectory);
 
             Console.WriteLine("\nDataset directory:\n" + Path.GetFullPath(Path.Combine("datasets", _datasetName)));
             Console.WriteLine("\nCollecting Dataset:");
 
-            for (int matchIdx = 0; matchIdx < _matchCount; matchIdx++)
+            // Each worker takes whole matches: it plays the match, then all playouts of its samples on its own thread and
+            // writes their files, so the workers never wait for each other
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            Task[] workers = Enumerable.Range(0, (int)Math.Max(1, _threadCount))
+                .Select(workerIdx => Task.Factory.StartNew(() => RunWorker(workerIdx), TaskCreationOptions.LongRunning))
+                .ToArray();
+
+            while (!Task.WaitAll(workers, TimeSpan.FromSeconds(1)))
+                ReportProgress(stopwatch);
+            ReportProgress(stopwatch);
+
+            if (_skippedSamples > 0)
+                Console.WriteLine($"\n\nWarning: {_skippedSamples} sample(s) skipped because none of their playouts finished.");
+
+            if (_errorCount > 0)
             {
-                CollectMatch(matchIdx);
+                Console.WriteLine($"\n\nWarning: {_errorCount} error(s) during collection, the first one:");
+                Console.WriteLine(_firstError);
             }
 
             Console.WriteLine("\nDone!");
         }
 
-        private void CollectMatch(int matchIdx)
+        private void RunWorker(int workerIdx)
         {
-            // GameState neu generieren
-            _baseState = new GameState(MapGenerator.GenerateRandomClassic(), PLAYER_COUNT);
-            _playedActions = [];
+            using VectorChunkWriter vectors = new(_vectorDirectory, workerIdx);
 
-            // Kopie erstellen und bis zum Ende durchspielen, dabei Actions sammeln
-            GameState playState = new GameState(_baseState);
-            while (!playState.HasEnded)
+            int matchIdx;
+            while ((matchIdx = Interlocked.Increment(ref _nextMatchIdx)) < _matchCount)
             {
-                // Terminate unwinnable rounds and retry
-                if (playState.Turn.RoundCounter >= UNWINNABLE_ROUND_THRESHOLD)
+                try
                 {
-                    Console.WriteLine($"\nTerminating unwinnable match (idx {matchIdx}) after {playState.Turn.RoundCounter} rounds. Retrying.\n");
-                    CollectMatch(matchIdx);
-                    return;
+                    CollectMatch(matchIdx, vectors);
+                }
+                catch (Exception e)
+                {
+                    RecordError(e);
                 }
 
-                // Find first player that is allowed to act on state
-                int? actingPlayerIdx = null;
-                for (int playerIdx = 0; playerIdx < PLAYER_COUNT; playerIdx++)
-                {
-                    if (playState.CanPlayerAct(playerIdx))
-                    {
-                        actingPlayerIdx = playerIdx;
-                        break;
-                    }
-                }
-
-                if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
-
-                // Query agent for current state
-                Action playedAction = _agents[actingPlayerIdx.Value].Act(playState);
-
-                if (!playedAction.IsValidFor(playState)) throw new InvalidOperationException();
-
-                // Apply action to state
-                playedAction.Apply(playState);
-
-                // Push to action stack
-                _playedActions.Push(playedAction);
+                Interlocked.Increment(ref _finishedMatches);
             }
+        }
+
+        private void ReportProgress(Stopwatch stopwatch)
+        {
+            double seconds = stopwatch.Elapsed.TotalSeconds;
+            Console.Write($"\x000DMatches {_finishedMatches}/{_matchCount}, samples {_writtenSamples} ({_writtenSamples / Math.Max(seconds, 1e-9):F1}/s), {seconds:F0}s          ");
+        }
+
+        private void CollectMatch(int matchIdx, VectorChunkWriter vectors)
+        {
+            (GameState baseState, List<Action> playedActions) = PlayMatch(matchIdx);
 
             // Action Indices sammeln bis Sample Count erreicht ist
             // Immer garantiert den ersten State (vor Placement) und den letzten State (Termination) in den Datensatz schreiben
             // Für die übrigen States dazwischen einen random Index Shuffle samplen
-            HashSet<int> sampleIndices = [0, _playedActions.Count];
-            int remainingSampleCount = Math.Min((int)_samplesPerMatch - 2, _playedActions.Count - 1);
+            HashSet<int> sampleIndices = [0, playedActions.Count];
+            int remainingSampleCount = Math.Min((int)_samplesPerMatch - 2, playedActions.Count - 1);
 
-            List<int> possibleSampleIndices = Enumerable.Range(1, _playedActions.Count - 1).ToList();
+            List<int> possibleSampleIndices = Enumerable.Range(1, playedActions.Count - 1).ToList();
             possibleSampleIndices.Shuffle();
 
             sampleIndices.UnionWith(possibleSampleIndices.Take(remainingSampleCount));
 
-            // States bei den gegebenen Indices kopieren und sammeln
-            playState = new GameState(_baseState);
-            Stack<Action> replayActions = new(_playedActions);
-            // Action Stack zurücksetzen, damit jedes Sample nur die bis dahin gespielten Actions enthält
-            // (sonst stehen im Sample k alle N Actions des ersten Durchlaufs plus k weitere)
-            _playedActions = [];
-            List<(GameState, Stack<Action>)> statesToSample = [(new GameState(playState), new (_playedActions.Reverse()))];
-            int stateIdx = 0;
+            // States bei den gegebenen Indices kopieren, jeweils mit den bis dahin gespielten Actions
+            GameState playState = new GameState(baseState);
+            List<(GameState state, List<Action> previousActions)> statesToSample = [(new GameState(playState), [])];
 
-            while (!playState.HasEnded)
+            for (int actionIdx = 0; actionIdx < playedActions.Count; actionIdx++)
             {
-                // Query agent for current state
-                Action playedAction = replayActions.Pop();
-
+                Action playedAction = playedActions[actionIdx];
                 if (!playedAction.IsValidFor(playState)) throw new InvalidOperationException();
-
-                // Apply action to state
                 playedAction.Apply(playState);
-                _playedActions.Push(playedAction);
 
-                stateIdx++;
-
-                if (sampleIndices.Contains(stateIdx))
+                if (sampleIndices.Contains(actionIdx + 1))
                 {
-                    statesToSample.Add((new GameState(playState), new(_playedActions.Reverse())));
+                    statesToSample.Add((new GameState(playState), playedActions.GetRange(0, actionIdx + 1)));
                 }
             }
 
-            // Dann für diese States jeweils die gegebene Anzahl Playouts parallel spielen und Input sowie normalisierten Output als Dateien speichern
-            int sampleRunIdx = 0;
-            foreach ((GameState sampleState, Stack<Action> samplePlayedActions) in statesToSample)
+            // Dann für diese States jeweils die gegebene Anzahl Playouts spielen und Input sowie normalisierten Output als Dateien speichern
+            for (int sampleIdx = 0; sampleIdx < statesToSample.Count; sampleIdx++)
             {
-                Console.Write($"\x000DMatch {matchIdx + 1}/{_matchCount}, Sample {sampleRunIdx+1}/{_samplesPerMatch}                                 ");
-                CollectSample(sampleState, samplePlayedActions, matchIdx, sampleRunIdx).GetAwaiter().GetResult();
-                sampleRunIdx++;
+                (GameState sampleState, List<Action> previousActions) = statesToSample[sampleIdx];
+                CollectSample(sampleState, previousActions, matchIdx, sampleIdx, vectors);
             }
         }
 
-        private async Task CollectSample(GameState sampleState, Stack<Action> previousActions, int roundIdx, int sampleIdx)
+        /// <summary>
+        /// Plays a match with the agents until it ends, starting over on a new map if it takes too many rounds
+        /// </summary>
+        private (GameState baseState, List<Action> playedActions) PlayMatch(int matchIdx)
         {
-            DateTime startTime = DateTime.Now;
-
-            ConcurrentQueue<int> runs = new ConcurrentQueue<int>(Enumerable.Range(0, (int)_playoutsPerSample));
-            CountdownEvent countdown = new CountdownEvent((int)_playoutsPerSample);
-
-            object lockObj = new object();
-            List<int> timesWon = new List<int>();
-            for (int i = 0; i < PLAYER_COUNT; i++)
-                timesWon.Add(0);
-
-            ConcurrentBag<Exception> workerExceptions = new ConcurrentBag<Exception>();
-
-            System.Action doPlayout = () =>
+            while (true)
             {
-                while (runs.TryDequeue(out int runIdx))
+                GameState baseState = new GameState(MapGenerator.GenerateRandomClassic(_centerDesert), PLAYER_COUNT);
+                GameState playState = new GameState(baseState);
+                List<Action> playedActions = [];
+
+                while (!playState.HasEnded && playState.Turn.RoundCounter < UNWINNABLE_ROUND_THRESHOLD)
                 {
-                    try
-                    {
-                        GameState simState = new GameState(sampleState);
+                    Action playedAction = _agents[ActingPlayer(playState)].Act(playState);
+                    if (!playedAction.IsValidFor(playState)) throw new InvalidOperationException();
 
-                        // Play until game has ended or unwinnable round threshold is reached
-                        while (!simState.HasEnded && simState.Turn.RoundCounter < UNWINNABLE_ROUND_THRESHOLD)
-                        {
-                            // Find first player that is allowed to act on state
-                            sbyte? actingPlayerIdx = null;
-                            for (sbyte playerIdx = 0; playerIdx < PLAYER_COUNT; playerIdx++)
-                            {
-                                if (simState.CanPlayerAct(playerIdx))
-                                {
-                                    actingPlayerIdx = playerIdx;
-                                    break;
-                                }
-                            }
-
-                            if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
-
-                            // Pick action
-                            Action playedAction = _agents[actingPlayerIdx.Value].Act(simState);
-
-                            // Apply action to state
-                            playedAction.Apply(simState);
-                        }
-
-                        // If the playout was aborted due to timeout, don't collect a result but keep processing the queue
-                        if (!simState.HasEnded) continue;
-
-                        // Since players can only win on their own turn, the winner is the current turn player
-                        int winnerIdx = simState.Turn.PlayerIndex;
-
-                        // Collect match result thread-safely
-                        lock (lockObj)
-                        {
-                            timesWon[winnerIdx]++;
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        workerExceptions.Add(e);
-                    }
-                    finally
-                    {
-                        countdown.Signal();
-                    }
+                    playedAction.Apply(playState);
+                    playedActions.Add(playedAction);
                 }
-            };
 
+                if (playState.HasEnded)
+                    return (baseState, playedActions);
 
-            List<Task> tasks = new List<Task>();
-            for (int t = 0; t < _threadCount; t++)
-            {
-                tasks.Add(Task.Run(doPlayout));
+                Console.WriteLine($"\nTerminating unwinnable match (idx {matchIdx}) after {playState.Turn.RoundCounter} rounds. Retrying.\n");
             }
+        }
 
-            countdown.Wait();
+        private void CollectSample(GameState sampleState, List<Action> previousActions, int matchIdx, int sampleIdx, VectorChunkWriter vectors)
+        {
+            int[] timesWon = new int[PLAYER_COUNT];
 
-            // Not strictly necessary, but ensures all tasks are complete
-            await Task.WhenAll(tasks);
-
-            countdown.Dispose();
-
-            if (!workerExceptions.IsEmpty)
+            for (int runIdx = 0; runIdx < _playoutsPerSample; runIdx++)
             {
-                Console.WriteLine($"\n\nWarning: {workerExceptions.Count} playout(s) threw exceptions:");
-                foreach (var e in workerExceptions)
+                try
                 {
-                    Console.WriteLine(e.ToString());
-                    break;
+                    GameState simState = new GameState(sampleState);
+
+                    // Play until game has ended or unwinnable round threshold is reached
+                    while (!simState.HasEnded && simState.Turn.RoundCounter < UNWINNABLE_ROUND_THRESHOLD)
+                    {
+                        _agents[ActingPlayer(simState)].Act(simState).Apply(simState);
+                    }
+
+                    // If the playout was aborted due to timeout, don't collect a result
+                    if (!simState.HasEnded) continue;
+
+                    // Since players can only win on their own turn, the winner is the current turn player
+                    timesWon[simState.Turn.PlayerIndex]++;
+                }
+                catch (Exception e)
+                {
+                    RecordError(e);
                 }
             }
 
@@ -263,23 +217,46 @@ namespace DatasetCollector
             double[]? normalizedEvaluation = NormalizeWinCounts(timesWon);
             if (normalizedEvaluation == null)
             {
-                Console.WriteLine($"\n\nWarning: no playout of sample r{roundIdx}_s{sampleIdx} finished, skipping it.");
+                Interlocked.Increment(ref _skippedSamples);
                 return;
             }
 
             // Write GameState to file
-            string sampleName = $"r{roundIdx}_s{sampleIdx}";
-            SaveFile saveFile = new SaveFile(sampleState, previousActions.Reverse().ToList(), []);
+            string sampleName = $"r{matchIdx}_s{sampleIdx}";
+            SaveFile saveFile = new SaveFile(sampleState, previousActions, []);
             string saveData = SaveFileSerializer.Serialize(saveFile);
             File.WriteAllText(Path.Combine(_stateDirectory, sampleName + ".yaml"), saveData);
 
             // Write evaluation to file
             StringBuilder evalStringBuilder = new StringBuilder();
-            foreach (double evalEntry in  normalizedEvaluation)
+            foreach (double evalEntry in normalizedEvaluation)
             {
                 evalStringBuilder.Append(evalEntry.ToString(CultureInfo.InvariantCulture) + "\n");
             }
             File.WriteAllText(Path.Combine(_evaluationDirectory, sampleName + ".txt"), evalStringBuilder.ToString());
+
+            // Write the state vector, so the dataset doesn't need to be vectorized from the YAML files afterwards
+            vectors.Write(sampleName, sampleState);
+
+            Interlocked.Increment(ref _writtenSamples);
+        }
+
+        private static sbyte ActingPlayer(GameState state)
+        {
+            // Find first player that is allowed to act on state
+            for (sbyte playerIdx = 0; playerIdx < PLAYER_COUNT; playerIdx++)
+            {
+                if (state.CanPlayerAct(playerIdx))
+                    return playerIdx;
+            }
+
+            throw new InvalidOperationException();
+        }
+
+        private void RecordError(Exception e)
+        {
+            if (Interlocked.Increment(ref _errorCount) == 1)
+                _firstError = e;
         }
 
         /// <summary>

@@ -14,6 +14,7 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 from state_to_vector import yaml_to_numpy, FEATURE_DIM
+from vector_chunks import load_vector_chunks
     
 def load_index_file(index_path: str):
     print(f"Loading index from \"{os.path.realpath(index_path)}\".")
@@ -44,14 +45,25 @@ def _process_entry(args):
 
 
 def vectorize_states(base_path: Path, index, max_workers=None, chunksize=64):
-    # State YAMLs multi-processed vektorisieren
-    tasks = [
-        (entry_idx, base_path, subdir_name, entry_name)
-        for entry_idx, group_idx, subdir_name, entry_name in index
-    ]
- 
     # NP Array erstellen: f16 <Index Length>,<Feature vector length>
     state_matrix = np.zeros((len(index), FEATURE_DIM), dtype=np.float16)
+
+    # Vektoren, die der Collector schon als Chunks geschrieben hat, direkt übernehmen
+    chunk_vectors = {
+        subdir_name: load_vector_chunks(str(base_path / subdir_name))
+        for subdir_name in {entry[2] for entry in index}
+    }
+
+    # Nur die übrigen State YAMLs (z.B. ältere Datensätze ohne Chunks) multi-processed vektorisieren
+    tasks = []
+    for entry_idx, group_idx, subdir_name, entry_name in index:
+        vec = chunk_vectors[subdir_name].get(entry_name)
+        if vec is not None:
+            state_matrix[entry_idx, :] = vec
+        else:
+            tasks.append((entry_idx, base_path, subdir_name, entry_name))
+
+    print(f"{len(index) - len(tasks)} state vectors taken from vector chunks, {len(tasks)} to vectorize from YAML.")
  
     progress_columns = [
         SpinnerColumn(),
@@ -64,15 +76,16 @@ def vectorize_states(base_path: Path, index, max_workers=None, chunksize=64):
         TimeRemainingColumn(),
     ]
  
-    # Einmal parallel durch den ganzen Index gehen
-    with Progress(*progress_columns) as progress:
-        task_id = progress.add_task("Processing Game States", total=len(tasks))
- 
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for entry_idx, vec in executor.map(_process_entry, tasks, chunksize=chunksize):
-                # Vektor in Matrix schreiben
-                state_matrix[entry_idx, :] = vec
-                progress.advance(task_id)
+    # Einmal parallel durch die übrigen Einträge gehen
+    if tasks:
+        with Progress(*progress_columns) as progress:
+            task_id = progress.add_task("Processing Game States", total=len(tasks))
+
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                for entry_idx, vec in executor.map(_process_entry, tasks, chunksize=chunksize):
+                    # Vektor in Matrix schreiben
+                    state_matrix[entry_idx, :] = vec
+                    progress.advance(task_id)
  
     # Array der State-Matrix als Datei speichern
     output_path = Path("states.npy")

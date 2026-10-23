@@ -1,5 +1,7 @@
+using Agents;
 using Common;
 using Common.Serialization;
+using System.Buffers.Binary;
 using System.Globalization;
 using Action = Common.Actions.Action;
 
@@ -80,11 +82,82 @@ namespace Tests
                     (SaveFile last, double[] lastLabel) = matchSamples[^1];
                     Assert.Equal(1.0, lastLabel[last.GameState.Turn.PlayerIndex], 9);
                 }
+
+                // Every sample has exactly one row in the vector chunks, equal to the vector of its state as float16
+                Dictionary<string, Half[]> vectors = ReadVectorChunks(Path.Combine(datasetDirectory, "vectors"));
+                Assert.Equal(samples.Select(Path.GetFileNameWithoutExtension).Order(), vectors.Keys.Order());
+
+                StateVectorizer vectorizer = new();
+                foreach (string path in samples)
+                {
+                    float[] expected = vectorizer.Vectorize(SaveFileSerializer.Deserialize(File.ReadAllText(path)).GameState).ToArray();
+                    Half[] row = vectors[Path.GetFileNameWithoutExtension(path)!];
+                    Assert.Equal(expected.Select(value => (Half)value), row);
+                }
             }
             finally
             {
                 Directory.Delete(workingDirectory, recursive: true);
             }
+        }
+
+        [Fact]
+        public void VectorChunksRollOverAfterTheirRowLimit()
+        {
+            TestUtil.Seed(151);
+            string directory = Path.Combine(Path.GetTempPath(), "catansim-vectors-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+
+            try
+            {
+                List<GameState> states = [];
+                GameState state = TestUtil.NewGame();
+                TestUtil.PlayRandomGame(state, afterApply: (s, _) => { if (states.Count < 7) states.Add(new GameState(s)); }, maxActions: 50);
+
+                using (var writer = new DatasetCollector.VectorChunkWriter(directory, workerIdx: 3, rowsPerChunk: 3))
+                {
+                    for (int i = 0; i < states.Count; i++)
+                        writer.Write($"r0_s{i}", states[i]);
+                }
+
+                // 7 rows in chunks of 3, 3 and 1, named after the worker
+                Assert.Equal(["w03_c0000", "w03_c0001", "w03_c0002"],
+                    Directory.GetFiles(directory, "*.f16").Select(Path.GetFileNameWithoutExtension).Order());
+                Assert.Equal([3, 3, 1], Directory.GetFiles(directory, "*.txt").Order().Select(path => File.ReadAllLines(path).Length));
+
+                Dictionary<string, Half[]> vectors = ReadVectorChunks(directory);
+                StateVectorizer vectorizer = new();
+                for (int i = 0; i < states.Count; i++)
+                    Assert.Equal(vectorizer.Vectorize(states[i]).ToArray().Select(value => (Half)value), vectors[$"r0_s{i}"]);
+            }
+            finally
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        /// <summary>
+        /// The rows of all chunk files in the directory by sample name
+        /// </summary>
+        private static Dictionary<string, Half[]> ReadVectorChunks(string directory)
+        {
+            Dictionary<string, Half[]> vectors = [];
+            foreach (string dataPath in Directory.GetFiles(directory, "*.f16"))
+            {
+                byte[] data = File.ReadAllBytes(dataPath);
+                string[] names = File.ReadAllLines(Path.ChangeExtension(dataPath, ".txt"));
+                int rowBytes = StateVectorizer.FeatureDim * sizeof(ushort);
+                Assert.Equal(names.Length * rowBytes, data.Length);
+
+                for (int row = 0; row < names.Length; row++)
+                {
+                    Half[] values = new Half[StateVectorizer.FeatureDim];
+                    for (int i = 0; i < values.Length; i++)
+                        values[i] = BinaryPrimitives.ReadHalfLittleEndian(data.AsSpan(row * rowBytes + i * sizeof(ushort)));
+                    vectors.Add(names[row], values);
+                }
+            }
+            return vectors;
         }
     }
 }
