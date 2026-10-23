@@ -22,9 +22,6 @@ namespace Common
         public static Board GenerateRandomClassic(bool centerDesert = false)
         {
             HexMap<Tile> map = new HexMap<Tile>(7, 7, new Tile(0, 0, TileType.NonPlayable, null));
-            List<Intersection> intersections = new();
-            List<Edge> edges = new();
-            AdjacencyMatrix adjacency = new AdjacencyMatrix(map, intersections, edges);
             Tile? robber = null;
 
             // Shuffle tiles and number tokens
@@ -97,6 +94,72 @@ namespace Common
                 }
             }
 
+            // Prevent red number (6/8) adjacency
+            SeparateRedNumbers(map);
+
+            // Place ports in fixed locations with random types
+            List<Port> ports = new();
+            // Hard-coded positions and orientations of ports
+            List<(int q, int r, int s, Direction.Tile dir)> portPositions = new()
+            {
+                (-2, -1,  3, Direction.Tile.East),
+                ( 0, -3,  3, Direction.Tile.SouthEast),
+                ( 2, -3,  1, Direction.Tile.SouthWest),
+                ( 3, -2, -1, Direction.Tile.SouthWest),
+                ( 3,  0, -3, Direction.Tile.West),
+                ( 1,  2, -3, Direction.Tile.NorthWest),
+                (-1,  3, -2, Direction.Tile.NorthWest),
+                (-3,  3,  0, Direction.Tile.NorthEast),
+                (-3,  1,  2, Direction.Tile.East)
+            };
+            foreach(var portPlacement in portPositions)
+            {
+                // Calculate port coordinates
+                Vector3 centerPos = Coordinates.EvenRToCube(3, 3);
+                Vector3 portPos = new Vector3(centerPos.X + portPlacement.q, centerPos.Y + portPlacement.r, centerPos.Z + portPlacement.s);
+                (int x, int y) = Coordinates.CubeToEvenR(portPos);
+                Tile portTile = map.GetTile(x, y);
+
+                // Initialize port with random type from shuffled list
+                Port port = new Port(portTile.X, portTile.Y, portPlacement.dir, portTypes[0]);
+                ports.Add(port);
+                portTypes.RemoveAt(0);
+            }
+
+            // Intersections, edges and their adjacency only depend on the shape of the board, which is the same for every
+            // classic map, so all classic boards share them and only get their own view resolving to their tiles
+            ClassicGeometry geometry = Geometry.Value;
+            AdjacencyMatrix adjacency = new AdjacencyMatrix(geometry.Adjacency, map, geometry.Intersections, geometry.Edges);
+
+            return new Board(map, geometry.Intersections, geometry.Edges, ports, adjacency, robber);
+        }
+
+        /// <summary>
+        /// Shape of the classic board, built once: adjacency, intersections and edges, and the neighbors of every map position
+        /// </summary>
+        private sealed record ClassicGeometry(AdjacencyMatrix Adjacency, List<Intersection> Intersections, List<Edge> Edges, int[][] Neighbors);
+
+        private static readonly Lazy<ClassicGeometry> Geometry = new(BuildClassicGeometry);
+
+        private static ClassicGeometry BuildClassicGeometry()
+        {
+            // Template with the classic shape: land within distance 2 of the center (3, 3), water around it.
+            // The tile types don't matter, the adjacency only stores positions.
+            HexMap<Tile> map = new HexMap<Tile>(7, 7, new Tile(0, 0, TileType.NonPlayable, null));
+            for (int y = 0; y < map.Height; y++)
+            {
+                for (int x = 0; x < map.Width; x++)
+                {
+                    int dist = Coordinates.Distance(x, y, 3, 3);
+                    TileType type = dist < 3 ? TileType.Desert : dist < 4 ? TileType.Water : TileType.NonPlayable;
+                    map.SetTile(x, y, new Tile((byte)x, (byte)y, type, null));
+                }
+            }
+
+            List<Intersection> intersections = new();
+            List<Edge> edges = new();
+            AdjacencyMatrix adjacency = new AdjacencyMatrix(map, intersections, edges);
+
             // Assign neighbors
             for (int y = 0; y < map.Height; y++)
             {
@@ -108,23 +171,6 @@ namespace Common
                         adjacency.RegisterTile(tile, dir, neighbor);
                     }
                 }
-            }
-
-            // Prevent red number (6/8) adjacency
-            HashSet<Tile> adjacentReds;
-            while((adjacentReds = GetAdjacentRedNumbers(map)).Count > 0)
-            {
-                int redIdx = Utils.Random.Next(adjacentReds.Count);
-                Tile red = adjacentReds.ElementAt(redIdx);
-
-                HashSet<Tile> freeBlackNumbers = GetFreeBlackNumbers(map, red);
-
-                int blackIdx = Utils.Random.Next(freeBlackNumbers.Count);
-                Tile black = freeBlackNumbers.ElementAt(blackIdx);
-                
-                // Tiles are immutable, so swap the numbers by replacing both tiles
-                map.SetTile(black.X, black.Y, new Tile(black.X, black.Y, black.Type, red.Number));
-                map.SetTile(red.X, red.Y, new Tile(red.X, red.Y, red.Type, black.Number));
             }
 
             // Assign intersections
@@ -234,53 +280,63 @@ namespace Common
                 }
             }
 
-            // Place ports in fixed locations with random types
-            List<Port> ports = new();
-            // Hard-coded positions and orientations of ports
-            List<(int q, int r, int s, Direction.Tile dir)> portPositions = new()
+            // Neighbor positions (indices into map.Values) of every map position
+            int[][] neighbors = new int[map.Length][];
+            for (int y = 0; y < map.Height; y++)
             {
-                (-2, -1,  3, Direction.Tile.East),
-                ( 0, -3,  3, Direction.Tile.SouthEast),
-                ( 2, -3,  1, Direction.Tile.SouthWest),
-                ( 3, -2, -1, Direction.Tile.SouthWest),
-                ( 3,  0, -3, Direction.Tile.West),
-                ( 1,  2, -3, Direction.Tile.NorthWest),
-                (-1,  3, -2, Direction.Tile.NorthWest),
-                (-3,  3,  0, Direction.Tile.NorthEast),
-                (-3,  1,  2, Direction.Tile.East)
-            };
-            foreach(var portPlacement in portPositions)
-            {
-                // Calculate port coordinates
-                Vector3 centerPos = Coordinates.EvenRToCube(3, 3);
-                Vector3 portPos = new Vector3(centerPos.X + portPlacement.q, centerPos.Y + portPlacement.r, centerPos.Z + portPlacement.s);
-                (int x, int y) = Coordinates.CubeToEvenR(portPos);
-                Tile portTile = map.GetTile(x, y);
-
-                // Initialize port with random type from shuffled list
-                Port port = new Port(portTile.X, portTile.Y, portPlacement.dir, portTypes[0]);
-                ports.Add(port);
-                portTypes.RemoveAt(0);
+                for (int x = 0; x < map.Width; x++)
+                {
+                    neighbors[y * map.Width + x] = map.GetNeighbors(x, y).Select(tile => (int)(tile.Y * map.Width + tile.X)).ToArray();
+                }
             }
 
-            return new Board(map, intersections, edges, ports, adjacency, robber);
+            return new ClassicGeometry(adjacency, intersections, edges, neighbors);
         }
 
-        private static HashSet<Tile> GetAdjacentRedNumbers(HexMap<Tile> map)
+        /// <summary>
+        /// Swaps numbers until no 6 or 8 is next to another 6 or 8: a red number next to a red one trades places with a black
+        /// number that has no red neighbor apart from it
+        /// </summary>
+        private static void SeparateRedNumbers(HexMap<Tile> map)
         {
-            return map.Where(tile => RedNumberPredicate(tile) && map.GetNeighbors(tile.X, tile.Y, RedNumberPredicate).Count > 0);
+            Tile[] tiles = map.Values;
+            int[][] neighbors = Geometry.Value.Neighbors;
+            List<int> candidates = new(tiles.Length);
+
+            while (true)
+            {
+                // Red numbers with a red neighbor, in map order
+                candidates.Clear();
+                for (int i = 0; i < tiles.Length; i++)
+                    if (IsRed(tiles[i]) && HasRedNeighbor(tiles, neighbors[i], except: -1)) candidates.Add(i);
+
+                if (candidates.Count == 0) return;
+                Tile red = tiles[candidates[Utils.Random.Next(candidates.Count)]];
+                int redIdx = (int)(red.Y * map.Width + red.X);
+
+                // Black numbers whose only possible red neighbor is the red number to be swapped, in map order
+                candidates.Clear();
+                for (int i = 0; i < tiles.Length; i++)
+                    if (IsBlack(tiles[i]) && !HasRedNeighbor(tiles, neighbors[i], except: redIdx)) candidates.Add(i);
+
+                Tile black = tiles[candidates[Utils.Random.Next(candidates.Count)]];
+
+                // Tiles are immutable, so swap the numbers by replacing both tiles
+                map.SetTile(black.X, black.Y, new Tile(black.X, black.Y, black.Type, red.Number));
+                map.SetTile(red.X, red.Y, new Tile(red.X, red.Y, red.Type, black.Number));
+            }
         }
 
-        private static HashSet<Tile> GetFreeBlackNumbers(HexMap<Tile> map, Tile redWorkingTile)
+        private static bool IsRed(Tile tile) => tile.Number is 6 or 8;
+
+        private static bool IsBlack(Tile tile) => tile.Number.HasValue && tile.Number.Value != 6 && tile.Number.Value != 8;
+
+        private static bool HasRedNeighbor(Tile[] tiles, int[] neighbors, int except)
         {
-            return map.Where(tile => {
-                HashSet<Tile> redNeighbors = map.GetNeighbors(tile.X, tile.Y, RedNumberPredicate);
+            foreach (int neighbor in neighbors)
+                if (neighbor != except && IsRed(tiles[neighbor])) return true;
 
-                // Remove the red tile to be swapped, because it is the only allowed red neighbor
-                redNeighbors.Remove(redWorkingTile);
-
-                return BlackNumberPredicate(tile) && redNeighbors.Count == 0;
-            });
+            return false;
         }
     }
 }
