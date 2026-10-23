@@ -12,6 +12,9 @@ namespace Common
             public List<Port> Ports = null!;
             public List<Intersection> Intersections = [];
             public List<Edge> Edges = [];
+
+            // Producing tiles per number token (index 2-12), computed on first use; all threads compute the same arrays
+            public Tile[][]? YieldingTilesByNumber;
         }
 
         private Layout _layout;
@@ -33,7 +36,30 @@ namespace Common
         public HexMap<Tile> Map
         {
             get => _layout.Map;
-            set => _layout.Map = value;
+            set
+            {
+                _layout.Map = value;
+                _layout.YieldingTilesByNumber = null;
+            }
+        }
+
+        /// <summary>
+        /// The producing tiles with the given number token
+        /// </summary>
+        public ReadOnlySpan<Tile> GetYieldingTiles(int number)
+        {
+            Tile[][] byNumber = Volatile.Read(ref _layout.YieldingTilesByNumber) ?? ComputeYieldingTiles();
+            return number >= 0 && number < byNumber.Length ? byNumber[number] : ReadOnlySpan<Tile>.Empty;
+        }
+
+        private Tile[][] ComputeYieldingTiles()
+        {
+            Tile[][] byNumber = new Tile[13][];
+            for (int number = 0; number < byNumber.Length; number++)
+                byNumber[number] = Map.Values.Where(tile => tile.HasYield() && tile.Number == number).ToArray();
+
+            Volatile.Write(ref _layout.YieldingTilesByNumber, byNumber);
+            return byNumber;
         }
 
         /// <summary>

@@ -183,28 +183,20 @@ namespace Common.Actions
             uint[,] yieldSummary = new uint[state.Players.Length, CardSet<ResourceCardType>.Values.Count];
             uint robbedYields = 0;
 
-            // Calculate tile yields
-            foreach (Tile tile in state.Board.Map.Where(x => x.HasYield() && x.Number == number))
+            // Calculate tile yields from the buildings at the corners of the tiles with the rolled number
+            foreach (Tile tile in state.Board.GetYieldingTiles(number))
             {
-                foreach (Intersection intersection in state.Board.Adjacency.GetIntersections(tile))
+                foreach (int intersectionIdx in BitMask.Of(state.Board.Adjacency.GetCornerMask(tile) & state.Board.BuildingMask))
                 {
-                    uint yieldCount = state.Board.GetBuilding(intersection.Index) switch
-                    {
-                        Intersection.BuildingType.City => 2,
-                        Intersection.BuildingType.Settlement => 1,
-                        _ => 0
-                    };
+                    uint yieldCount = state.Board.GetBuilding(intersectionIdx) == Intersection.BuildingType.City ? 2u : 1u;
 
-                    if (yieldCount > 0)
+                    if (!state.Board.HasRobber(tile))
                     {
-                        if (!state.Board.HasRobber(tile))
-                        {
-                            yieldSummary[state.Board.GetBuildingOwner(intersection.Index), CardSet<ResourceCardType>.ToInt(tile.Type.ToCardType())] += yieldCount;
-                        }
-                        else
-                        {
-                            robbedYields += yieldCount;
-                        }
+                        yieldSummary[state.Board.GetBuildingOwner(intersectionIdx), CardSet<ResourceCardType>.ToInt(tile.Type.ToCardType())] += yieldCount;
+                    }
+                    else
+                    {
+                        robbedYields += yieldCount;
                     }
                 }
             }
