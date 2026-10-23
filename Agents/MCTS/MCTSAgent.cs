@@ -25,8 +25,12 @@ namespace Agents.MCTS
         protected double _timeLimitSeconds;
         protected Random _random = Random.Shared;
 
-        protected static StateValueNet _stateValueNet;
-        protected static StateVectorizer _stateVectorizer;
+        // The default net is shared by all agents that aren't given another one, and loaded on first use
+        private static readonly Lazy<StateValueNet> DefaultValueNet = new(() => new StateValueNet(StateValueNet.DefaultModelFile));
+        private static readonly StateVectorizer DefaultVectorizer = new();
+
+        protected readonly StateValueNet _stateValueNet;
+        protected readonly IStateVectorizer _stateVectorizer;
 
         protected readonly object _treeLock = new object();
 
@@ -53,19 +57,18 @@ namespace Agents.MCTS
         private readonly Stopwatch _selectionTime = new(), _evaluationTime = new(), _backpropagationTime = new(), _evaluationWaitTime = new();
 
 
-        public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414, double timeLimitSeconds = TIME_LIMIT_SECONDS)
+        /// <param name="valueNet">Value net for the leaves, the default model if null</param>
+        /// <param name="vectorizer">Encoding the value net was trained on, the current StateVectorizer if null</param>
+        public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414, double timeLimitSeconds = TIME_LIMIT_SECONDS,
+            StateValueNet? valueNet = null, IStateVectorizer? vectorizer = null)
             : base(playerIndex)
         {
             _explorationParameter = explorationParameter;
             _timeLimitSeconds = timeLimitSeconds;
+            _stateValueNet = valueNet ?? DefaultValueNet.Value;
+            _stateVectorizer = vectorizer ?? DefaultVectorizer;
 
             ResetToState(initialState);
-        }
-
-        static MCTSAgent()
-        {
-            _stateValueNet = new StateValueNet(StateValueNet.DefaultModelFile);
-            _stateVectorizer = new StateVectorizer();
         }
 
         public override Action Act(GameState state)
@@ -211,7 +214,8 @@ namespace Agents.MCTS
         private LeafBatch SelectBatch(MCTSTree tree, uint batchSize)
         {
             var leaves = new (MCTSNode leafNode, GameState stateAtLeaf)[batchSize];
-            DenseTensor<float> features = new DenseTensor<float>([(int)batchSize, StateVectorizer.FeatureDim]);
+            int featureDim = _stateVectorizer.FeatureDim;
+            DenseTensor<float> features = new DenseTensor<float>([(int)batchSize, featureDim]);
             Memory<float> featureBuffer = features.Buffer;
 
             _selectionTime.Start();
@@ -235,7 +239,7 @@ namespace Agents.MCTS
 
                 // Featurize right away, on the same thread (ended matches don't need the value net, their row stays empty)
                 if (!stateAtLeaf.HasEnded)
-                    _stateVectorizer.VectorizeInto(stateAtLeaf, featureBuffer.Span.Slice(i * StateVectorizer.FeatureDim, StateVectorizer.FeatureDim));
+                    _stateVectorizer.VectorizeInto(stateAtLeaf, featureBuffer.Span.Slice(i * featureDim, featureDim));
             });
             _selectionTime.Stop();
             _distinctLeaves += leaves.Select(leaf => leaf.leafNode).Distinct().Count();
@@ -325,10 +329,11 @@ namespace Agents.MCTS
             return valuation[PlayerIndex] / sum;
         }
 
-        protected static float[] StateValueFunc(GameState state)
+        protected float[] StateValueFunc(GameState state)
         {
-            var inputTensor = _stateVectorizer.Vectorize(state);
-            return _stateValueNet.Run(inputTensor);
+            float[] features = new float[_stateVectorizer.FeatureDim];
+            _stateVectorizer.VectorizeInto(state, features);
+            return _stateValueNet.Run(new DenseTensor<float>(features, [1, features.Length]));
         }
     }
 }

@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace Agents
 {
-    public class StateVectorizer
+    public class StateVectorizer : IStateVectorizer
     {
         // Length of the feature vector produced by Vectorize for the classic 4-player board
         public const int FeatureDim = 1609;
@@ -31,6 +31,8 @@ namespace Agents
             _intersectionBuildingTypeVocab = new EnumVocab<Intersection.BuildingType>(nameof(Intersection.BuildingType));
             _edgeBuildingTypeVocab = new EnumVocab<Edge.BuildingType>(nameof(Edge.BuildingType));
         }
+
+        int IStateVectorizer.FeatureDim => FeatureDim;
 
         public DenseTensor<float> Vectorize(GameState state)
         {
