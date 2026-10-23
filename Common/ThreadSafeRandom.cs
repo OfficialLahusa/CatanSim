@@ -34,6 +34,15 @@ namespace Common
             lock (_seedLock) return new Random(_seedSource.Next());
         }
 
+        /// <summary>
+        /// Replaces the random source of the calling thread with one from the seed, so everything this thread draws from
+        /// now on is reproducible (e.g. a whole match played on one thread)
+        /// </summary>
+        public void SeedCurrentThread(int seed)
+        {
+            _random.Value = new Random(seed);
+        }
+
         public int Next(int min, int max)
         {
             return _random.Value!.Next(min, max);

@@ -9,16 +9,27 @@ using Action = Common.Actions.Action;
 
 namespace Agents
 {
+    /// <summary>
+    /// Places its setup settlements on the spots with the most yield points and otherwise plays a random action, preferring
+    /// any other action to ending the turn. With the exploration rate it plays a random action instead (as RandomAgent).
+    /// </summary>
     public class SimpleAgent : Agent
     {
-        public SimpleAgent(sbyte playerIndex)
+        private readonly double _explorationRate;
+        private readonly RandomAgent _randomAgent;
+
+        public SimpleAgent(sbyte playerIndex, double explorationRate = 0)
             : base(playerIndex)
         {
-
+            _explorationRate = explorationRate;
+            _randomAgent = new RandomAgent(playerIndex);
         }
 
         public override Action Act(GameState state)
         {
+            if (_explorationRate > 0 && Utils.Random.NextDouble() < _explorationRate)
+                return _randomAgent.Act(state);
+
             List<Action> firstInitialSettlementActions = FirstInitialSettlementAction.GetActionsForState(state, PlayerIndex);
             if (firstInitialSettlementActions.Count > 0)
             {
