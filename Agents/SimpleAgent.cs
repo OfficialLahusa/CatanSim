@@ -22,16 +22,17 @@ namespace Agents
             List<Action> firstInitialSettlementActions = FirstInitialSettlementAction.GetActionsForState(state, PlayerIndex);
             if (firstInitialSettlementActions.Count > 0)
             {
-                // The first of the most valuable spots
                 return firstInitialSettlementActions
-                    .MaxBy(a => IntersectionValueFunc(state.Board.Intersections[((FirstInitialSettlementAction)a).IntersectionIndex], state))!;
+                    .OrderByDescending(a => IntersectionValueFunc(state.Board.Intersections[((FirstInitialSettlementAction)a).IntersectionIndex], state))
+                    .First();
             }
 
             List<Action> secondInitialSettlementActions = SecondInitialSettlementAction.GetActionsForState(state, PlayerIndex);
             if (secondInitialSettlementActions.Count > 0)
             {
                 return secondInitialSettlementActions
-                    .MaxBy(a => IntersectionValueFunc(state.Board.Intersections[((SecondInitialSettlementAction)a).IntersectionIndex], state))!;
+                    .OrderByDescending(a => IntersectionValueFunc(state.Board.Intersections[((SecondInitialSettlementAction)a).IntersectionIndex], state))
+                    .First();
             }
 
             if (DiscardAction.IsTurnValid(state.Turn, PlayerIndex))
