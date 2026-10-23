@@ -54,13 +54,29 @@
 
 ## Agents
 - Datensatz v2 (nächster Server-Run)
-	- Platzierungsverteilung P(1. bis 4.) und finalen VP-Anteil pro Spieler aus denselben Playouts mitschreiben
-	- Leeres Board und Terminal State nicht mehr in jedem Match erzwingen (derzeit 40% der Samples)
+	- Agents für Matches und Playouts: gemischte Population statt nur Random (z.B. 30% Random, 35% SimpleAgent-ε, 35% BuilderAgent-ε, ε = 10-20% zufällige Moves, Agent pro Sitz zufällig)
+		- Random-Winrates unterschätzen Pläne, die Random nie ausführt (Städte/Ore, Dev Cards, Ports), und das wirkt direkt auf die Setup-Entscheidungen
+		- Gemessen (je 2000 Spiele): BuilderAgent gewinnt 100% gegen 3 Random und 91% gegen 3 SimpleAgents, Playouts sind 1,6-4x schneller als Random
+	- Pro Playout die Rohergebnisse speichern (Gewinner, finale VP pro Spieler, Spiellänge in Runden), Labels erst in Python ableiten
+		- Daraus Platzierungsverteilung P(1. bis 4.) (Gleichstände anteilig verteilen), finalen VP-Anteil und Runden bis Spielende
+		- Später neue Labels ohne neuen Run möglich, Anzahl beendeter Playouts zum Gewichten bleibt erhalten
+	- Sampling: k States pro Match gleichverteilt über alle Positionen 0..N, leeres Board und Terminal State eingeschlossen
+		- Beide nur noch mit der normalen Wahrscheinlichkeit k/(N+1) statt garantiert (derzeit 40% der Samples bei k=5)
+		- Terminal States ohne Playouts labeln (Gewinner, finale VP und Platzierung stehen fest)
+		- Feste k pro Match statt fester Wahrscheinlichkeit pro State (mehr Maps, weniger korrelierte Samples), dafür Position im Match und Matchlänge pro Sample speichern, um beim Training umgewichten zu können
+	- Mehr States mit weniger Playouts pro State (z.B. 300 statt 1000, bei 50% ~2,9 statt ~1,6 pp Standardfehler), plus kleines Präzisions-Set (20-50k States mit 2000+ Playouts) für Evaluation und Kalibrierung
+	- Seeds und Gruppen: zufälliger Run-Seed, daraus pro Match ein Seed (z.B. SplitMix64(Run-Seed, Match-Index)), den der Collector direkt als Gruppen-ID pro Sample schreibt
+		- Ersetzt die Gruppierung in build_dataset_index.py (hängt bisher von der Verzeichnisreihenfolge ab), Gruppen bleiben beim Zusammenführen mehrerer Runs eindeutig
+		- Match-Seed reproduziert Map und Match (Playouts laufen parallel und bleiben nicht reproduzierbar)
 	- Seed, Collector-Einstellungen und Commit-Hash als Metadaten neben dem Datensatz speichern
-	- Thread-Anzahl auf dem Server per Benchmark bestimmen (Messungen bisher nur auf dem 32-Thread-Desktop)
+	- Kalibrierungsmodus im Collector: kurze zeitbegrenzte Läufe mit den echten Einstellungen und mehreren Thread-Anzahlen (z.B. alle, 3/4, 1/2, 1/4 der logischen Kerne), die schnellste übernehmen
+		- Abgebrochene Matches am Ende jedes Laufs verwerfen statt zu Ende zu spielen, Ausgabe in ein temporäres Verzeichnis
+		- Messrauschen beachten (±8-15% zwischen Läufen auf dem Desktop), Kandidaten notfalls wiederholen
+	- Einstellungen als Kommandozeilenargumente statt interaktiver Abfrage (Server-Run in tmux/nohup)
+	- Vektor-Bereinigung (RoundCounter raus, LastRoll-Fix, Counts skalieren) vor dem Run, Vektorizer dafür versionieren (Layout v1 für das aktuelle Net, v2 für den neuen Datensatz), damit kein Zwischenschritt mit neuem Modell nötig ist
+		- Die YAML-Samples erlauben späteres Neu-Vektorisieren, die Chunks wären dann veraltet
+	- Platzbedarf: ~185 KB pro Sample (82% Action History), 1M Samples ~185 GB und 2M Dateien
 	- Bisherige Datensätze folgen der alten Road-Building-Regel (Straßen erst nach dem Würfeln, beliebig später im Zug), der nächste Run nutzt die korrigierte
-	- Stärkere Playout-Agents (SimpleAgent/Greedy, gemischt) statt nur Random prüfen: Random-Winrates unterschätzen Pläne, die Random nie ausführt (Städte/Ore, Dev Cards, Ports), und das wirkt direkt auf die Setup-Entscheidungen
-	- Mehr States mit weniger Playouts pro State prüfen (1000 Playouts haben bei 50% noch ~1,6 pp Standardfehler)
 - Dataset-Pipeline robuster machen
 	- build_dataset_index.py sortiert die Verzeichnisse nicht, Index und Split hängen dadurch vom Dateisystem ab
 	- Fehlende .txt-Labels fallen erst nach der langen Vektorisierung auf, vorher prüfen
