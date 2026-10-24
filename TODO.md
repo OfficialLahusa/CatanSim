@@ -73,7 +73,7 @@
 		- Optional Platzierung als Tie-Breaker im MCTS-Wert, damit weit zurückliegende Gegner im Baum nicht zufällig modelliert werden (braucht zweiten ONNX-Output und StateValueNet in C#)
 	- Phase 3: Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), Augmentation (Spielerrotation, 12 Brett-Symmetrien), Expansionspotenzial, Inference-Budget ~2-3x
 	- Phase 4: Policy Head => Search-distillierte Targets / Self-Play (Expert Iteration) => Belief-aware Net
-	- Nebenbei: alte State-Matrizen in Agents/Training/dataset löschen (~60 GB), Regenerierungs-Snippet in baselines.py verweist auf Funktionen, die es nicht gibt
+	- Nebenbei: alte State-Matrizen in Agents/Training/dataset löschen (~60 GB)
 - Agents/env: OpenMP-Konflikt (libiomp5md.dll von conda-MKL und torch), torch läuft nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren oder Duplikat entfernen
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Größter Hebel: im Setup reicht die Suche nicht über den eigenen Zug hinaus (PV = Settlement + Road), die Entscheidung ist praktisch eine 1-Ply-Bewertung des Nets
