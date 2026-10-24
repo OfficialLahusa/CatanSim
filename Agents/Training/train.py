@@ -1,22 +1,35 @@
 import argparse
+import os
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import lightning as L
-from torch.utils.data import Dataset, DataLoader, Subset
-from state_value_net import StateValueModule
+from torch.utils.data import Dataset, DataLoader, Sampler
+from state_value_net import StateValueModule, PLAYER_COUNT
+
+# Zusätzliche Label-Arrays aus DatasetProcessing/playout_results.py (gleiche Zeilenreihenfolge wie die States), alle optional
+AUX_ARRAYS = ("placements", "vp_shares", "rounds_left", "sibling_groups", "actors")
+
 
 class StateDataset(Dataset):
-    def __init__(self, states_path, labels_path):
+    def __init__(self, states_path, labels_path, aux_dir=None):
         self.states_path = states_path
         self.labels_path = labels_path
+        # Nur die Aux-Arrays, deren Datei existiert
+        self.aux_paths = {}
+        if aux_dir is not None:
+            for name in AUX_ARRAYS:
+                path = os.path.join(aux_dir, f"{name}.npy")
+                if os.path.exists(path):
+                    self.aux_paths[name] = path
         self._open()
 
     def _open(self):
         # Memory mapped NP Arrays
         self.states = np.load(self.states_path, mmap_mode='r')
         self.labels = np.load(self.labels_path, mmap_mode='r')
+        self.aux = {name: np.load(path, mmap_mode='r') for name, path in self.aux_paths.items()}
 
     def __getstate__(self):
         # Wird beim Picklen des Datasets vor dem Senden an Worker aufgerufen
@@ -24,21 +37,70 @@ class StateDataset(Dataset):
         state = self.__dict__.copy()
         state["states"] = None
         state["labels"] = None
+        state["aux"] = None
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         # In jedem Worker Process eigene MemMaps öffnen
-        self._open()  
+        self._open()
 
     def __len__(self):
         return len(self.states)
 
     def __getitem__(self, idx):
         # from_numpy kopiert nicht, sondern teilt zugrundeliegenden Speicher
-        x = torch.from_numpy(self.states[idx].astype(np.float32))
-        y = torch.from_numpy(self.labels[idx].astype(np.float32))
-        return x, y
+        item = {
+            "x": torch.from_numpy(self.states[idx].astype(np.float32)),
+            "y": torch.from_numpy(self.labels[idx].astype(np.float32)),
+        }
+        # Fehlende Labels als NaN bzw. -1, die Losses lassen solche Samples aus
+        aux = self.aux
+        item["placements"] = torch.from_numpy(np.asarray(aux["placements"][idx], dtype=np.float32)) if "placements" in aux \
+            else torch.full((PLAYER_COUNT, PLAYER_COUNT), float("nan"))
+        item["vp_shares"] = torch.from_numpy(np.asarray(aux["vp_shares"][idx], dtype=np.float32)) if "vp_shares" in aux \
+            else torch.full((PLAYER_COUNT,), float("nan"))
+        item["rounds_left"] = torch.tensor(float(aux["rounds_left"][idx]) if "rounds_left" in aux else float("nan"))
+        item["sibling_groups"] = torch.tensor(int(aux["sibling_groups"][idx]) if "sibling_groups" in aux else -1)
+        item["actors"] = torch.tensor(max(int(aux["actors"][idx]), 0) if "actors" in aux else 0)
+        return item
+
+
+class GroupBatchSampler(Sampler):
+    """
+    Batches, die keine Sibling-Gruppe auseinanderreißen, damit der Ranking-Loss die Paare einer Gruppe im selben Batch sieht.
+    Gruppen und einzelne Samples (Units) werden gemischt und der Reihe nach in Batches von etwa batch_size Samples geschnitten,
+    jeweils an der nächsten Unit-Grenze.
+    """
+    def __init__(self, indices, groups, batch_size, shuffle):
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.indices = np.asarray(indices, dtype=np.int64)
+
+        # Unit pro Sample: die Sibling-Gruppe, oder eine eigene für Samples ohne Gruppe
+        unit = np.asarray(groups[self.indices], dtype=np.int64)
+        singles = unit < 0
+        unit[singles] = max(int(unit.max()), -1) + 1 + np.arange(int(singles.sum()))
+        unique_units, self.unit_of = np.unique(unit, return_inverse=True)
+        self.unit_count = unique_units.size
+
+    def __iter__(self):
+        keys = np.random.permutation(self.unit_count) if self.shuffle else np.arange(self.unit_count)
+        order = np.argsort(keys[self.unit_of], kind="stable")
+        indices, units = self.indices[order], self.unit_of[order]
+        starts = np.flatnonzero(np.r_[True, units[1:] != units[:-1]])
+
+        pos = 0
+        while pos < len(indices):
+            # Ende an der ersten Unit-Grenze ab pos + batch_size
+            next_start = np.searchsorted(starts, pos + self.batch_size)
+            end = starts[next_start] if next_start < len(starts) else len(indices)
+            yield indices[pos:end].tolist()
+            pos = end
+
+    def __len__(self):
+        # Schätzung für den Scheduler: Gruppen sind klein gegenüber der Batch-Größe
+        return max(1, -(-len(self.indices) // self.batch_size))
 
 
 def main():
@@ -47,6 +109,14 @@ def main():
     parser.add_argument("--labels", default="dataset/win_rates.npy")
     parser.add_argument("--train-idx", default="dataset/idx_train.npy")
     parser.add_argument("--val-idx", default="dataset/idx_val.npy")
+    # Verzeichnis mit den Arrays aus playout_results.py (placements.npy, vp_shares.npy, ...)
+    parser.add_argument("--aux-dir", default=None)
+    parser.add_argument("--placement-weight", type=float, default=0.0)
+    parser.add_argument("--vp-share-weight", type=float, default=0.0)
+    parser.add_argument("--rounds-weight", type=float, default=0.0)
+    parser.add_argument("--ranking-weight", type=float, default=0.0)
+    # Inputs im Modell standardisieren (Statistik aus bis zu 200k Trainings-States)
+    parser.add_argument("--normalize-inputs", action="store_true")
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--max-epochs", type=int, default=60)
@@ -56,17 +126,31 @@ def main():
     parser.add_argument("--num-workers", type=int, default=8)
     args = parser.parse_args()
 
-    full_ds = StateDataset(args.states, args.labels)
-    train_ds = Subset(full_ds, np.load(args.train_idx))
-    val_ds = Subset(full_ds, np.load(args.val_idx))
+    full_ds = StateDataset(args.states, args.labels, args.aux_dir)
+    for name, weight in [("placements", args.placement_weight), ("vp_shares", args.vp_share_weight),
+                         ("rounds_left", args.rounds_weight), ("sibling_groups", args.ranking_weight)]:
+        if weight > 0 and name not in full_ds.aux_paths:
+            raise SystemExit(f"--{name} loss needs {name}.npy in --aux-dir (from DatasetProcessing/playout_results.py)")
+    print(f"Aux labels: {', '.join(full_ds.aux_paths) or 'none'}")
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True,
-                               num_workers=args.num_workers, pin_memory=True, persistent_workers=True)
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False,
-                             num_workers=args.num_workers, pin_memory=True, persistent_workers=True)
+    train_idx, val_idx = np.load(args.train_idx), np.load(args.val_idx)
+    loader_args = dict(num_workers=args.num_workers, pin_memory=True, persistent_workers=True)
+    if args.ranking_weight > 0:
+        # Sibling-Gruppen zusammenhalten, auch in der Validation (für die Ranking-Metriken)
+        groups = full_ds.aux["sibling_groups"]
+        train_loader = DataLoader(full_ds, batch_sampler=GroupBatchSampler(train_idx, groups, args.batch_size, shuffle=True), **loader_args)
+        val_loader = DataLoader(full_ds, batch_sampler=GroupBatchSampler(val_idx, groups, args.batch_size, shuffle=False), **loader_args)
+    else:
+        train_loader = DataLoader(torch.utils.data.Subset(full_ds, train_idx), batch_size=args.batch_size, shuffle=True, **loader_args)
+        val_loader = DataLoader(torch.utils.data.Subset(full_ds, val_idx), batch_size=args.batch_size, shuffle=False, **loader_args)
 
     in_dim = full_ds.states.shape[1]
-    model = StateValueModule(in_dim=in_dim, lr=args.lr)
+    model = StateValueModule(in_dim=in_dim, lr=args.lr, placement_weight=args.placement_weight, vp_share_weight=args.vp_share_weight,
+                             rounds_weight=args.rounds_weight, ranking_weight=args.ranking_weight, normalize_inputs=args.normalize_inputs)
+    if args.normalize_inputs:
+        sample = np.sort(np.random.default_rng(0).choice(train_idx, min(len(train_idx), 200_000), replace=False))
+        scaled = model.set_input_normalization(full_ds.states[sample])
+        print(f"Input normalization: {scaled} of {in_dim} features standardized, the binary ones unchanged")
 
     logger = L.pytorch.loggers.WandbLogger(project="colonysim")
     callbacks = [
@@ -89,6 +173,8 @@ def main():
         gradient_clip_val=1.0,
         logger=logger,
         callbacks=callbacks,
+        # Die Gruppen-Batches dürfen nicht durch einen DistributedSampler ersetzt werden
+        use_distributed_sampler=args.ranking_weight == 0,
     )
 
     torch.set_float32_matmul_precision("high")
