@@ -18,20 +18,22 @@ Usage:
     python baseline_losses.py --states states.npy --labels labels.npy --val-idx val_idx.npy
 """
 import argparse
+import os
+import sys
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "DatasetProcessing"))
+from state_to_vector import FEATURE_DIM, PLAYER_BLOCK_STARTS, VICTORY_POINT_FIELDS  # noqa: E402
+
 # Per-player Victory Points live at [start : start+5] within each player's
-# 35-wide block (SettlementPoints, CityPoints, DevelopmentCardPoints,
-# LongestRoadPoints, LargestArmyPoints -- their sum is total VP). Offsets
-# below were computed via state_yaml_to_tensor.get_feature_layout() against
-# the current encoding -- do not hand-edit; if the encoding changes,
-# regenerate these via the snippet at the bottom of this file instead.
-PLAYER_BLOCK_STARTS = [1468, 1503, 1538, 1573]
-VP_FIELDS_PER_PLAYER = 5  # first 5 floats of each player block
-EXPECTED_VECTOR_DIM = 1764
+# block (SettlementPoints, CityPoints, DevelopmentCardPoints, LongestRoadPoints,
+# LargestArmyPoints -- their sum is total VP). The offsets come from the
+# vectorizer, so they follow changes of the encoding.
+VP_FIELDS_PER_PLAYER = VICTORY_POINT_FIELDS
+EXPECTED_VECTOR_DIM = FEATURE_DIM
 
 VP_SMOOTHING_ALPHA = 1.0  # Laplace smoothing: avoids exact-zero probabilities
                           # (e.g. a player with 0 VP) and naturally falls back
@@ -76,9 +78,9 @@ def main():
 
     assert states.shape[1] == EXPECTED_VECTOR_DIM, (
         f"states.npy has feature dim {states.shape[1]}, expected "
-        f"{EXPECTED_VECTOR_DIM}. The hardcoded PLAYER_BLOCK_STARTS offsets "
-        "above no longer match -- regenerate them (see snippet at bottom of "
-        "this file) before trusting the VP baseline result."
+        f"{EXPECTED_VECTOR_DIM} for the current encoding. Vectorize or migrate "
+        "the dataset to the current encoding (DatasetProcessing/migrate_states_*.py) "
+        "first, the player block offsets would not match."
     )
 
     val_states = np.asarray(states[val_idx], dtype=np.float32)
@@ -98,16 +100,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-# --------------------------------------------------------------------------
-# If the feature encoding ever changes, regenerate PLAYER_BLOCK_STARTS with:
-#
-#   from state_yaml_to_tensor import (
-#       load_state_yaml_fast, state_to_feature_vector_with_layout, get_feature_layout,
-#   )
-#   gs, played, undo = load_state_yaml_fast("path/to/any_state.yaml")
-#   _, sections = state_to_feature_vector_with_layout(gs, 4, played, undo)
-#   layout = get_feature_layout(sections)
-#   print([layout[f"player_{i}"][0] for i in range(4)])
-# --------------------------------------------------------------------------

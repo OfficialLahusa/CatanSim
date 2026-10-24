@@ -116,7 +116,7 @@ class Vocab:
         idx = self.index.get(key)
         if idx is None:
             print(
-                f"[state_yaml_to_tensor] WARNING: unseen value {key!r} for "
+                f"[state_to_vector] WARNING: unseen value {key!r} for "
                 f"field {self.name!r}; encoding as all-zero. Consider "
                 f"adding it to the vocabulary."
             )
@@ -149,7 +149,7 @@ def owner_one_hot(owner: int, num_players: int) -> List[float]:
     if 0 <= idx < len(vec):
         vec[idx] = 1.0
     else:
-        print(f"[state_yaml_to_tensor] WARNING: owner index {owner} out of range")
+        print(f"[state_to_vector] WARNING: owner index {owner} out of range")
     return vec
 
 
@@ -190,7 +190,7 @@ def port_privileges_multi_hot(value: Any) -> List[float]:
         idx = PORT_PRIVILEGE_INDEX.get(token)
         if idx is None:
             print(
-                f"[state_yaml_to_tensor] WARNING: unseen PortPrivileges flag "
+                f"[state_to_vector] WARNING: unseen PortPrivileges flag "
                 f"{token!r}; ignoring it (not encoded). Consider adding it "
                 f"to PORT_PRIVILEGE_FLAGS."
             )
@@ -375,7 +375,15 @@ CLASSIC_MAP_WIDTH = 7
 _TILE_START, _TILE_SIZE, _TILE_COUNT = 30, 10, 49        # 8 type one-hot (HEX_TYPES), normalized number, present flag
 _INTERSECTION_START, _INTERSECTION_SIZE = 520, 8         # building one-hot, owner one-hot over [-1, 0..3]
 _DEVELOPMENT_BANK = slice(1463, 1468)                   # without Unknown
-_PLAYER_START, _PLAYER_SIZE = 1468, 35
+
+# The player blocks close the base features. Each holds the victory point trackers (VICTORY_POINT_FIELDS, their sum is
+# the player's victory points), played knights, longest road, resource cards, development cards, new development cards,
+# building stock and port privileges (see encode_player)
+PLAYER_COUNT = 4
+VICTORY_POINT_FIELDS = 5
+PLAYER_BLOCK_SIZE = VICTORY_POINT_FIELDS + 2 + len(RESOURCE_KEYS) + 2 * len(DEV_CARD_KEYS) + 4 + len(PORT_PRIVILEGE_FLAGS)
+PLAYER_BLOCK_STARTS = [BASE_FEATURE_DIM - (PLAYER_COUNT - p) * PLAYER_BLOCK_SIZE for p in range(PLAYER_COUNT)]
+_PLAYER_START, _PLAYER_SIZE = PLAYER_BLOCK_STARTS[0], PLAYER_BLOCK_SIZE
 
 # Costs in resource order (Lumber, Brick, Wool, Grain, Ore) of a road, a settlement, a city and a development card
 BUILD_COSTS = np.array([[1, 1, 0, 0, 0], [1, 1, 1, 1, 0], [0, 0, 0, 2, 3], [0, 0, 1, 1, 1]], dtype=np.int64)

@@ -107,7 +107,7 @@ class SaveFileLoadingTest(unittest.TestCase):
 
 
 class BaselineLayoutTest(unittest.TestCase):
-    """baselines.py reads victory points from hardcoded player block offsets"""
+    """baselines.py reads victory points at the player block offsets of the vectorizer"""
 
     def setUp(self):
         try:
