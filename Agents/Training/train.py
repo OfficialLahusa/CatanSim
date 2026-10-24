@@ -84,23 +84,30 @@ class GroupBatchSampler(Sampler):
         unique_units, self.unit_of = np.unique(unit, return_inverse=True)
         self.unit_count = unique_units.size
 
+    def __len__(self):
+        # Exact, since Lightning starts the validation once the stated number of batches is reached
+        return max(1, -(-len(self.indices) // self.batch_size))
+
     def __iter__(self):
         keys = np.random.permutation(self.unit_count) if self.shuffle else np.arange(self.unit_count)
         order = np.argsort(keys[self.unit_of], kind="stable")
         indices, units = self.indices[order], self.unit_of[order]
         starts = np.flatnonzero(np.r_[True, units[1:] != units[:-1]])
 
-        pos = 0
-        while pos < len(indices):
-            # Ende an der ersten Unit-Grenze ab pos + batch_size
-            next_start = np.searchsorted(starts, pos + self.batch_size)
-            end = starts[next_start] if next_start < len(starts) else len(indices)
-            yield indices[pos:end].tolist()
-            pos = end
-
-    def __len__(self):
-        # Schätzung für den Scheduler: Gruppen sind klein gegenüber der Batch-Größe
-        return max(1, -(-len(self.indices) // self.batch_size))
+        # Exactly len(self) batches: the i-th ends at the first unit start from i * n / batches on (a unit is only split
+        # if units are as large as batches, which they aren't with sibling groups of a few samples)
+        batches = len(self)
+        end = 0
+        for i in range(1, batches + 1):
+            start = end
+            if i == batches:
+                end = len(indices)
+            else:
+                target = (i * len(indices)) // batches
+                next_start = np.searchsorted(starts, target)
+                end = starts[next_start] if next_start < len(starts) else len(indices)
+                end = min(max(end, start + 1), len(indices) - (batches - i))
+            yield indices[start:end].tolist()
 
 
 def main():
