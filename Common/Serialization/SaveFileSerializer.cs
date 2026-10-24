@@ -80,16 +80,76 @@ namespace Common.Serialization
 
         public static SaveFile Deserialize(string yaml)
         {
+            return Deserialize(yaml, checkVersion: true);
+        }
+
+        /// <summary>
+        /// Without the version check only for SaveFileUpgrader, on older documents with the current layout
+        /// </summary>
+        internal static SaveFile Deserialize(string yaml, bool checkVersion)
+        {
             SaveFile save = Deserializer.Deserialize<SaveFile>(yaml);
 
             // Older files are rejected instead of being replayed with silently wrong action histories
             // (SaveFileUpgrader can convert them first)
-            if (save.Version != SaveFile.CurrentVersion)
+            if (checkVersion && save.Version != SaveFile.CurrentVersion)
                 throw new UnsupportedSaveFileVersionException(save.Version);
 
             // Reattach AdjacencyMatrix to board after deserialization
             save.GameState.Board.Adjacency.Attach(save.GameState.Board);
 
+            return save;
+        }
+
+        /// <summary>
+        /// Reads a save file and resolves its HistoryReference: the referenced file's played actions (in the same directory,
+        /// resolved recursively) are put before the file's own, and the reference is cleared, so the result has the whole
+        /// history. If the referenced file is missing or doesn't lead to this state, only the file's own actions are kept and
+        /// LoadWarning explains why.
+        /// </summary>
+        public static SaveFile Load(string path)
+        {
+            return Load(Path.GetFullPath(path), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+        }
+
+        private static SaveFile Load(string path, HashSet<string> visited)
+        {
+            SaveFile save = Deserialize(File.ReadAllText(path));
+            if (save.HistoryReference == null) return save;
+
+            visited.Add(path);
+            string referencePath = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, save.HistoryReference));
+            string reference = save.HistoryReference;
+            string fileName = Path.GetFileName(path);
+
+            if (!File.Exists(referencePath))
+            {
+                save.LoadWarning = $"\"{fileName}\" is a sibling state: it stores only its own last move and takes the actions before it from "
+                    + $"\"{reference}\", the state it branches off, which has to be in the same directory. That file was not found, so the state "
+                    + "is loaded with only its last move as history and can't be undone further. Keep sibling files (named like r1_s2_c3.yaml) "
+                    + "together with the file they reference (r1_s2.yaml) when copying samples.";
+                return save;
+            }
+            if (visited.Contains(referencePath))
+                throw new InvalidDataException($"The history references of \"{fileName}\" form a cycle through \"{reference}\".");
+
+            SaveFile referenced = Load(referencePath, visited);
+
+            // The file's own actions, undone from its state, have to lead back to the referenced state
+            GameState undone = new GameState(save.GameState);
+            for (int i = save.PlayedActions.Count - 1; i >= 0; i--)
+                save.PlayedActions[i].Clone().Revert(undone);
+            if (!undone.Equals(referenced.GameState))
+            {
+                save.LoadWarning = $"\"{fileName}\" takes the actions before its last move from \"{reference}\", but that file holds a different "
+                    + "state than the one this move was played from (was it replaced, or copied from another dataset?). The state is loaded with "
+                    + "only its last move as history.";
+                return save;
+            }
+
+            save.PlayedActions = [.. referenced.PlayedActions, .. save.PlayedActions];
+            save.HistoryReference = null;
+            save.LoadWarning = referenced.LoadWarning;
             return save;
         }
 

@@ -60,6 +60,7 @@
 	- Sibling-Gruppen (Default 1 pro Match à 6): States nach mehreren Zügen des Spielers am Zug, Playouts mit denselben Seeds (eigener Würfel-Stream und ein Stream pro Sitz)
 		- Varianz der Differenz zwischen Geschwistern 2,4x kleiner als mit unabhängigen Playouts (Sieg), 3,2x (VP-Anteil)
 		- Kosten: doppelt so viele Samples pro Match, ~75% mehr Zeit pro Match
+		- Sibling-Dateien speichern nur ihren Zug und verweisen per HistoryReference auf die Datei der Root (~33 statt ~88 KB), SaveFileSerializer.Load setzt die History zusammen
 		- Würfe sind keine Geschwister (nur Zufall), Züge mit zufälligem Ausgang (Dev-Kauf, Räuber-Steal) werden einmal realisiert und markiert
 	- Mehr States mit weniger Playouts pro State (z.B. 300 statt 1000, bei 50% ~2,9 statt ~1,6 pp Standardfehler), plus kleines Präzisions-Set (20-50k States mit 2000+ Playouts) für Evaluation und Kalibrierung
 	- Platzbedarf: ~185 KB pro Sample (82% Action History), 1M Samples ~185 GB und 2M Dateien, Playout-Records 12 Byte pro Playout

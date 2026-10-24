@@ -96,7 +96,7 @@ class SaveFileLoadingTest(unittest.TestCase):
     def test_fast_loader_matches_a_full_parse_of_the_current_format(self):
         for path in fixture_files():
             with open(path) as stream:
-                self.assertTrue(stream.readline().startswith("Version: 2"), f"{path} is not a current save file")
+                self.assertTrue(stream.readline().startswith("Version: 3"), f"{path} is not a current save file")
 
             fast_state, played_count, undo_count = load_state_yaml_fast(path)
             full = load_state_yaml(path)

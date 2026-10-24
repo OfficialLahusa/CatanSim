@@ -21,6 +21,8 @@ namespace Common.Serialization
     ///   1: RollResult lives in RollActionHistory, RobberActionHistory stores PrevRobberTileIndex.
     ///   2: Road Building roads are placed right after the card (also before the roll) or given up by the next other action.
     ///      Same layout as 1, but games recorded under the old rule placed them later in the turn, so the upgrade moves them.
+    ///   3: Optional HistoryReference: the played actions continue those of another file (sibling states of the dataset collector).
+    ///      Older files have none, so the upgrade only relabels them; a version 2 reader would take such a file's actions for its whole history.
     /// </summary>
     public static class SaveFileUpgrader
     {
@@ -56,7 +58,19 @@ namespace Common.Serialization
                 yaml = WriteWithVersion(root, 1);
             }
 
-            return UpgradeV1ToV2(yaml);
+            if (version < 2)
+                yaml = UpgradeV1ToV2(yaml);
+
+            return UpgradeV2ToV3(yaml);
+        }
+
+        private static string UpgradeV2ToV3(string yaml)
+        {
+            // Files the previous step had to rewrite are already serialized with the current version
+            if (ReadVersion(yaml) >= 3) return yaml;
+
+            Regex versionLine = new(@"^Version: 2(?=?$)", RegexOptions.Multiline);
+            return versionLine.IsMatch(yaml) ? versionLine.Replace(yaml, "Version: 3", 1) : WriteWithVersion(LoadRoot(yaml), 3);
         }
 
         private static string WriteWithVersion(YamlMappingNode root, int version)
@@ -82,7 +96,7 @@ namespace Common.Serialization
             string relabeled = versionLine.IsMatch(yaml) ? versionLine.Replace(yaml, "Version: 2", 1) : WriteWithVersion(LoadRoot(yaml), 2);
             if (!relabeled.Contains(nameof(RoadBuildingAction))) return relabeled;
 
-            SaveFile save = SaveFileSerializer.Deserialize(relabeled);
+            SaveFile save = SaveFileSerializer.Deserialize(relabeled, checkVersion: false);
 
             // One chronological sequence: played actions, then the undone ones from the oldest to the newest undo
             List<Action> sequence = [.. save.PlayedActions, .. Enumerable.Reverse(save.UndoHistory)];

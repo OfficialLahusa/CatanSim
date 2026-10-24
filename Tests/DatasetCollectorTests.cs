@@ -157,7 +157,7 @@ namespace Tests
             try
             {
                 Dictionary<string, SampleRecord> records = ReadSampleRecords(datasetDirectory).ToDictionary(record => record.Name);
-                SaveFile Load(string name) => SaveFileSerializer.Deserialize(File.ReadAllText(Path.Combine(datasetDirectory, "input", name + ".yaml")));
+                SaveFile Load(string name) => SaveFileSerializer.Load(Path.Combine(datasetDirectory, "input", name + ".yaml"));
                 string Text(string name) => File.ReadAllText(Path.Combine(datasetDirectory, "input", name + ".yaml"));
 
                 List<SampleRecord> roots = records.Values.Where(record => record.Source == "root").ToList();
@@ -175,7 +175,6 @@ namespace Tests
                 foreach (SampleRecord root in roots)
                 {
                     GameState rootState = Load(root.Name).GameState;
-                    string rootActions = ActionItems(Text(root.Name));
                     Assert.False(rootState.HasEnded);
                     Assert.Equal(root.Name, root.SiblingGroup);
                     Assert.Equal(TestUtil.ActingPlayer(rootState), root.Actor);
@@ -187,15 +186,17 @@ namespace Tests
                     List<GameState> siblingStates = [];
                     foreach (SampleRecord sibling in siblings)
                     {
-                        string siblingText = Text(sibling.Name);
-                        SaveFile save = SaveFileSerializer.Deserialize(siblingText);
-                        Action move = save.PlayedActions[^1];
+                        // The file holds only the move and references the root's file, loading puts the history together
+                        SaveFile stored = SaveFileSerializer.Deserialize(Text(sibling.Name));
+                        Assert.Equal(root.Name + ".yaml", stored.HistoryReference);
+                        Action move = Assert.Single(stored.PlayedActions);
+                        SaveFile save = Load(sibling.Name);
+                        Assert.Null(save.LoadWarning);
+                        Assert.Null(save.HistoryReference);
 
                         // The root's actions plus one move of the acting player, never a roll, leading to the sibling's state
                         Assert.Equal(root.Position + 1, sibling.Position);
                         Assert.Equal(root.Position + 1, save.PlayedActions.Count);
-                        if (root.Position > 0)
-                            Assert.StartsWith(rootActions, ActionItems(siblingText));
                         Assert.IsNotType<RollAction>(move);
                         Assert.Equal(root.Actor, move.PlayerIndex);
                         Assert.Equal(move.GetType().Name, sibling.Move);
@@ -222,13 +223,13 @@ namespace Tests
                             Assert.Equal(settings.PlayoutsPerSample, sibling.Playouts.Count);
                         }
 
-                        // The match's own move leads to the match's next state, which was sampled too: the files are the same
+                        // The match's own move leads to the match's next state, which was sampled too: loaded, it is that file
                         if (sibling.Source == "match")
                         {
                             matchSiblings++;
                             string next = $"r{root.Name[1..root.Name.IndexOf('_')]}_s{int.Parse(root.Name[(root.Name.IndexOf("_s") + 2)..]) + 1}";
                             Assert.Equal(sibling.Position, records[next].Position);
-                            Assert.Equal(Text(next), siblingText);
+                            Assert.Equal(Text(next), SaveFileSerializer.Serialize(save));
                         }
                     }
                 }
@@ -440,23 +441,6 @@ namespace Tests
                 }
             }
             return records;
-        }
-
-        /// <summary>
-        /// The items of the PlayedActions list in a save file's text (empty for an empty list)
-        /// </summary>
-        private static string ActionItems(string saveFile)
-        {
-            int start = saveFile.IndexOf("PlayedActions:", StringComparison.Ordinal);
-            string[] lines = saveFile[start..].Split('\n');
-            int length = lines[0].Length + 1;
-            foreach (string line in lines.Skip(1))
-            {
-                // The list ends at the next key at the same indentation
-                if (line.Length > 0 && line[0] != ' ' && line[0] != '-') break;
-                length += line.Length + 1;
-            }
-            return saveFile.Substring(start, Math.Min(length, saveFile.Length - start));
         }
 
         private static string CollectIntoTemporaryDirectory(CollectorSettings settings, out CollectionResult result)

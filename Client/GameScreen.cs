@@ -1392,11 +1392,11 @@ namespace Client
         {
             SaveFile saveFile;
 
-            // Unreadable, malformed or outdated files are reported instead of taking the client down
+            // Unreadable, malformed or outdated files are reported instead of taking the client down.
+            // Load also takes the history of sibling states from the file they reference.
             try
             {
-                string saveData = File.ReadAllText(filepath);
-                saveFile = SaveFileSerializer.Deserialize(saveData);
+                saveFile = SaveFileSerializer.Load(filepath);
             }
             catch (UnsupportedSaveFileVersionException e) when (SaveFileUpgrader.CanUpgrade(e.Version))
             {
@@ -1414,6 +1414,12 @@ namespace Client
             }
 
             ApplySaveFile(saveFile);
+
+            if (saveFile.LoadWarning != null)
+            {
+                Console.WriteLine($"Warning: {saveFile.LoadWarning}");
+                _eventLog.WriteLine(new ColoredStrEntry(saveFile.LoadWarning, Color.Yellow));
+            }
         }
 
         private void UpgradeAndLoadSaveFile(string filepath)

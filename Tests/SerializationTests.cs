@@ -149,6 +149,103 @@ namespace Tests
         }
 
         [Fact]
+        public void VersionTwoFilesOnlyChangeTheirVersionLine()
+        {
+            TestUtil.Seed(85);
+            GameState state = TestUtil.NewGame();
+            List<Action> played = TestUtil.PlayRandomGame(state, maxActions: 300);
+
+            string current = SaveFileSerializer.Serialize(new SaveFile(state, played, []));
+            string versionTwo = new Regex($"^Version: {SaveFile.CurrentVersion}", RegexOptions.Multiline).Replace(current, "Version: 2", 1);
+
+            Assert.Equal(current, SaveFileUpgrader.Upgrade(versionTwo));
+            Assert.DoesNotContain("HistoryReference", current);
+        }
+
+        [Fact]
+        public void ForfeitedFreeRoadsAreRestoredWhenUndoingLoadedActions()
+        {
+            // A Road Building card with only one of its roads placed: ending the turn gives the other one up
+            (GameState start, _, _) = RoadBuildingTurn();
+            GameState state = new GameState(start);
+            int edge = state.Board.Adjacency.GetEdgeIndices(state.Board.Intersections.First(i => state.Board.GetBuilding(i.Index) != Intersection.BuildingType.None).Index)[0];
+            Action roll = new RollAction(0).GetOutcomeVariants(state, 0).First(variant => ((RollAction)variant.Action).History!.RollResult.Total == 8).Action;
+            List<Action> played = [roll, new RoadBuildingAction(0), new RoadAction(0, edge), new EndTurnAction(0)];
+            foreach (Action action in played)
+                action.Apply(state);
+            Assert.Equal(1u, played[^1].ForfeitedFreeRoads);
+
+            SaveFile loaded = SaveFileSerializer.Deserialize(SaveFileSerializer.Serialize(new SaveFile(state, played, [])));
+            Assert.Equal(1u, loaded.PlayedActions[^1].ForfeitedFreeRoads);
+
+            // Undoing the loaded turn end gives the road back
+            loaded.PlayedActions[^1].Revert(loaded.GameState);
+            Assert.Equal(1u, loaded.GameState.Players[0].BuildingStock.FreeRoads);
+            for (int i = loaded.PlayedActions.Count - 2; i >= 0; i--)
+                loaded.PlayedActions[i].Revert(loaded.GameState);
+            Assert.True(loaded.GameState.Equals(start), "undoing the loaded actions did not reach the start of the turn");
+        }
+
+        [Fact]
+        public void HistoryReferencesAreResolvedWhenLoading()
+        {
+            TestUtil.Seed(86);
+            string directory = Path.Combine(Path.GetTempPath(), "catansim-references-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+
+            try
+            {
+                GameState initial = TestUtil.NewGame();
+                GameState state = new GameState(initial);
+                List<Action> played = TestUtil.PlayRandomGame(state, maxActions: 120);
+                File.WriteAllText(Path.Combine(directory, "r0_s1.yaml"), SaveFileSerializer.Serialize(new SaveFile(state, played, [])));
+
+                // Two moves off the match, each file holding only its move and referencing the previous file
+                List<Action> moves = [];
+                string reference = "r0_s1.yaml";
+                foreach (string name in new[] { "r0_s1_c0.yaml", "r0_s1_c0_c0.yaml" })
+                {
+                    Action move = TestUtil.RandomAgents()[TestUtil.ActingPlayer(state)].Act(state);
+                    move.Apply(state);
+                    moves.Add(move);
+                    File.WriteAllText(Path.Combine(directory, name), SaveFileSerializer.Serialize(new SaveFile(state, [move], []) { HistoryReference = reference }));
+                    reference = name;
+                }
+
+                SaveFile loaded = SaveFileSerializer.Load(Path.Combine(directory, "r0_s1_c0_c0.yaml"));
+                Assert.Null(loaded.LoadWarning);
+                Assert.Null(loaded.HistoryReference);
+                Assert.Equal(played.Count + 2, loaded.PlayedActions.Count);
+
+                // The whole history: saving the result writes a self-contained file, and undoing it reaches the start of the game
+                Assert.Equal(SaveFileSerializer.Serialize(new SaveFile(state, [.. played, .. moves], [])), SaveFileSerializer.Serialize(loaded));
+                GameState replay = new GameState(loaded.GameState);
+                for (int i = loaded.PlayedActions.Count - 1; i >= 0; i--)
+                    loaded.PlayedActions[i].Revert(replay);
+                Assert.True(replay.Equals(initial), "the loaded history does not lead back to the start");
+
+                // A missing referenced file: only the file's own move, and a warning that explains sibling files
+                File.Delete(Path.Combine(directory, "r0_s1.yaml"));
+                SaveFile orphan = SaveFileSerializer.Load(Path.Combine(directory, "r0_s1_c0.yaml"));
+                Assert.Single(orphan.PlayedActions);
+                Assert.Contains("\"r0_s1.yaml\"", orphan.LoadWarning);
+                Assert.Contains("same directory", orphan.LoadWarning);
+                Assert.Contains("can't be undone further", orphan.LoadWarning);
+                Assert.Equal(orphan.LoadWarning, SaveFileSerializer.Load(Path.Combine(directory, "r0_s1_c0_c0.yaml")).LoadWarning);
+
+                // A referenced file with another state (e.g. from another dataset) is not used either
+                File.WriteAllText(Path.Combine(directory, "r0_s1.yaml"), SaveFileSerializer.Serialize(new SaveFile(initial, [], [])));
+                SaveFile mismatched = SaveFileSerializer.Load(Path.Combine(directory, "r0_s1_c0.yaml"));
+                Assert.Single(mismatched.PlayedActions);
+                Assert.Contains("different state", mismatched.LoadWarning);
+            }
+            finally
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+
+        [Fact]
         public void RoadBuildingRoadsPlacedAfterTheRollUnderTheOldRuleAreMovedBehindTheCard()
         {
             (GameState start, GameState end, List<Action> played) = RoadBuildingTurn();

@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Common.Actions;
+using Common.Serialization;
 using Action = Common.Actions.Action;
 
 namespace DatasetCollector
@@ -183,8 +184,12 @@ namespace DatasetCollector
 
                 SampleInfo sample = NewSample(name, match, sampleIdx, position, sampleState,
                     siblings == null ? null : new SiblingInfo(name, "root", actor, "", false));
-                if (!CollectSample(sampleState, sample, sampleSeed, saveFiles, null, vectors, records, cancellation))
+                SampleOutcome rootOutcome = CollectSample(sampleState, sample, sampleSeed, saveFiles, null, null, vectors, records, cancellation);
+                if (rootOutcome == SampleOutcome.Cancelled)
                     return;
+
+                // Sibling files take the history from the root's file, if it was written (it isn't without a finished playout)
+                string? historyReference = rootOutcome == SampleOutcome.Written ? name + ".yaml" : null;
 
                 // The siblings use the same playout seeds as their sampled state (common random numbers)
                 for (int siblingIdx = 0; siblings != null && siblingIdx < siblings.Count; siblingIdx++)
@@ -192,7 +197,7 @@ namespace DatasetCollector
                     Sibling sibling = siblings[siblingIdx];
                     SampleInfo siblingSample = NewSample($"{name}_c{siblingIdx}", match, sampleIdx, position + 1, sibling.State,
                         new SiblingInfo(name, sibling.Source, actor, sibling.Move.GetType().Name, sibling.Chance));
-                    if (!CollectSample(sibling.State, siblingSample, sampleSeed, saveFiles, sibling.Move, vectors, records, cancellation))
+                    if (CollectSample(sibling.State, siblingSample, sampleSeed, saveFiles, sibling.Move, historyReference, vectors, records, cancellation) == SampleOutcome.Cancelled)
                         return;
                 }
             }
@@ -330,11 +335,12 @@ namespace DatasetCollector
         }
 
         /// <summary>
-        /// Labels the sample with playouts from the sample seed (an ended match needs none) and writes its files; a sibling's
-        /// save file has its move after the match's first actions. Returns false if the run was cancelled.
+        /// Labels the sample with playouts from the sample seed (an ended match needs none) and writes its files. A sibling's
+        /// save file holds only its move and references the root's file for the history before it (SaveFileSerializer.Load
+        /// puts them together), or, without a written root file, the whole history.
         /// </summary>
-        private bool CollectSample(GameState sampleState, in SampleInfo sample, ulong sampleSeed, MatchSaveFiles saveFiles, Action? siblingMove,
-            VectorChunkWriter vectors, SampleRecordWriter records, CancellationToken cancellation)
+        private SampleOutcome CollectSample(GameState sampleState, in SampleInfo sample, ulong sampleSeed, MatchSaveFiles saveFiles, Action? siblingMove,
+            string? historyReference, VectorChunkWriter vectors, SampleRecordWriter records, CancellationToken cancellation)
         {
             double[] winRates;
             if (sampleState.HasEnded)
@@ -353,7 +359,7 @@ namespace DatasetCollector
                     if (cancellation.IsCancellationRequested)
                     {
                         records.DiscardPlayouts();
-                        return false;
+                        return SampleOutcome.Cancelled;
                     }
 
                     try
@@ -377,14 +383,16 @@ namespace DatasetCollector
                 {
                     records.DiscardPlayouts();
                     Interlocked.Increment(ref _skippedSamples);
-                    return true;
+                    return SampleOutcome.Skipped;
                 }
                 winRates = normalized;
             }
 
             // Write GameState to file, with the actions that led to it
-            int matchActions = siblingMove == null ? sample.Position : sample.Position - 1;
-            File.WriteAllText(Path.Combine(_stateDirectory, sample.Name + ".yaml"), saveFiles.Build(sampleState, matchActions, siblingMove));
+            string saveFile = siblingMove != null && historyReference != null
+                ? SaveFileSerializer.Serialize(new SaveFile(sampleState, [siblingMove], []) { HistoryReference = historyReference })
+                : saveFiles.Build(sampleState, siblingMove == null ? sample.Position : sample.Position - 1, siblingMove);
+            File.WriteAllText(Path.Combine(_stateDirectory, sample.Name + ".yaml"), saveFile);
 
             // Write evaluation to file
             StringBuilder evalStringBuilder = new StringBuilder();
@@ -401,8 +409,10 @@ namespace DatasetCollector
             records.WriteSample(sample);
 
             Interlocked.Increment(ref _writtenSamples);
-            return true;
+            return SampleOutcome.Written;
         }
+
+        private enum SampleOutcome { Written, Skipped, Cancelled }
 
         /// <summary>
         /// Plays the state to the end (or the round limit) with agents drawn from the population, all from the playout's seed
