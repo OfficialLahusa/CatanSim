@@ -51,8 +51,8 @@ namespace Common
         {
             return new RollResult()
             {
-                First = (byte)(Utils.Random.Next(6) + 1),
-                Second = (byte)(Utils.Random.Next(6) + 1)
+                First = (byte)Utils.Random.NextDie(),
+                Second = (byte)Utils.Random.NextDie()
             };
         }
 
