@@ -50,7 +50,6 @@
 - Belief Tracker (sobald implementiert): wahrer State liegt immer im Support jedes Beliefs
 - Übersprungene Rulebook-Tests aktivieren, sobald die Regeln umgesetzt sind
 	- PlayersMayTradeResourcesWithEachOtherOnTheirTurn (Player Trades)
-- Ersten CI-Lauf unter Linux prüfen (bisher lief nichts unter Linux)
 
 ## Agents
 - Roadmap v2
@@ -59,7 +58,7 @@
 	- Phase 0: vor dem Server-Run
 		- Erledigt: Pipeline ohne Rückfragen (prepare_dataset.py: Index, Label-Check vor der Vektorisierung, Vektorisierung aus den Chunks, Labels, Split nur als Indizes), Teilläufe im Collector (--parts, fortsetzbar, --first-match), lokaler Pilot
 		- Lokaler Pilot (Desktop, 32 Threads): 5000 Matches in 215 s, 0 Fehler, 9,97 Samples pro Match, ~70k Playouts/s, 0,70 MB und ~20 Dateien pro Match, Pipeline 19 s, Training mit allen Zusatz-Losses läuft
-		- Offen auf dem Server: .NET 9 SDK, einmal dotnet test (unter Linux lief bisher nichts), Build mit -p:DownloadStateValueNet=false falls ohne Netz, Python-Umgebung (numpy, pyyaml, rich, scikit-learn)
+		- Offen auf dem Server: .NET 10 SDK, einmal dotnet test (die CI läuft schon unter Ubuntu), Build mit -p:DownloadStateValueNet=false falls ohne Netz, Python-Umgebung (numpy, pyyaml, rich, scikit-learn)
 		- Offen auf dem Server: Pilot wiederholen (--calibrate, dann ~5k Matches durch Collector, prepare_dataset.py und ein kurzes train.py), danach Größe festlegen
 		- Hochrechnung Desktop für 400k Matches: ~4,8 h, ~280 GB, ~8M Dateien, ~4M Samples, Pipeline ~30 min (states.npy ~14 GB, wird direkt in die Datei geschrieben)
 		- Weitere abgeleitete Features (z.B. Expansionspotenzial) blockieren nicht: sie werden aus dem Basisvektor berechnet, gespeicherte Datensätze lassen sich migrieren
