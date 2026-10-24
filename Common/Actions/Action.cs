@@ -23,9 +23,10 @@ namespace Common.Actions
         /// <summary>
         /// Road Building roads the player had not placed yet when taking this action. They are placed right after the card
         /// or not at all, so any other action returns them to the stock (only written to save files when non-zero).
+        /// The setter is public because the deserializer skips private setters, and Revert needs the value of loaded actions.
         /// </summary>
         [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
-        public uint ForfeitedFreeRoads { get; private set; }
+        public uint ForfeitedFreeRoads { get; set; }
 
         public Action(sbyte playerIndex)
         {
