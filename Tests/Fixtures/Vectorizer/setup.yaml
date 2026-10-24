@@ -6,8 +6,8 @@ GameState:
   Turn:
     RoundCounter: 1
     LastRoll:
-      First: 3
-      Second: 6
+      First: 6
+      Second: 3
     PlayerIndex: 3
     TypeOfRound: SecondInitial
     MustRoll: false

@@ -91,7 +91,8 @@
 		- Offline-Ablation auf dem 3M-Datensatz (156 Features: Produktion und blockierte Produktion, Tauschkurse, Bezahlbarkeit pro Bauwerk, Rennabstände): val KL 0.0867 => 0.0355, mit Input-Normalisierung 0.0320 (Favorit 87,5% => 94,0%, Fehler pro VP-Rückstand ~45% kleiner)
 		- Nur die 156 Features ohne Brett schon 0.0494, Normalisierung allein ohne die Features bringt nichts (0.0871)
 		- Läufe waren nach 60 Epochen noch nicht konvergiert
-		- Noch offen: in beide Vektorizer übernehmen (Parität), Modell mit Normalisierung exportieren, im MCTS gegen j1fvwmta testen; Expansionspotenzial (erreichbare Bauplätze) fehlt noch
+		- In beiden Vektorizern (1764 Features), Modell sl159q7y mit Input-Normalisierung: val KL 0.0318, im MCTS 36:4 gegen j1fvwmta (2 gegen 2), gegen 3 BuilderAgents 17/30 statt 8/30
+		- Noch offen: Expansionspotenzial (erreichbare Bauplätze pro Spieler mit ihren Pips)
 	- Counts nur zusammen mit Input-Normalisierung skalieren (z.B. Standardisierung pro Feature oder separater Count-Encoder)
 		- Nur skalieren (/10 bis /19) hat das jetzige MLP klar verschlechtert: val KL 0.087 => 0.094, im MCTS 13:17 gegen das alte Net
 	- Aux Head für Runden bis Spielende (Spielfortschritt lernen ohne RoundCounter)

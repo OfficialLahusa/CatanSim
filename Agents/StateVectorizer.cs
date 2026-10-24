@@ -11,8 +11,11 @@ namespace Agents
 {
     public class StateVectorizer : IStateVectorizer
     {
-        // Length of the feature vector produced by Vectorize for the classic 4-player board
-        public const int FeatureDim = 1608;
+        // Length of the feature vector produced by Vectorize for the classic 4-player board: the encoded state, then the
+        // derived features (shared with DatasetProcessing/state_to_vector.py, see EncodeDerived)
+        public const int BaseFeatureDim = 1608;
+        public const int DerivedFeatureDim = 156;
+        public const int FeatureDim = BaseFeatureDim + DerivedFeatureDim;
 
         // The setup rounds count the round counter up to 2, so the first normal round is 2
         private const int FirstNormalRound = 2;
@@ -66,6 +69,7 @@ namespace Agents
             EncodeResourceCardSet(state.ResourceBank, ref writer);
             EncodeDevelopmentCardSet(state.DevelopmentBank, ref writer);
             EncodePlayers(state, ref writer);
+            EncodeDerived(state, ref writer);
 
             if (writer.Position != FeatureDim)
                 throw new InvalidOperationException($"The board produced {writer.Position} features instead of {FeatureDim}.");
@@ -183,6 +187,156 @@ namespace Agents
                 }
             }
         }
+
+        // Costs in resource order (Lumber, Brick, Wool, Grain, Ore) of a road, a settlement, a city and a development card
+        private static readonly int[,] BuildCosts = { { 1, 1, 0, 0, 0 }, { 1, 1, 1, 1, 0 }, { 0, 0, 0, 2, 3 }, { 0, 0, 1, 1, 1 } };
+
+        /// <summary>
+        /// Compound quantities that an MLP finds hard to compute from the one-hot board (production needs ownership, building,
+        /// tile type and number through the geometry), all per player. Integer arithmetic and float32 in the same order as
+        /// derived_features in state_to_vector.py, which the parity fixtures compare exactly:
+        /// production per resource without the robber's tile (expected cards per roll, cities count twice), production blocked
+        /// by the robber, total production, trade rates, per build (road, settlement, city, development card) whether it can be
+        /// built now, missing cards, missing cards after trading surplus and rounds until affordable, and race margins
+        /// </summary>
+        private static void EncodeDerived(GameState state, ref FeatureWriter writer)
+        {
+            const int players = 4, resources = 5, builds = 4;
+            Board board = state.Board;
+            int robber = board.GetRobberTileIndex() ?? -1;
+
+            Span<int> productionPips = stackalloc int[players * resources];
+            Span<int> blockedPips = stackalloc int[players * resources];
+            Span<int> settlements = stackalloc int[players];
+            Span<int> cornerTiles = stackalloc int[6];
+            for (int i = 0; i < board.IntersectionCount; i++)
+            {
+                Intersection.BuildingType building = board.GetBuilding(i);
+                if (building == Intersection.BuildingType.None) continue;
+
+                int owner = board.GetBuildingOwner(i);
+                int multiplier = building == Intersection.BuildingType.City ? 2 : 1;
+                if (building == Intersection.BuildingType.Settlement) settlements[owner]++;
+
+                int tileCount = board.Adjacency.GetTileIndices(i, cornerTiles);
+                for (int t = 0; t < tileCount; t++)
+                {
+                    Tile tile = board.Map.Values[cornerTiles[t]];
+                    int resource = ResourceIndex(tile.Type);
+                    if (resource < 0) continue;
+
+                    Span<int> target = cornerTiles[t] == robber ? blockedPips : productionPips;
+                    target[owner * resources + resource] += multiplier * tile.YieldPoints;
+                }
+            }
+
+            Span<float> total = stackalloc float[players];
+            for (int p = 0; p < players; p++)
+            {
+                int pips = 0;
+                for (int r = 0; r < resources; r++) pips += productionPips[p * resources + r];
+                total[p] = pips / 36f;
+            }
+
+            foreach (int pips in productionPips) writer.Add(pips / 36f);
+            foreach (int pips in blockedPips) writer.Add(pips / 36f);
+            foreach (float production in total) writer.Add(production);
+
+            // Trade rates: 2 with the resource's port, 3 with a generic port, otherwise 4
+            Span<int> rates = stackalloc int[players * resources];
+            for (int p = 0; p < players; p++)
+            {
+                PortPrivileges ports = state.Players[p].PortPrivileges;
+                for (int r = 0; r < resources; r++)
+                {
+                    PortPrivileges resourcePort = (PortPrivileges)(1 << (r + 1));
+                    rates[p * resources + r] = ports.HasFlag(resourcePort) ? 2 : ports.HasFlag(PortPrivileges.GenericThreeToOne) ? 3 : 4;
+                    writer.Add(rates[p * resources + r]);
+                }
+            }
+
+            // Affordability per player and build
+            uint developmentLeft = 0;
+            foreach (DevelopmentCardType development in DevelopmentTypes)
+                if (development != DevelopmentCardType.Unknown) developmentLeft += state.DevelopmentBank.Get(development);
+
+            Span<int> missing = stackalloc int[players * builds];
+            Span<int> missingTraded = stackalloc int[players * builds];
+            for (int p = 0; p < players; p++)
+            {
+                PlayerState player = state.Players[p];
+                for (int b = 0; b < builds; b++)
+                {
+                    int lacking = 0, tradeable = 0;
+                    for (int r = 0; r < resources; r++)
+                    {
+                        int held = (int)player.ResourceCards.Get((ResourceCardType)(r + 1));
+                        lacking += Math.Max(BuildCosts[b, r] - held, 0);
+                        tradeable += Math.Max(held - BuildCosts[b, r], 0) / rates[p * resources + r];
+                    }
+                    missing[p * builds + b] = lacking;
+                    missingTraded[p * builds + b] = Math.Max(lacking - tradeable, 0);
+                }
+            }
+
+            for (int p = 0; p < players; p++)
+            {
+                BuildingStock stock = state.Players[p].BuildingStock;
+                writer.Add(missingTraded[p * builds + 0] == 0 && stock.RemainingRoads > 0);
+                writer.Add(missingTraded[p * builds + 1] == 0 && stock.RemainingSettlements > 0);
+                writer.Add(missingTraded[p * builds + 2] == 0 && stock.RemainingCities > 0 && settlements[p] > 0);
+                writer.Add(missingTraded[p * builds + 3] == 0 && developmentLeft > 0);
+            }
+            foreach (int lacking in missing) writer.Add(lacking);
+            foreach (int lacking in missingTraded) writer.Add(lacking);
+            for (int p = 0; p < players; p++)
+                for (int b = 0; b < builds; b++)
+                    writer.Add(Math.Min(missingTraded[p * builds + b] / Math.Max(4f * total[p], 0.05f), 20f));
+
+            // Race margins against the best other player
+            Span<int> victoryPoints = stackalloc int[players];
+            Span<int> roads = stackalloc int[players];
+            Span<int> knights = stackalloc int[players];
+            for (int p = 0; p < players; p++)
+            {
+                var points = state.Players[p].VictoryPoints;
+                victoryPoints[p] = (int)(points.SettlementPoints + points.CityPoints + points.DevelopmentCardPoints + points.LongestRoadPoints + points.LargestArmyPoints);
+                roads[p] = (int)state.Players[p].LongestRoadLength;
+                knights[p] = (int)state.Players[p].PlayedKnights;
+            }
+
+            for (int p = 0; p < players; p++)
+            {
+                int handSize = 0;
+                for (int r = 0; r < resources; r++) handSize += (int)state.Players[p].ResourceCards.Get((ResourceCardType)(r + 1));
+
+                writer.Add(victoryPoints[p]);
+                writer.Add(Lead(victoryPoints, p));
+                writer.Add(state.Settings.VictoryPoints - victoryPoints[p]);
+                writer.Add(Lead(roads, p));
+                writer.Add(Lead(knights, p));
+                writer.Add(handSize);
+                writer.Add(handSize > state.Settings.RobberCardLimit);
+            }
+        }
+
+        private static int Lead(ReadOnlySpan<int> values, int player)
+        {
+            int bestOther = int.MinValue;
+            for (int p = 0; p < values.Length; p++)
+                if (p != player) bestOther = Math.Max(bestOther, values[p]);
+            return values[player] - bestOther;
+        }
+
+        private static int ResourceIndex(Tile.TileType type) => type switch
+        {
+            Tile.TileType.Lumber => 0,
+            Tile.TileType.Brick => 1,
+            Tile.TileType.Wool => 2,
+            Tile.TileType.Grain => 3,
+            Tile.TileType.Ore => 4,
+            _ => -1
+        };
 
         private static void EncodeResourceCardSet(CardSet<ResourceCardType> cardSet, ref FeatureWriter writer)
         {

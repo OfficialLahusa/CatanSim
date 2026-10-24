@@ -60,6 +60,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", required=True)
     parser.add_argument("--out", default="state_value_net.onnx")
-    parser.add_argument("--in-dim", type=int, default=1608)
+    parser.add_argument("--in-dim", type=int, default=1764)
     args = parser.parse_args()
     export(args.ckpt, args.out, args.in_dim)

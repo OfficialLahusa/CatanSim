@@ -192,6 +192,24 @@ namespace Common
             return GetTileByIndex(neighborIndex);
         }
 
+        /// <summary>
+        /// Writes the map storage indices (y * width + x) of the tiles at the corners of the intersection into the destination
+        /// (room for 6) and returns how many there are, without allocating
+        /// </summary>
+        public int GetTileIndices(int intersectionIndex, Span<int> destination)
+        {
+            AdjIdx[]? neighbors = _topology.IntersectionToTile[intersectionIndex];
+            if (neighbors == null) return 0;
+
+            int count = 0;
+            foreach (AdjIdx neighbor in neighbors)
+            {
+                if (neighbor != NO_ADJACENCY)
+                    destination[count++] = neighbor;
+            }
+            return count;
+        }
+
         public Tile? GetTile(Intersection source, Direction.Corner direction)
         {
             if (_topology.IntersectionToTile[source.Index] == null)

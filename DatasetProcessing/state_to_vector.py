@@ -1,5 +1,5 @@
 """
-Convert GameState YAML snapshots into a flat fixed-length (currently 1608) numeric feature vector.
+Convert GameState YAML snapshots into a flat fixed-length (currently 1764) numeric feature vector.
 
 Design notes
 ------------
@@ -28,6 +28,9 @@ Design notes
 - Counts stay unscaled: a net trained on counts divided to about [0, 1] was
   clearly worse, most likely because the small count features get drowned
   out by the many binary board features.
+- After the base features come derived ones (production, trade rates,
+  affordability, race margins, see derived_features); with them and input
+  normalization the value net's val KL fell from 0.087 to 0.032.
 - Output ordering is 100% deterministic given a fixed board (Width/Height,
   hex count, intersection/edge count, player count), so tensors from
   different snapshots of the *same* map/player-count are directly
@@ -41,8 +44,12 @@ from typing import Any, Dict, Iterable, List, Sequence
 import numpy as np
 import yaml
 
+# Size of the base features (the encoded state) and of the derived features after them
+BASE_FEATURE_DIM = 1608
+DERIVED_FEATURE_DIM = 156
+
 # Total size of the final GameState feature vector
-FEATURE_DIM = 1608
+FEATURE_DIM = BASE_FEATURE_DIM + DERIVED_FEATURE_DIM
 
 # The setup rounds count the round counter up to 2, so the first normal round is 2
 FIRST_NORMAL_ROUND = 2
@@ -344,6 +351,116 @@ def encode_players(players: List[Dict[str, Any]]) -> List[float]:
 # Top-level conversion
 # --------------------------------------------------------------------------
 
+# --------------------------------------------------------------------------
+# Derived features: compound quantities of the board, hands and stocks that
+# an MLP finds hard to compute from the one-hot encoding (e.g. production
+# needs ownership x building x tile type x number through the geometry).
+# Computed from the base vector, so stored datasets can be extended too, with
+# integer arithmetic and float32 in the same order as Agents/StateVectorizer.cs
+# (the parity fixtures compare both exactly).
+# --------------------------------------------------------------------------
+
+# Land tiles at the corners of every intersection of the classic board (map storage index y * 7 + x)
+CLASSIC_INTERSECTION_TILES = [
+    (9, 15), (9,), (9,), (10, 9), (10, 16, 9), (16, 15, 9), (10,), (11, 10), (11, 17, 10), (17, 16, 10), (11,), (11,),
+    (18, 11), (18, 17, 11), (15, 22), (15,), (16, 23, 15), (23, 22, 15), (17, 24, 16), (24, 23, 16), (18, 25, 17),
+    (25, 24, 17), (18,), (26, 18), (26, 25, 18), (22,), (22,), (23, 29, 22), (29, 22), (24, 30, 23), (30, 29, 23),
+    (25, 31, 24), (31, 30, 24), (26, 32, 25), (32, 31, 25), (26,), (26,), (32, 26), (29,), (30, 37, 29), (37, 29),
+    (31, 38, 30), (38, 37, 30), (32, 39, 31), (39, 38, 31), (32,), (39, 32), (37,), (38, 37), (37,), (39, 38), (38,),
+    (39,), (39,),
+]
+CLASSIC_MAP_WIDTH = 7
+
+# Layout of the base vector
+_TILE_START, _TILE_SIZE, _TILE_COUNT = 30, 10, 49        # 8 type one-hot (HEX_TYPES), normalized number, present flag
+_INTERSECTION_START, _INTERSECTION_SIZE = 520, 8         # building one-hot, owner one-hot over [-1, 0..3]
+_DEVELOPMENT_BANK = slice(1463, 1468)                   # without Unknown
+_PLAYER_START, _PLAYER_SIZE = 1468, 35
+
+# Costs in resource order (Lumber, Brick, Wool, Grain, Ore) of a road, a settlement, a city and a development card
+BUILD_COSTS = np.array([[1, 1, 0, 0, 0], [1, 1, 1, 1, 0], [0, 0, 0, 2, 3], [0, 0, 1, 1, 1]], dtype=np.int64)
+
+_INTERSECTION_TILE_MATRIX = np.zeros((len(CLASSIC_INTERSECTION_TILES), _TILE_COUNT), dtype=np.int64)
+for _i, _tiles in enumerate(CLASSIC_INTERSECTION_TILES):
+    _INTERSECTION_TILE_MATRIX[_i, list(_tiles)] = 1
+
+
+def derived_features(base: np.ndarray) -> np.ndarray:
+    """
+    Derived features of base vectors (n, BASE_FEATURE_DIM), as float32 (n, DERIVED_FEATURE_DIM), all per player:
+    - production per resource: expected cards per roll (pips / 36, cities count twice), without the robber's tile (20)
+    - production blocked by the robber per resource (20), total production (4)
+    - trade rate per resource: 2 with its port, 3 with a generic port, otherwise 4 (20)
+    - per build (road, settlement, city, development card): can build now (cards after trading at the player's rates,
+      stock, a settlement to upgrade, cards left in the bank), missing cards, missing cards after trading surplus,
+      rounds until affordable at the current production (missing after trading / (4 rolls * production), at most 20) (4 x 16)
+    - race: victory points, lead over the best other player, points still needed, longest road and knights against the
+      best other player, hand size, over the robber card limit (28)
+    """
+    x = np.asarray(base, dtype=np.float32)
+    n = x.shape[0]
+    players = 4
+
+    tiles = x[:, _TILE_START:_TILE_START + _TILE_COUNT * _TILE_SIZE].reshape(n, _TILE_COUNT, _TILE_SIZE)
+    # Numbers are stored normalized (and maybe as float16), rounding gives the exact number back
+    number = np.rint(tiles[:, :, 8].astype(np.float64) * 10 + 2).astype(np.int64)
+    pips = np.where(tiles[:, :, 9] > 0, 6 - np.abs(7 - number), 0)
+    tile_pips = np.rint(tiles[:, :, 1:6]).astype(np.int64) * pips[:, :, None]            # (n, tiles, resources)
+
+    robber = np.rint(x[:, 19]).astype(np.int64) * CLASSIC_MAP_WIDTH + np.rint(x[:, 18]).astype(np.int64)
+    on_robber = np.zeros((n, _TILE_COUNT), dtype=np.int64)
+    on_robber[np.arange(n), robber] = 1
+
+    inters = np.rint(x[:, _INTERSECTION_START:_INTERSECTION_START + 54 * _INTERSECTION_SIZE]).astype(np.int64).reshape(n, 54, _INTERSECTION_SIZE)
+    owner = inters[:, :, 4:8]                                                               # (n, intersections, players)
+    weight = (inters[:, :, 1] + 2 * inters[:, :, 2])[:, :, None] * owner
+    settlements = (inters[:, :, 1:2] * owner).sum(axis=1)
+
+    free_pips = np.matmul(weight.transpose(0, 2, 1), np.matmul(_INTERSECTION_TILE_MATRIX, tile_pips * (1 - on_robber)[:, :, None]))
+    blocked_pips = np.matmul(weight.transpose(0, 2, 1), np.matmul(_INTERSECTION_TILE_MATRIX, tile_pips * on_robber[:, :, None]))
+    production = free_pips.astype(np.float32) / np.float32(36)
+    blocked = blocked_pips.astype(np.float32) / np.float32(36)
+    total = free_pips.sum(axis=2).astype(np.float32) / np.float32(36)
+
+    player = np.rint(x[:, _PLAYER_START:_PLAYER_START + players * _PLAYER_SIZE]).astype(np.int64).reshape(n, players, _PLAYER_SIZE)
+    hand = player[:, :, 8:13]
+    ports = player[:, :, 29:35]
+    rate = np.where(ports[:, :, 1:6] > 0, 2, np.where(ports[:, :, 0:1] > 0, 3, 4))
+
+    missing = np.maximum(BUILD_COSTS[None, None] - hand[:, :, None, :], 0).sum(axis=3)               # (n, players, builds)
+    tradeable = (np.maximum(hand[:, :, None, :] - BUILD_COSTS[None, None], 0) // rate[:, :, None, :]).sum(axis=3)
+    missing_traded = np.maximum(missing - tradeable, 0)
+    development_left = np.rint(x[:, _DEVELOPMENT_BANK]).sum(axis=1) > 0
+    stock = np.stack([
+        player[:, :, 25] > 0,
+        player[:, :, 26] > 0,
+        (player[:, :, 27] > 0) & (settlements > 0),
+        np.repeat(development_left[:, None], players, axis=1),
+    ], axis=2)
+    can_build = (missing_traded == 0) & stock
+    rounds = np.minimum(missing_traded.astype(np.float32) / np.maximum(np.float32(4) * total, np.float32(0.05))[:, :, None], np.float32(20))
+
+    def lead(values):
+        best_other = np.stack([np.delete(values, p, axis=1).max(axis=1) for p in range(players)], axis=1)
+        return values - best_other
+
+    vp = player[:, :, 0:5].sum(axis=2)
+    hand_size = hand.sum(axis=2)
+    race = np.stack([
+        vp, lead(vp), np.rint(x[:, 1:2]).astype(np.int64) - vp,
+        lead(player[:, :, 6]), lead(player[:, :, 5]),
+        hand_size, hand_size > np.rint(x[:, 0:1]),
+    ], axis=2)
+
+    return np.concatenate([
+        production.reshape(n, -1), blocked.reshape(n, -1), total,
+        rate.reshape(n, -1).astype(np.float32),
+        can_build.reshape(n, -1).astype(np.float32), missing.reshape(n, -1).astype(np.float32),
+        missing_traded.reshape(n, -1).astype(np.float32), rounds.reshape(n, -1),
+        race.reshape(n, -1).astype(np.float32),
+    ], axis=1)
+
+
 def state_to_feature_vector(
     state: Dict[str, Any],
     num_players: int = 4,
@@ -369,6 +486,7 @@ def state_to_feature_vector(
     feats.extend(encode_resource_bank(state["ResourceBank"]))
     feats.extend(encode_development_bank(state["DevelopmentBank"]))
     feats.extend(encode_players(state["Players"]))
+    feats.extend(derived_features(np.array([feats]))[0].tolist())
     return feats
 
 

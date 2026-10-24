@@ -75,9 +75,10 @@ namespace Tests
             GameState state = TestUtil.NewGame();
             Board board = state.Board;
 
-            // Layout after the tiles: intersections (3 building + 5 owner), edges (2 + 5), banks (6 + 6), players (35 each)
+            // Layout after the tiles: intersections (3 building + 5 owner), edges (2 + 5), banks (6 + 6), players (35 each),
+            // then the derived features (unaffected here: nobody has built yet)
             const int TileWidth = 10;
-            int tilesStart = StateVectorizer.FeatureDim
+            int tilesStart = StateVectorizer.BaseFeatureDim
                 - board.Map.Length * TileWidth - board.Intersections.Count * 8 - board.Edges.Count * 7 - 12 - state.Players.Length * 35;
 
             float[] baseline = Vectorize(state);
