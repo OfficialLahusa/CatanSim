@@ -88,6 +88,10 @@
 	- v2 erstmal auf v1 basiert mit Player/Tile Encoderblöcken, Embeddings statt OneHot, GraphConv auf v3 schieben
 	- State Vectorizer über push/pop Architektur eine Index-Aufschlüsselung generieren lassen
 	- Abgeleitete Features: Produktion pro Spieler und Ressource (Pips, Räuber), Hafenzugang, "kann X bauen"-Flags
+		- Offline-Ablation auf dem 3M-Datensatz (156 Features: Produktion und blockierte Produktion, Tauschkurse, Bezahlbarkeit pro Bauwerk, Rennabstände): val KL 0.0867 => 0.0355, mit Input-Normalisierung 0.0320 (Favorit 87,5% => 94,0%, Fehler pro VP-Rückstand ~45% kleiner)
+		- Nur die 156 Features ohne Brett schon 0.0494, Normalisierung allein ohne die Features bringt nichts (0.0871)
+		- Läufe waren nach 60 Epochen noch nicht konvergiert
+		- Noch offen: in beide Vektorizer übernehmen (Parität), Modell mit Normalisierung exportieren, im MCTS gegen j1fvwmta testen; Expansionspotenzial (erreichbare Bauplätze) fehlt noch
 	- Counts nur zusammen mit Input-Normalisierung skalieren (z.B. Standardisierung pro Feature oder separater Count-Encoder)
 		- Nur skalieren (/10 bis /19) hat das jetzige MLP klar verschlechtert: val KL 0.087 => 0.094, im MCTS 13:17 gegen das alte Net
 	- Aux Head für Runden bis Spielende (Spielfortschritt lernen ohne RoundCounter)
