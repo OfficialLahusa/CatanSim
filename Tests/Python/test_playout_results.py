@@ -16,7 +16,8 @@ sys.path.insert(0, os.path.join(REPO, "DatasetProcessing"))
 
 from playout_results import PLAYOUT_DTYPE, build_label_arrays, derive_labels, load_samples, placements  # noqa: E402
 
-HEADER = "name,group,match,sample,position,match_length,round,terminal,playouts,finished,playout_offset,match_winner,match_vp,match_rounds,match_agents"
+HEADER = ("name,group,match,sample,position,match_length,round,terminal,playouts,finished,playout_offset,"
+          "match_winner,match_vp,match_rounds,match_agents,end_winner,end_vp,sibling_group,source,actor,move,chance")
 
 
 def playout(winner, vp, end_round, agents=(2, 2, 1, 0)):
@@ -44,9 +45,17 @@ class PlayoutResultsTest(unittest.TestCase):
             playout(2, [5, 8, 10, 9], 40),
             playout(-1, [6, 6, 6, 6], 50000),  # hit the round limit
         ]
+        self.records += [
+            playout(1, [4, 10, 3, 7], 31),  # sibling r0_s0_c0, same seeds as r0_s0
+            playout(3, [5, 9, 4, 10], 36),
+            playout(1, [3, 10, 6, 6], 35),
+            playout(-1, [6, 6, 6, 6], 50000),
+        ]
         write_dataset(self.directory, "w00", [
-            "r0_s0,123,0,0,40,200,8,0,4,3,0,1,4/10/5/5,32,BBSR",
-            "r0_s1,123,0,1,200,200,32,1,0,0,4,1,4/10/5/5,32,BBSR",
+            "r0_s0,123,0,0,40,200,8,0,4,3,0,1,4/10/5/5,32,BBSR,,,r0_s0,root,1,,",
+            "r0_s0_c0,123,0,0,41,200,8,0,4,3,4,1,4/10/5/5,32,BBSR,,,r0_s0,match,1,RoadAction,0",
+            "r0_s0_c1,123,0,0,41,200,8,1,0,0,8,1,4/10/5/5,32,BBSR,1,6/10/2/3,r0_s0,random,1,SettlementAction,0",
+            "r0_s1,123,0,1,200,200,32,1,0,0,8,1,4/10/5/5,32,BBSR,1,4/10/5/5,,,,,",
         ], self.records)
 
     def tearDown(self):
@@ -54,7 +63,7 @@ class PlayoutResultsTest(unittest.TestCase):
 
     def test_samples_refer_to_their_playouts(self):
         samples = load_samples(self.directory)
-        self.assertEqual(["r0_s0", "r0_s1"], sorted(samples))
+        self.assertEqual(["r0_s0", "r0_s0_c0", "r0_s0_c1", "r0_s1"], sorted(samples))
         self.assertEqual(4, len(samples["r0_s0"].playouts))
         self.assertEqual(0, len(samples["r0_s1"].playouts))
         self.assertEqual(123, samples["r0_s0"].match_seed)
@@ -73,6 +82,19 @@ class PlayoutResultsTest(unittest.TestCase):
         np.testing.assert_allclose(labels.placements.sum(axis=0), 1)
         np.testing.assert_allclose(labels.placements.sum(axis=1), 1)
 
+    def test_siblings_name_their_group_and_an_ended_sibling_its_own_result(self):
+        samples = load_samples(self.directory)
+        self.assertEqual({"r0_s0"}, {s.sibling_group for s in samples.values() if s.sibling_group})
+        self.assertEqual(("root", "match", "random"), tuple(samples[n].source for n in ("r0_s0", "r0_s0_c0", "r0_s0_c1")))
+        self.assertEqual("", samples["r0_s1"].sibling_group)
+        self.assertEqual(-1, samples["r0_s1"].actor)
+
+        # The winning settlement ends the match there, whatever the match's own result was
+        labels = derive_labels(samples["r0_s0_c1"])
+        np.testing.assert_allclose(labels.win_rates, [0, 1, 0, 0])
+        np.testing.assert_allclose(labels.vp_shares, np.array([6, 10, 2, 3]) / 21)
+        np.testing.assert_allclose(derive_labels(samples["r0_s0_c0"]).win_rates, [0, 2 / 3, 0, 1 / 3])
+
     def test_ended_matches_are_labeled_by_their_result(self):
         labels = derive_labels(load_samples(self.directory)["r0_s1"])
 
@@ -87,13 +109,15 @@ class PlayoutResultsTest(unittest.TestCase):
         np.testing.assert_allclose(result, [[1, 0, 0, 0]] + [[0, 1 / 3, 1 / 3, 1 / 3]] * 3)
 
     def test_label_arrays_follow_the_index(self):
-        index = [[0, 0, "run", "r0_s1"], [1, 0, "run", "r0_s0"], [2, 1, "old_run", "r5_s2"]]
+        index = [[0, 0, "run", "r0_s1"], [1, 0, "run", "r0_s0"], [2, 1, "old_run", "r5_s2"], [3, 0, "run", "r0_s0_c1"]]
         os.makedirs(os.path.join(self.base, "old_run"))  # an older dataset without raw results
 
         arrays = build_label_arrays(self.base, index)
 
-        self.assertEqual([1, 3, 0], arrays["finished_playouts"].tolist())
-        self.assertEqual([123, 123, 0], arrays["match_seeds"].tolist())
+        self.assertEqual([1, 3, 0, 1], arrays["finished_playouts"].tolist())
+        self.assertEqual([123, 123, 0, 123], arrays["match_seeds"].tolist())
+        self.assertEqual([-1, 0, -1, 0], arrays["sibling_groups"].tolist())
+        self.assertEqual([-1, 1, -1, 1], arrays["actors"].tolist())
         self.assertTrue(np.isnan(arrays["rounds_left"][2]))
         np.testing.assert_allclose(arrays["placements"][0, 1], [1, 0, 0, 0])
 

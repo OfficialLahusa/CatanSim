@@ -6,7 +6,11 @@ Each collector worker writes, in the dataset directory:
 - `playouts/w<worker>.bin`: one 12-byte record per playout (PLAYOUT_DTYPE): the winner (-1 if the playout hit the
   round limit), the final VP of the 4 players, the agent kind of the 4 seats (AGENT_KINDS) and the round counter at the end.
 
-Ended matches have no playouts, their labels come from the match result in the sample line. Labels derived here:
+Ended states have no playouts, their labels come from their result in the sample line (end_winner, end_vp).
+Sibling groups: a sampled state (source "root") and the states after several moves of its acting player ("actor"),
+all labeled with the same playout seeds. Every member names the group (the root's sample name) in sibling_group;
+the move's action type is in "move", and "chance" marks moves whose random outcome (development card, robber steal)
+was realized once. Labels derived here:
 - win rates (what output/*.txt holds)
 - placement distribution P(1st..4th) per player, ties among the losers split evenly over their places
 - share of the final VP per player
@@ -14,8 +18,9 @@ Ended matches have no playouts, their labels come from the match result in the s
 So new labels need no new run, and the number of finished playouts stays available for weighting.
 
 Usage: python playout_results.py <index.csv> <base path>
-  writes placements.npy (n, 4, 4), vp_shares.npy (n, 4), rounds_left.npy (n,), finished_playouts.npy (n,) and
-  match_seeds.npy (n,) aligned with the index entries, for entries of datasets with raw results (NaN / 0 otherwise)
+  writes placements.npy (n, 4, 4), vp_shares.npy (n, 4), rounds_left.npy (n,), finished_playouts.npy (n,),
+  match_seeds.npy (n,), sibling_groups.npy (n,), actors.npy (n,) and chance_moves.npy (n,) aligned with the index
+  entries, for entries of datasets with raw results (NaN / 0 / -1 otherwise)
 """
 
 import csv
@@ -56,6 +61,13 @@ class Sample:
     match_vp: np.ndarray
     match_rounds: int
     match_agents: str
+    end_winner: int         # winner and final VP of an ended state (-1 / empty otherwise)
+    end_vp: np.ndarray
+    sibling_group: str      # name of the group's root sample, empty outside sibling groups
+    source: str             # root, match, builder or random
+    actor: int              # acting player whose moves the group compares, -1 outside sibling groups
+    move: str
+    chance: bool
 
 
 def load_samples(dataset_dir: str) -> Dict[str, Sample]:
@@ -89,6 +101,13 @@ def load_samples(dataset_dir: str) -> Dict[str, Sample]:
                     match_vp=np.array([int(v) for v in row["match_vp"].split("/")]),
                     match_rounds=int(row["match_rounds"]),
                     match_agents=row["match_agents"],
+                    end_winner=int(row["end_winner"]) if row["end_winner"] else -1,
+                    end_vp=np.array([int(v) for v in row["end_vp"].split("/")]) if row["end_vp"] else np.zeros(0, dtype=int),
+                    sibling_group=row["sibling_group"],
+                    source=row["source"],
+                    actor=int(row["actor"]) if row["actor"] else -1,
+                    move=row["move"],
+                    chance=row["chance"] == "1",
                 )
 
     return samples
@@ -137,10 +156,10 @@ class Labels:
 
 
 def derive_labels(sample: Sample) -> Labels:
-    """Labels of a sample from its finished playouts, or from the match result for an ended match. Raises without any."""
+    """Labels of a sample from its finished playouts, or from its result for an ended state. Raises without any."""
     if sample.terminal:
-        winners = np.array([sample.match_winner])
-        vp = sample.match_vp[None, :]
+        winners = np.array([sample.end_winner])
+        vp = sample.end_vp[None, :]
         rounds_left = np.array([0.0])
     else:
         finished = sample.playouts[sample.playouts["winner"] >= 0]
@@ -172,7 +191,11 @@ def build_label_arrays(base_path: str, index: List[list]) -> Dict[str, np.ndarra
         "rounds_left": np.full((n,), np.nan, dtype=np.float32),
         "finished_playouts": np.zeros((n,), dtype=np.int32),
         "match_seeds": np.zeros((n,), dtype=np.uint64),
+        "sibling_groups": np.full((n,), -1, dtype=np.int64),
+        "actors": np.full((n,), -1, dtype=np.int8),
+        "chance_moves": np.zeros((n,), dtype=bool),
     }
+    group_ids: Dict[tuple, int] = {}
 
     samples_by_subdir = {subdir: load_samples(os.path.join(base_path, subdir)) for subdir in sorted({entry[2] for entry in index})}
     for entry_idx, _, subdir_name, entry_name in index:
@@ -185,6 +208,10 @@ def build_label_arrays(base_path: str, index: List[list]) -> Dict[str, np.ndarra
         arrays["rounds_left"][entry_idx] = labels.rounds_left
         arrays["finished_playouts"][entry_idx] = labels.finished
         arrays["match_seeds"][entry_idx] = sample.match_seed
+        if sample.sibling_group:
+            arrays["sibling_groups"][entry_idx] = group_ids.setdefault((subdir_name, sample.sibling_group), len(group_ids))
+            arrays["actors"][entry_idx] = sample.actor
+            arrays["chance_moves"][entry_idx] = sample.chance
 
     return arrays
 

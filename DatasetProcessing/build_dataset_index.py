@@ -71,22 +71,24 @@ def build_dataset_index(base_path):
             full_path = os.path.abspath(file)
             basename = os.path.splitext(os.path.basename(file))[0]
 
-            # Dateinamen in Run-Index und State-Index unterteilen (z.B. "r919_s4" => 919, 4)
-            run_idx_in_subdir, state_idx_in_run = map(int, basename.replace("r", "").replace("s", "").split("_"))
+            # Dateinamen in Run-Index, State-Index und ggf. Sibling-Index unterteilen (z.B. "r919_s4" => 919, 4, -1 und "r919_s4_c2" => 919, 4, 2)
+            parts = basename.split("_")
+            run_idx_in_subdir, state_idx_in_run = int(parts[0][1:]), int(parts[1][1:])
+            sibling_idx = int(parts[2][1:]) if len(parts) > 2 else -1
 
             #print(run_idx_in_subdir, state_idx_in_run, basename, full_path)
             #print(file, os.path.abspath(file), basename, os.path.basename(os.path.dirname(os.path.dirname(file))))
 
-            files_in_subdir.append([full_path, run_idx_in_subdir, state_idx_in_run])
+            files_in_subdir.append([full_path, run_idx_in_subdir, state_idx_in_run, sibling_idx])
 
         # Dateinamen sortieren
-        files_in_subdir.sort(key=lambda entry: (entry[1], entry[2]))
+        files_in_subdir.sort(key=lambda entry: (entry[1], entry[2], entry[3]))
 
         #print(*files_in_subdir, sep="\n")
 
         # Dateinamen gruppieren und indizieren
         for entry in files_in_subdir:
-            full_path, run_idx_in_subdir, state_idx_in_run = entry
+            full_path, run_idx_in_subdir, state_idx_in_run, sibling_idx = entry
             entry_name = os.path.splitext(os.path.basename(full_path))[0]
 
             group_key = ("seed", match_seeds[entry_name]) if entry_name in match_seeds else ("run", subdir_name, run_idx_in_subdir)

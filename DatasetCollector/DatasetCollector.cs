@@ -1,4 +1,5 @@
 ﻿using Agents;
+using Agents.MCTS;
 using Common;
 using System.Diagnostics;
 using System.Globalization;
@@ -6,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Common.Actions;
 using Action = Common.Actions.Action;
 
 namespace DatasetCollector
@@ -155,16 +157,120 @@ namespace DatasetCollector
                 }
             }
 
+            // Sibling groups go to sampled states (in random order) where the acting player has at least two distinct moves
+            Dictionary<int, List<Sibling>> groups = [];
+            foreach (int sampleIdx in Enumerable.Range(0, statesToSample.Count).OrderBy(_ => Utils.Random.Next()).ToList())
+            {
+                if (groups.Count == _settings.SiblingGroupsPerMatch) break;
+
+                (GameState state, int position) = statesToSample[sampleIdx];
+                Action? matchMove = position < playedActions.Count ? playedActions[position] : null;
+                ulong groupSeed = Seeds.Derive(SampleSeed(matchSeed, position), GroupSeedIndex);
+                List<Sibling> siblings = SiblingStates(state, matchMove, _settings.SiblingsPerGroup, groupSeed);
+                if (siblings.Count > 0) groups[sampleIdx] = siblings;
+            }
+
             // The actions of the match are serialized once for the save files of all its samples
             MatchSaveFiles saveFiles = new MatchSaveFiles(playedActions);
 
             for (int sampleIdx = 0; sampleIdx < statesToSample.Count; sampleIdx++)
             {
                 (GameState sampleState, int position) = statesToSample[sampleIdx];
-                SampleInfo sample = new($"r{matchIdx}_s{sampleIdx}", match, sampleIdx, position, sampleState.Turn.RoundCounter);
-                if (!CollectSample(sampleState, sample, saveFiles, vectors, records, cancellation))
+                ulong sampleSeed = SampleSeed(matchSeed, position);
+                string name = $"r{matchIdx}_s{sampleIdx}";
+                groups.TryGetValue(sampleIdx, out List<Sibling>? siblings);
+                int actor = siblings == null ? -1 : ActingPlayer(sampleState);
+
+                SampleInfo sample = NewSample(name, match, sampleIdx, position, sampleState,
+                    siblings == null ? null : new SiblingInfo(name, "root", actor, "", false));
+                if (!CollectSample(sampleState, sample, sampleSeed, saveFiles, null, vectors, records, cancellation))
                     return;
+
+                // The siblings use the same playout seeds as their sampled state (common random numbers)
+                for (int siblingIdx = 0; siblings != null && siblingIdx < siblings.Count; siblingIdx++)
+                {
+                    Sibling sibling = siblings[siblingIdx];
+                    SampleInfo siblingSample = NewSample($"{name}_c{siblingIdx}", match, sampleIdx, position + 1, sibling.State,
+                        new SiblingInfo(name, sibling.Source, actor, sibling.Move.GetType().Name, sibling.Chance));
+                    if (!CollectSample(sibling.State, siblingSample, sampleSeed, saveFiles, sibling.Move, vectors, records, cancellation))
+                        return;
+                }
             }
+        }
+
+        // Seeds of a sampled state: its playouts use Derive(sampleSeed, playoutIdx), its sibling group the index below
+        private const ulong GroupSeedIndex = 1UL << 40;
+
+        private static ulong SampleSeed(ulong matchSeed, int position)
+        {
+            return Seeds.Derive(matchSeed, (ulong)position);
+        }
+
+        private static SampleInfo NewSample(string name, MatchInfo match, int sampleIdx, int position, GameState state, SiblingInfo? sibling)
+        {
+            int[]? endVictoryPoints = state.HasEnded ? state.Players.Select(player => player.VictoryPoints.Total).ToArray() : null;
+            return new SampleInfo(name, match, sampleIdx, position, state.Turn.RoundCounter, state.HasEnded,
+                state.HasEnded ? state.Turn.PlayerIndex : -1, endVictoryPoints, sibling);
+        }
+
+        /// <summary>
+        /// A state one move away from a sampled state: the move as applied (with its history) and how it was chosen
+        /// </summary>
+        internal sealed record Sibling(GameState State, Action Move, string Source, bool Chance);
+
+        /// <summary>
+        /// The sibling group of a state: the states after up to count distinct moves of the acting player, or none if there
+        /// aren't at least two. The move played in the match comes first (its recorded outcome included), then BuilderAgent's
+        /// choice, then random moves (action type uniformly, then a move of that type), all from the group seed.
+        /// Rolls are left out: they are no choice between states, only chance. Moves with a random outcome (development card,
+        /// robber steal) get one outcome, realized from the group seed, and are marked. Moves leading to the same state as an
+        /// earlier one are skipped. A move may end the match; that sibling is labeled by its result.
+        /// </summary>
+        internal static List<Sibling> SiblingStates(GameState root, Action? matchMove, int count, ulong groupSeed)
+        {
+            if (root.HasEnded || count < 2) return [];
+
+            Utils.Random.SeedCurrentThread(Seeds.ToInt32(groupSeed));
+            sbyte actor = ActingPlayer(root);
+            List<Action> legalMoves = MCTSTree.GetValidActions(root).Where(move => move is not RollAction && move.PlayerIndex == actor).ToList();
+            List<Sibling> siblings = [];
+
+            // Asked of the unresolved legal move, since the match's move already carries its outcome
+            bool HasRandomOutcome(Action move) => legalMoves.FirstOrDefault(legal => legal.IsSameDecision(move)) is IOutputRandomnessAction random
+                && random.GetOutcomeVariants(root, actor).Count > 1;
+
+            void TryAdd(Action candidate, string source)
+            {
+                if (siblings.Count >= count || candidate is RollAction || candidate.PlayerIndex != actor || !candidate.IsValidFor(root)) return;
+                if (siblings.Any(sibling => sibling.Move.IsSameDecision(candidate))) return;
+
+                bool chance = HasRandomOutcome(candidate);
+                GameState state = new GameState(root);
+                Action move = candidate.Clone();
+                move.Apply(state);
+                if (siblings.Any(sibling => sibling.State.Equals(state))) return;
+
+                siblings.Add(new Sibling(state, move, source, chance));
+            }
+
+            if (matchMove != null) TryAdd(matchMove, "match");
+            TryAdd(new BuilderAgent(actor).Act(root), "builder");
+
+            List<List<Action>> movesByType = legalMoves.GroupBy(move => move.GetType()).Select(group => group.ToList()).ToList();
+            while (siblings.Count < count && movesByType.Count > 0)
+            {
+                int typeIdx = Utils.Random.Next(movesByType.Count);
+                List<Action> moves = movesByType[typeIdx];
+                int moveIdx = Utils.Random.Next(moves.Count);
+                Action move = moves[moveIdx];
+                moves[moveIdx] = moves[^1];
+                moves.RemoveAt(moves.Count - 1);
+                if (moves.Count == 0) movesByType.RemoveAt(typeIdx);
+
+                TryAdd(move, "random");
+            }
+
+            return siblings.Count >= 2 ? siblings : [];
         }
 
         /// <summary>
@@ -224,9 +330,11 @@ namespace DatasetCollector
         }
 
         /// <summary>
-        /// Labels the sample with playouts (an ended match needs none) and writes its files. Returns false if the run was cancelled.
+        /// Labels the sample with playouts from the sample seed (an ended match needs none) and writes its files; a sibling's
+        /// save file has its move after the match's first actions. Returns false if the run was cancelled.
         /// </summary>
-        private bool CollectSample(GameState sampleState, in SampleInfo sample, MatchSaveFiles saveFiles, VectorChunkWriter vectors, SampleRecordWriter records, CancellationToken cancellation)
+        private bool CollectSample(GameState sampleState, in SampleInfo sample, ulong sampleSeed, MatchSaveFiles saveFiles, Action? siblingMove,
+            VectorChunkWriter vectors, SampleRecordWriter records, CancellationToken cancellation)
         {
             double[] winRates;
             if (sampleState.HasEnded)
@@ -239,7 +347,6 @@ namespace DatasetCollector
             {
                 int[] timesWon = new int[PLAYER_COUNT];
                 Span<AgentKind> kinds = stackalloc AgentKind[PLAYER_COUNT];
-                ulong sampleSeed = Seeds.Derive(sample.Match.Seed, (ulong)sample.Position);
 
                 for (int runIdx = 0; runIdx < _settings.PlayoutsPerSample; runIdx++)
                 {
@@ -276,7 +383,8 @@ namespace DatasetCollector
             }
 
             // Write GameState to file, with the actions that led to it
-            File.WriteAllText(Path.Combine(_stateDirectory, sample.Name + ".yaml"), saveFiles.Build(sampleState, sample.Position));
+            int matchActions = siblingMove == null ? sample.Position : sample.Position - 1;
+            File.WriteAllText(Path.Combine(_stateDirectory, sample.Name + ".yaml"), saveFiles.Build(sampleState, matchActions, siblingMove));
 
             // Write evaluation to file
             StringBuilder evalStringBuilder = new StringBuilder();
@@ -307,9 +415,16 @@ namespace DatasetCollector
             GameState simState = new GameState(sampleState);
             foreach (Agent agent in agents) agent.ResetToState(simState);
 
+            // Every seat draws from its own stream (dice have one anyway), so playouts of siblings with the same seed stay
+            // alike for longer after their states differ: the difference between siblings has 2.4x less variance than with
+            // independent playouts, 2.2x with one shared stream
+            Random[] seatRandoms = Enumerable.Range(0, PLAYER_COUNT).Select(seat => new Random(Seeds.ToInt32(Seeds.Derive(playoutSeed, (ulong)seat)))).ToArray();
+
             while (!simState.HasEnded && simState.Turn.RoundCounter < UNWINNABLE_ROUND_THRESHOLD)
             {
-                Action action = agents[ActingPlayer(simState)].Act(simState);
+                sbyte acting = ActingPlayer(simState);
+                Utils.Random.UseOnCurrentThread(seatRandoms[acting]);
+                Action action = agents[acting].Act(simState);
                 action.Apply(simState);
                 foreach (Agent agent in agents) agent.HandleAction(action);
             }
@@ -351,6 +466,8 @@ namespace DatasetCollector
                     matches = _settings.Matches,
                     samples_per_match = _settings.SamplesPerMatch,
                     playouts_per_sample = _settings.PlayoutsPerSample,
+                    sibling_groups_per_match = _settings.SiblingGroupsPerMatch,
+                    siblings_per_group = _settings.SiblingsPerGroup,
                     center_desert = _settings.CenterDesert,
                     agents = new
                     {

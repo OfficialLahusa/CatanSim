@@ -33,18 +33,22 @@ namespace DatasetCollector
         }
 
         /// <summary>
-        /// The save file of the state reached after the first actionCount actions, with these actions
+        /// The save file of the state reached after the first actionCount actions, with these actions, and after the extra
+        /// action if one is given (a move off the match, e.g. for a sibling of a sampled state)
         /// </summary>
-        public string Build(GameState state, int actionCount)
+        public string Build(GameState state, int actionCount, Action? extraAction = null)
         {
             string stateFile = SaveFileSerializer.Serialize(new SaveFile(state, [], []));
-            if (actionCount == 0) return stateFile;
+            if (actionCount == 0 && extraAction == null) return stateFile;
 
+            string[]? extraItems = extraAction == null ? [] : SplitItems(SaveFileSerializer.Serialize(new List<Action> { extraAction }), 1);
             int at = stateFile.IndexOf(EmptyActionList, StringComparison.Ordinal);
-            if (_actionItems == null || at < 0 || stateFile.IndexOf(EmptyActionList, at + 1, StringComparison.Ordinal) >= 0)
+            if (_actionItems == null || extraItems == null || at < 0 || stateFile.IndexOf(EmptyActionList, at + 1, StringComparison.Ordinal) >= 0)
             {
                 FallbackCount++;
-                return SaveFileSerializer.Serialize(new SaveFile(state, _actions.GetRange(0, actionCount), []));
+                List<Action> actions = _actions.GetRange(0, actionCount);
+                if (extraAction != null) actions.Add(extraAction);
+                return SaveFileSerializer.Serialize(new SaveFile(state, actions, []));
             }
 
             // "PlayedActions: []" + newline becomes "PlayedActions:" + newline + the items, keeping the serializer's line ending
@@ -52,12 +56,13 @@ namespace DatasetCollector
             int newlineLength = stateFile.AsSpan(afterList).StartsWith("\r\n") ? 2 : 1;
             int rest = afterList + newlineLength;
 
-            int itemLength = 0;
+            int itemLength = extraItems.Sum(item => item.Length);
             for (int i = 0; i < actionCount; i++) itemLength += _actionItems[i].Length;
 
             StringBuilder file = new(stateFile.Length + itemLength);
             file.Append(stateFile, 0, at).Append("PlayedActions:").Append(stateFile, afterList, newlineLength);
             for (int i = 0; i < actionCount; i++) file.Append(_actionItems[i]);
+            foreach (string item in extraItems) file.Append(item);
             file.Append(stateFile, rest, stateFile.Length - rest);
             return file.ToString();
         }

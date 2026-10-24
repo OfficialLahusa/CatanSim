@@ -11,6 +11,17 @@ namespace DatasetCollector
         public int Matches { get; init; } = 100;
         public int SamplesPerMatch { get; init; } = 5;
         public int PlayoutsPerSample { get; init; } = 300;
+
+        /// <summary>
+        /// Sampled states per match that also get a sibling group: the states after several of the acting player's moves,
+        /// labeled with the same playout seeds as the sampled state
+        /// </summary>
+        public int SiblingGroupsPerMatch { get; init; } = 1;
+
+        /// <summary>
+        /// Most siblings per group (fewer if the player has fewer distinct moves)
+        /// </summary>
+        public int SiblingsPerGroup { get; init; } = 6;
         public ulong Seed { get; init; } = Seeds.NewRunSeed();
         public AgentMix Agents { get; init; } = AgentMix.Default;
         public bool CenterDesert { get; init; }
@@ -33,6 +44,8 @@ namespace DatasetCollector
             if (Matches < 0) throw new ArgumentException("--matches must not be negative.");
             if (SamplesPerMatch < 1) throw new ArgumentException("--samples must be at least 1.");
             if (PlayoutsPerSample < 1) throw new ArgumentException("--playouts must be at least 1.");
+            if (SiblingGroupsPerMatch < 0) throw new ArgumentException("--sibling-groups must not be negative.");
+            if (SiblingGroupsPerMatch > 0 && SiblingsPerGroup < 2) throw new ArgumentException("--siblings must be at least 2.");
             Agents.Validate();
         }
     }
@@ -49,6 +62,10 @@ namespace DatasetCollector
               --samples K            States sampled per match, uniformly over all positions including the empty
                                      board and the ended match (default 5)
               --playouts P           Playouts per sampled state (default 300), ended matches need none
+              --sibling-groups G     Sampled states per match that get a sibling group (default 1, 0 for none):
+                                     the states after several moves of the acting player, labeled with the
+                                     same playout seeds, so moves can be compared with little noise
+              --siblings S           Most siblings per group (default 6)
               --threads N|auto       Worker threads (default: all logical cores); auto calibrates first
               --seed S               Run seed (default: random), every match seed is derived from it
               --agents SPEC          Agent population for matches and playouts, drawn per seat
@@ -80,6 +97,8 @@ namespace DatasetCollector
                     case "--matches": settings = settings with { Matches = IntValue() }; break;
                     case "--samples": settings = settings with { SamplesPerMatch = IntValue() }; break;
                     case "--playouts": settings = settings with { PlayoutsPerSample = IntValue() }; break;
+                    case "--sibling-groups": settings = settings with { SiblingGroupsPerMatch = IntValue() }; break;
+                    case "--siblings": settings = settings with { SiblingsPerGroup = IntValue() }; break;
                     case "--threads":
                         string threads = Value();
                         if (threads == "auto") calibrateThreads = true;

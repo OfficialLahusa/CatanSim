@@ -25,7 +25,7 @@ namespace Tests
         public void EverySampleIsAGamePrefixWithMatchingLabelsAndRecords()
         {
             // More samples than positions: every position of the match is sampled, the empty board and the ended match included
-            var settings = new CollectorSettings { Threads = 1, Matches = 1, SamplesPerMatch = 100_000, PlayoutsPerSample = 3, Seed = 150 };
+            var settings = new CollectorSettings { Threads = 1, Matches = 1, SamplesPerMatch = 100_000, PlayoutsPerSample = 3, Seed = 150, SiblingGroupsPerMatch = 0 };
             string datasetDirectory = CollectIntoTemporaryDirectory(settings, out CollectionResult result);
 
             try
@@ -143,6 +143,110 @@ namespace Tests
         }
 
         [Fact]
+        public void SiblingGroupsBranchOffWithOneDistinctMoveEach()
+        {
+            // Every position is sampled and every one that can gets a group: the last state before the end then has the winning
+            // move as a sibling, the ended match none, and states where only a roll is possible none
+            var settings = new CollectorSettings
+            {
+                Threads = 1, Matches = 1, SamplesPerMatch = 100_000, PlayoutsPerSample = 1, Seed = 155,
+                SiblingGroupsPerMatch = int.MaxValue, SiblingsPerGroup = 4,
+            };
+            string datasetDirectory = CollectIntoTemporaryDirectory(settings, out CollectionResult result);
+
+            try
+            {
+                Dictionary<string, SampleRecord> records = ReadSampleRecords(datasetDirectory).ToDictionary(record => record.Name);
+                SaveFile Load(string name) => SaveFileSerializer.Deserialize(File.ReadAllText(Path.Combine(datasetDirectory, "input", name + ".yaml")));
+                string Text(string name) => File.ReadAllText(Path.Combine(datasetDirectory, "input", name + ".yaml"));
+
+                List<SampleRecord> roots = records.Values.Where(record => record.Source == "root").ToList();
+                Assert.NotEmpty(roots);
+                int terminalSiblings = 0, matchSiblings = 0;
+
+                foreach (SampleRecord record in records.Values.Where(record => record.Source == "" && !record.Name.Contains("_c")))
+                {
+                    // States without a group: ended, or without two distinct moves besides rolling
+                    GameState state = Load(record.Name).GameState;
+                    Assert.True(state.HasEnded || DatasetCollector.DatasetCollector.SiblingStates(state, null, 4, 1).Count == 0, $"{record.Name} has no group");
+                }
+
+                ILookup<string, SampleRecord> groupMembers = records.Values.Where(record => record.Source is not ("" or "root")).ToLookup(record => record.SiblingGroup);
+                foreach (SampleRecord root in roots)
+                {
+                    GameState rootState = Load(root.Name).GameState;
+                    string rootActions = ActionItems(Text(root.Name));
+                    Assert.False(rootState.HasEnded);
+                    Assert.Equal(root.Name, root.SiblingGroup);
+                    Assert.Equal(TestUtil.ActingPlayer(rootState), root.Actor);
+
+                    List<SampleRecord> siblings = groupMembers[root.Name].OrderBy(record => record.Name).ToList();
+                    Assert.InRange(siblings.Count, 2, settings.SiblingsPerGroup);
+                    Assert.Equal(Enumerable.Range(0, siblings.Count).Select(i => $"{root.Name}_c{i}"), siblings.Select(sibling => sibling.Name));
+
+                    List<GameState> siblingStates = [];
+                    foreach (SampleRecord sibling in siblings)
+                    {
+                        string siblingText = Text(sibling.Name);
+                        SaveFile save = SaveFileSerializer.Deserialize(siblingText);
+                        Action move = save.PlayedActions[^1];
+
+                        // The root's actions plus one move of the acting player, never a roll, leading to the sibling's state
+                        Assert.Equal(root.Position + 1, sibling.Position);
+                        Assert.Equal(root.Position + 1, save.PlayedActions.Count);
+                        if (root.Position > 0)
+                            Assert.StartsWith(rootActions, ActionItems(siblingText));
+                        Assert.IsNotType<RollAction>(move);
+                        Assert.Equal(root.Actor, move.PlayerIndex);
+                        Assert.Equal(move.GetType().Name, sibling.Move);
+                        Assert.Equal(root.Actor, sibling.Actor);
+                        if (sibling.Chance) Assert.True(move is BuyDevelopmentCardAction or RobberAction);
+
+                        GameState replayed = new GameState(rootState);
+                        move.Clone().Apply(replayed);
+                        Assert.True(replayed.Equals(save.GameState), $"{sibling.Name} is not its root after its move");
+                        Assert.DoesNotContain(siblingStates, other => other.Equals(save.GameState));
+                        siblingStates.Add(save.GameState);
+
+                        // The same playout seeds as the root: as many playouts, and an ended sibling none, labeled by its result
+                        Assert.Equal(save.GameState.HasEnded, sibling.Terminal);
+                        if (sibling.Terminal)
+                        {
+                            terminalSiblings++;
+                            Assert.Empty(sibling.Playouts);
+                            Assert.Equal(root.Actor, sibling.EndWinner);
+                            Assert.Equal(save.GameState.Players.Select(player => player.VictoryPoints.Total), sibling.EndVictoryPoints!);
+                        }
+                        else
+                        {
+                            Assert.Equal(settings.PlayoutsPerSample, sibling.Playouts.Count);
+                        }
+
+                        // The match's own move leads to the match's next state, which was sampled too: the files are the same
+                        if (sibling.Source == "match")
+                        {
+                            matchSiblings++;
+                            string next = $"r{root.Name[1..root.Name.IndexOf('_')]}_s{int.Parse(root.Name[(root.Name.IndexOf("_s") + 2)..]) + 1}";
+                            Assert.Equal(sibling.Position, records[next].Position);
+                            Assert.Equal(Text(next), siblingText);
+                        }
+                    }
+                }
+
+                // The match's winning move is the sibling of the state before the end that ends the match
+                foreach (SampleRecord beforeEnd in roots.Where(root => root.Position == root.MatchLength - 1))
+                    Assert.Contains(records.Values, record => record.SiblingGroup == beforeEnd.Name && record.Source == "match" && record.Terminal);
+                Assert.True(terminalSiblings > 0);
+                Assert.True(matchSiblings > roots.Count / 2);
+                Assert.Equal(0, result.Errors);
+            }
+            finally
+            {
+                DeleteTemporaryDirectory(datasetDirectory);
+            }
+        }
+
+        [Fact]
         public void SampledPositionsAreDistinctAndUniform()
         {
             TestUtil.Seed(153);
@@ -167,12 +271,13 @@ namespace Tests
         public void TheCommandLineSetsEverySetting()
         {
             var commandLine = CommandLine.Parse(["--matches", "7", "--samples", "3", "--playouts", "50", "--threads", "5", "--seed", "18446744073709551615",
-                "--agents", "builder=1", "--exploration", "0.05-0.1", "--center-desert", "--output", "out", "--name", "run"]);
+                "--agents", "builder=1", "--exploration", "0.05-0.1", "--center-desert", "--output", "out", "--name", "run", "--sibling-groups", "2", "--siblings", "8"]);
             CollectorSettings settings = commandLine.Settings;
 
             Assert.Equal((7, 3, 50, 5, ulong.MaxValue, true, "out", "run"),
                 (settings.Matches, settings.SamplesPerMatch, settings.PlayoutsPerSample, settings.Threads, settings.Seed, settings.CenterDesert, settings.OutputDirectory, settings.Name));
             Assert.Equal(new AgentMix(0, 0, 1, 0.05, 0.1), settings.Agents);
+            Assert.Equal((2, 8), (settings.SiblingGroupsPerMatch, settings.SiblingsPerGroup));
             Assert.False(commandLine.CalibrateThreads);
 
             Assert.True(CommandLine.Parse(["--threads", "auto"]).CalibrateThreads);
@@ -180,6 +285,7 @@ namespace Tests
             Assert.Equal(AgentMix.Default, CommandLine.Parse([]).Settings.Agents);
             Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--agents", "random=0"]));
             Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--unknown"]));
+            Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--siblings", "1"]));
 
             Assert.Equal([32, 24, 16, 8], ThreadCalibration.Candidates(32));
             Assert.Equal([1], ThreadCalibration.Candidates(1));
@@ -228,6 +334,16 @@ namespace Tests
                     {
                         string expected = SaveFileSerializer.Serialize(new SaveFile(state, played.GetRange(0, count), []));
                         Assert.True(expected == saveFiles.Build(state, count), $"game {game}: assembled file with {count} actions differs");
+
+                        // A sibling's file: the match's first actions and one more move off the match
+                        if (!state.HasEnded)
+                        {
+                            Action move = TestUtil.RandomAgents()[TestUtil.ActingPlayer(state)].Act(state);
+                            GameState sibling = new GameState(state);
+                            move.Apply(sibling);
+                            string expectedSibling = SaveFileSerializer.Serialize(new SaveFile(sibling, [.. played.GetRange(0, count), move], []));
+                            Assert.True(expectedSibling == saveFiles.Build(sibling, count, move), $"game {game}: assembled sibling file after {count} actions differs");
+                        }
                     }
                 }
 
@@ -285,7 +401,8 @@ namespace Tests
         }
 
         private record SampleRecord(string Name, ulong Group, int Position, int MatchLength, int Round, bool Terminal, int Finished,
-            int MatchWinner, int[] MatchVictoryPoints, List<PlayoutRecord> Playouts);
+            int MatchWinner, int[] MatchVictoryPoints, List<PlayoutRecord> Playouts, int EndWinner, int[]? EndVictoryPoints,
+            string SiblingGroup, string Source, int Actor, string Move, bool Chance);
 
         /// <summary>
         /// The sample lines of all workers with their playout records
@@ -317,10 +434,29 @@ namespace Tests
 
                     records.Add(new SampleRecord(row["name"], ulong.Parse(row["group"]), int.Parse(row["position"]), int.Parse(row["match_length"]),
                         int.Parse(row["round"]), row["terminal"] == "1", int.Parse(row["finished"]), int.Parse(row["match_winner"]),
-                        row["match_vp"].Split('/').Select(int.Parse).ToArray(), samplePlayouts));
+                        row["match_vp"].Split('/').Select(int.Parse).ToArray(), samplePlayouts,
+                        row["end_winner"] == "" ? -1 : int.Parse(row["end_winner"]), row["end_vp"] == "" ? null : row["end_vp"].Split('/').Select(int.Parse).ToArray(),
+                        row["sibling_group"], row["source"], row["actor"] == "" ? -1 : int.Parse(row["actor"]), row["move"], row["chance"] == "1"));
                 }
             }
             return records;
+        }
+
+        /// <summary>
+        /// The items of the PlayedActions list in a save file's text (empty for an empty list)
+        /// </summary>
+        private static string ActionItems(string saveFile)
+        {
+            int start = saveFile.IndexOf("PlayedActions:", StringComparison.Ordinal);
+            string[] lines = saveFile[start..].Split('\n');
+            int length = lines[0].Length + 1;
+            foreach (string line in lines.Skip(1))
+            {
+                // The list ends at the next key at the same indentation
+                if (line.Length > 0 && line[0] != ' ' && line[0] != '-') break;
+                length += line.Length + 1;
+            }
+            return saveFile.Substring(start, Math.Min(length, saveFile.Length - start));
         }
 
         private static string CollectIntoTemporaryDirectory(CollectorSettings settings, out CollectionResult result)

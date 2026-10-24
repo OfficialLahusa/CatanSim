@@ -57,11 +57,17 @@
 	- Collector ist fertig: gemischte Agents mit ε, k States pro Match gleichverteilt, Rohergebnisse pro Playout, Match-Seeds als Gruppen, metadata.json, --threads auto
 		- Aufruf z.B. DatasetCollector --matches 200000 --samples 5 --playouts 300 --threads auto (alle Optionen mit --help)
 		- Gemessen auf dem Desktop (32 Threads, 300 Playouts): ~74k Playouts/s mit dem Default-Mix, ~35k nur mit Random
+	- Sibling-Gruppen (Default 1 pro Match à 6): States nach mehreren Zügen des Spielers am Zug, Playouts mit denselben Seeds (eigener Würfel-Stream und ein Stream pro Sitz)
+		- Varianz der Differenz zwischen Geschwistern 2,4x kleiner als mit unabhängigen Playouts (Sieg), 3,2x (VP-Anteil)
+		- Kosten: doppelt so viele Samples pro Match, ~75% mehr Zeit pro Match
+		- Würfe sind keine Geschwister (nur Zufall), Züge mit zufälligem Ausgang (Dev-Kauf, Räuber-Steal) werden einmal realisiert und markiert
 	- Mehr States mit weniger Playouts pro State (z.B. 300 statt 1000, bei 50% ~2,9 statt ~1,6 pp Standardfehler), plus kleines Präzisions-Set (20-50k States mit 2000+ Playouts) für Evaluation und Kalibrierung
 	- Platzbedarf: ~185 KB pro Sample (82% Action History), 1M Samples ~185 GB und 2M Dateien, Playout-Records 12 Byte pro Playout
 	- Bisherige Datensätze folgen der alten Road-Building-Regel (Straßen erst nach dem Würfeln, beliebig später im Zug), der nächste Run nutzt die korrigierte
 	- Training auf die neuen Labels umstellen: playout_results.py liefert Platzierungsverteilung, VP-Anteil und Runden bis Spielende, train.py nutzt bisher nur win_rates.npy
 		- Umgewichten nach Position im Match / Matchlänge und nach Anzahl beendeter Playouts prüfen
+		- Paarweiser Ranking-Loss innerhalb der Sibling-Gruppen auf den Wert des Spielers am Zug (sibling_groups.npy, actors.npy), Chance-Züge ggf. ausnehmen
+		- Platzierung als kleiner Tie-Breaker im MCTS-Wert, damit weit zurückliegende Gegner im Baum nicht zufällig modelliert werden
 - Dataset-Pipeline robuster machen
 	- Fehlende .txt-Labels fallen erst nach der langen Vektorisierung auf, vorher prüfen
 	- Regenerierungs-Snippet in baselines.py verweist auf Funktionen, die es nicht gibt

@@ -10,12 +10,15 @@ namespace DatasetCollector
     /// playouts/w{worker}.bin holds one 12-byte record per playout (winner as sbyte, -1 if the playout didn't finish; final VP
     /// of the 4 players as bytes; agent kind of the 4 seats as bytes; round counter at the end as little-endian ushort;
     /// one unused byte), samples/w{worker}.csv one line per sample with its playouts' offset and count in that file.
-    /// DatasetProcessing/playout_results.py reads them.
+    /// Ended states have no playouts, their result is in the sample line (end_winner, end_vp). Siblings name their group
+    /// (the sampled state they branch off, which names itself), the acting player whose moves they compare, the move
+    /// and whether its outcome was random. DatasetProcessing/playout_results.py reads them.
     /// </summary>
     internal sealed class SampleRecordWriter : IDisposable
     {
         public const int PlayoutRecordSize = 12;
-        public const string Header = "name,group,match,sample,position,match_length,round,terminal,playouts,finished,playout_offset,match_winner,match_vp,match_rounds,match_agents";
+        public const string Header = "name,group,match,sample,position,match_length,round,terminal,playouts,finished,playout_offset,"
+            + "match_winner,match_vp,match_rounds,match_agents,end_winner,end_vp,sibling_group,source,actor,move,chance";
 
         private readonly FileStream _playouts;
         private readonly StreamWriter _samples;
@@ -90,14 +93,21 @@ namespace DatasetCollector
                 sample.Position.ToString(CultureInfo.InvariantCulture),
                 match.Length.ToString(CultureInfo.InvariantCulture),
                 sample.Round.ToString(CultureInfo.InvariantCulture),
-                sample.Position == match.Length ? "1" : "0",
+                sample.Terminal ? "1" : "0",
                 _pendingPlayouts.ToString(CultureInfo.InvariantCulture),
                 _pendingFinished.ToString(CultureInfo.InvariantCulture),
                 offset.ToString(CultureInfo.InvariantCulture),
                 match.Winner.ToString(CultureInfo.InvariantCulture),
                 string.Join("/", match.VictoryPoints),
                 match.Rounds.ToString(CultureInfo.InvariantCulture),
-                match.Agents));
+                match.Agents,
+                sample.Terminal ? sample.EndWinner.ToString(CultureInfo.InvariantCulture) : "",
+                sample.Terminal ? string.Join("/", sample.EndVictoryPoints!) : "",
+                sample.Sibling?.Group ?? "",
+                sample.Sibling?.Source ?? "",
+                sample.Sibling?.Actor.ToString(CultureInfo.InvariantCulture) ?? "",
+                sample.Sibling?.Move ?? "",
+                sample.Sibling == null ? "" : sample.Sibling.Chance ? "1" : "0"));
             _samples.Flush();
 
             DiscardPlayouts();
@@ -116,7 +126,16 @@ namespace DatasetCollector
     internal readonly record struct MatchInfo(ulong Seed, int Index, int Length, int Winner, int[] VictoryPoints, int Rounds, string Agents);
 
     /// <summary>
-    /// A sampled state of a match: after the first Position actions, in the given round
+    /// A sampled state of a match: after the first Position actions (for a sibling: one more action, its move), in the given
+    /// round. An ended state carries its winner and final VP.
     /// </summary>
-    internal readonly record struct SampleInfo(string Name, MatchInfo Match, int Index, int Position, int Round);
+    internal readonly record struct SampleInfo(string Name, MatchInfo Match, int Index, int Position, int Round, bool Terminal,
+        int EndWinner, int[]? EndVictoryPoints, SiblingInfo? Sibling);
+
+    /// <summary>
+    /// Membership in a sibling group: the group's name (that of the sampled state it branches off), how the move was chosen
+    /// (root for the sampled state itself, match for the move played in the match, builder for BuilderAgent's choice, random),
+    /// the acting player, the move's action type and whether its outcome was random (one outcome is realized)
+    /// </summary>
+    internal sealed record SiblingInfo(string Group, string Source, int Actor, string Move, bool Chance);
 }
