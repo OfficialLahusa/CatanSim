@@ -410,6 +410,8 @@ DatasetProcessing/compressed_dataset/win_rates.npy
 /DatasetProcessing/split_dataset
 /DatasetProcessing/dataset
 /Agents/env
+# Python virtual environments, e.g. the one for the dataset pipeline on a server
+.venv/
 /Agents/Training/colonysim
 /Agents/Training/wandb
 /Agents/Training/dataset
