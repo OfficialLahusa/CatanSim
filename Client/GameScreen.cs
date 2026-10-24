@@ -80,6 +80,7 @@ namespace Client
         private Agent[] _agents;
         private readonly string[] _agentTypes = ["RandomAgent", "SimpleAgent", "BuilderAgent", "GreedyAgent", "MCTSAgent"];
         private int[] _selectedAgentTypes;
+        private float _mctsThinkingSeconds = (float)MCTSAgent.TIME_LIMIT_SECONDS;
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
 
@@ -376,10 +377,21 @@ namespace Client
                                 1 => new SimpleAgent(agentIdx),
                                 2 => new BuilderAgent(agentIdx),
                                 3 => new GreedyAgent(agentIdx),
-                                4 => new MCTSAgent(agentIdx, _state),
+                                4 => new MCTSAgent(agentIdx, _state, timeLimitSeconds: _mctsThinkingSeconds),
                                 _ => throw new InvalidOperationException()
                             };
                         }
+                    }
+                }
+
+                // Applies to the MCTS agents already selected as well, from their next decision on
+                if (ImGui.InputFloat("MCTS Thinking Time (s)", ref _mctsThinkingSeconds, 0.5f, 5f, "%.2f"))
+                {
+                    _mctsThinkingSeconds = Math.Clamp(_mctsThinkingSeconds, 0.05f, 600f);
+                    foreach (Agent agent in _agents)
+                    {
+                        if (agent is MCTSAgent mctsAgent)
+                            mctsAgent.TimeLimitSeconds = _mctsThinkingSeconds;
                     }
                 }
 

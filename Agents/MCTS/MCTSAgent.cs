@@ -16,7 +16,7 @@ namespace Agents.MCTS
 {
     public class MCTSAgent : Agent
     {
-        protected const double TIME_LIMIT_SECONDS = 5;
+        public const double TIME_LIMIT_SECONDS = 5;
         protected const uint BATCH_SIZE = 256;
 
         // Search tree, kept across moves by HandleAction (null until the next Act builds a new one)
@@ -59,6 +59,15 @@ namespace Agents.MCTS
 
         /// <param name="valueNet">Value net for the leaves, the default model if null</param>
         /// <param name="vectorizer">Encoding the value net was trained on, the current StateVectorizer if null</param>
+        /// <summary>
+        /// Search time per decision, can be changed between decisions
+        /// </summary>
+        public double TimeLimitSeconds
+        {
+            get => _timeLimitSeconds;
+            set => _timeLimitSeconds = value;
+        }
+
         public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414, double timeLimitSeconds = TIME_LIMIT_SECONDS,
             StateValueNet? valueNet = null, IStateVectorizer? vectorizer = null)
             : base(playerIndex)
