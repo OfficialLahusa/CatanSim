@@ -53,25 +53,27 @@
 - Ersten CI-Lauf unter Linux prüfen (bisher lief nichts unter Linux)
 
 ## Agents
-- Datensatz v2 (nächster Server-Run)
-	- Collector ist fertig: gemischte Agents mit ε, k States pro Match gleichverteilt, Rohergebnisse pro Playout, Match-Seeds als Gruppen, metadata.json, --threads auto
-		- Aufruf z.B. DatasetCollector --matches 200000 --samples 5 --playouts 300 --threads auto (alle Optionen mit --help)
-		- Gemessen auf dem Desktop (32 Threads, 300 Playouts): ~74k Playouts/s mit dem Default-Mix, ~35k nur mit Random
-	- Sibling-Gruppen (Default 1 pro Match à 6): States nach mehreren Zügen des Spielers am Zug, Playouts mit denselben Seeds (eigener Würfel-Stream und ein Stream pro Sitz)
-		- Varianz der Differenz zwischen Geschwistern 2,4x kleiner als mit unabhängigen Playouts (Sieg), 3,2x (VP-Anteil)
-		- Kosten: doppelt so viele Samples pro Match, ~75% mehr Zeit pro Match
-		- Sibling-Dateien speichern nur ihren Zug und verweisen per HistoryReference auf die Datei der Root (~33 statt ~88 KB), SaveFileSerializer.Load setzt die History zusammen
-		- Würfe sind keine Geschwister (nur Zufall), Züge mit zufälligem Ausgang (Dev-Kauf, Räuber-Steal) werden einmal realisiert und markiert
-	- Mehr States mit weniger Playouts pro State (z.B. 300 statt 1000, bei 50% ~2,9 statt ~1,6 pp Standardfehler), plus kleines Präzisions-Set (20-50k States mit 2000+ Playouts) für Evaluation und Kalibrierung
-	- Platzbedarf: ~185 KB pro Sample (82% Action History), 1M Samples ~185 GB und 2M Dateien, Playout-Records 12 Byte pro Playout
-	- Bisherige Datensätze folgen der alten Road-Building-Regel (Straßen erst nach dem Würfeln, beliebig später im Zug), der nächste Run nutzt die korrigierte
-	- Training auf die neuen Labels umstellen: playout_results.py liefert Platzierungsverteilung, VP-Anteil und Runden bis Spielende, train.py nutzt bisher nur win_rates.npy
-		- Umgewichten nach Position im Match / Matchlänge und nach Anzahl beendeter Playouts prüfen
-		- Paarweiser Ranking-Loss innerhalb der Sibling-Gruppen auf den Wert des Spielers am Zug (sibling_groups.npy, actors.npy), Chance-Züge ggf. ausnehmen
-		- Platzierung als kleiner Tie-Breaker im MCTS-Wert, damit weit zurückliegende Gegner im Baum nicht zufällig modelliert werden
-- Dataset-Pipeline robuster machen
-	- Fehlende .txt-Labels fallen erst nach der langen Vektorisierung auf, vorher prüfen
-	- Regenerierungs-Snippet in baselines.py verweist auf Funktionen, die es nicht gibt
+- Roadmap v2
+	- Stand: Collector (gemischte Agents, Sibling-Gruppen, Rohergebnisse, Match-Seeds), Labels (playout_results.py), train.py (Aux Heads, Sibling-Ranking, Input-Normalisierung) und abgeleitete Features (sl159q7y) sind fertig
+		- Sibling-Gruppen: Varianz der Differenz zwischen Geschwistern 2,4x kleiner als mit unabhängigen Playouts (Sieg), 3,2x (VP-Anteil), kosten ~75% mehr Zeit pro Match
+	- Phase 0: vor dem Server-Run
+		- Pipeline-Skripte (build_dataset_index, vectorize_indexed_dataset, split_dataset) per Kommandozeile statt input(), fehlende .txt-Labels vor der Vektorisierung prüfen
+		- Pilot-Run auf dem Server: --calibrate, dann ~5k Matches einmal durch die ganze Pipeline (Durchsatz, Platz, Dateianzahl)
+		- Größe festlegen: z.B. 400k Matches à 5 Samples + 1 Sibling-Gruppe à 6 => ~4,2M Samples, auf dem Desktop ~6 h bei 300 Playouts, ~250 GB (normale Dateien ~88 KB, Siblings ~33 KB)
+		- Präzisions-Set als eigener Run: ~30k States mit 2000+ Playouts, mit Sibling-Gruppen (Kalibrierung und Ranking gegen lange Playouts)
+		- Weitere abgeleitete Features (z.B. Expansionspotenzial) blockieren nicht: sie werden aus dem Basisvektor berechnet, gespeicherte Datensätze lassen sich migrieren
+	- Phase 1: Server-Run v2 mit dem Default-Mix plus Präzisions-Set
+		- Aufruf z.B. DatasetCollector --matches 400000 --samples 5 --playouts 300 --threads auto (alle Optionen mit --help), auf dem Desktop ~60-74k Playouts/s
+		- Bisherige Datensätze folgen der alten Road-Building-Regel, der neue Run nutzt die korrigierte
+	- Phase 2: Training auf v2
+		- Baseline mit dem sl159q7y-Setup (1764 Features, Normalisierung), val KL ist wegen der anderen Playout-Agents nicht mit v1 vergleichbar => Vergleich im MCTS
+		- Aux Heads und Sibling-Ranking zuschalten, Gewichte tunen, Maßstab ist die Ranking-Genauigkeit auf dem Präzisions-Set
+		- Umgewichten nach Position im Match / Matchlänge und nach Anzahl beendeter Playouts prüfen, Chance-Siblings ggf. aus dem Ranking nehmen
+		- Bewertung: Duell gegen sl159q7y, gegen 3 BuilderAgents, Kalibrierung pro VP-Rückstand
+		- Optional Platzierung als Tie-Breaker im MCTS-Wert, damit weit zurückliegende Gegner im Baum nicht zufällig modelliert werden (braucht zweiten ONNX-Output und StateValueNet in C#)
+	- Phase 3: Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), Augmentation (Spielerrotation, 12 Brett-Symmetrien), Expansionspotenzial, Inference-Budget ~2-3x
+	- Phase 4: Policy Head => Search-distillierte Targets / Self-Play (Expert Iteration) => Belief-aware Net
+	- Nebenbei: alte State-Matrizen in Agents/Training/dataset löschen (~60 GB), Regenerierungs-Snippet in baselines.py verweist auf Funktionen, die es nicht gibt
 - Agents/env: OpenMP-Konflikt (libiomp5md.dll von conda-MKL und torch), torch läuft nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren oder Duplikat entfernen
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Größter Hebel: im Setup reicht die Suche nicht über den eigenen Zug hinaus (PV = Settlement + Road), die Entscheidung ist praktisch eine 1-Ply-Bewertung des Nets
@@ -93,9 +95,9 @@
 		- Läufe waren nach 60 Epochen noch nicht konvergiert
 		- In beiden Vektorizern (1764 Features), Modell sl159q7y mit Input-Normalisierung: val KL 0.0318, im MCTS 36:4 gegen j1fvwmta (2 gegen 2), gegen 3 BuilderAgents 17/30 statt 8/30
 		- Noch offen: Expansionspotenzial (erreichbare Bauplätze pro Spieler mit ihren Pips)
-	- Counts nur zusammen mit Input-Normalisierung skalieren (z.B. Standardisierung pro Feature oder separater Count-Encoder)
+	- Input-Normalisierung ist im Modell (--normalize-inputs, Standardisierung der nicht-binären Features), die Vektorizer bleiben unskaliert
 		- Nur skalieren (/10 bis /19) hat das jetzige MLP klar verschlechtert: val KL 0.087 => 0.094, im MCTS 13:17 gegen das alte Net
-	- Aux Head für Runden bis Spielende (Spielfortschritt lernen ohne RoundCounter)
+	- Aux Heads für Platzierung, VP-Anteil und Runden bis Spielende sind in train.py, auf v2 testen (Roadmap Phase 2)
 	- Unzuverlässige Outputs für sehr weit zurückliegende Spieler addressieren
 		- Ursache sind die Labels: ab 5 VP Rückstand sind 65-87% der Winrates exakt 0 (1000 Playouts lösen < 0.1% nicht auf), das Net ist dort kalibriert, hat aber nichts zu lernen
 		- Paarweiser Hinge/Logistic Loss auf die Reihenfolge der Winrates reicht deshalb nicht (bei Labels = 0 gibt es keine Reihenfolge)
@@ -113,7 +115,7 @@
 	- Data Augmentation über Brett-Symmetrien (6 Rotationen x Spiegelung = 12x Daten), Permutationstabellen für Tiles, Intersections, Edges und Ports aus der Geometrie berechnen
 	- Evaluation über val KL hinaus: Kalibrierung pro VP-Rückstand, Ranking von Geschwister-States gegen lange Playouts, Quality Bench gegen tiefe Suche, Self-Play bei gleicher Zeit
 	- Inference-Budget: das Net darf ~2-3x teurer werden (kostet laut Quality Bench ~4 Punkte Übereinstimmung), alternativ kleines Net für Leaves und großes für Root/Policy
-	- Reihenfolge: v1.5 (Inputs bereinigen, Aux Heads, Augmentation) => Datensatz v2 => Transformer => Policy Head => Belief-aware
+	- Reihenfolge siehe Roadmap v2
 - PolicyNet
 	- Wahrscheinlichkeitsverteilung darüber welche Moves aus einem State wie erkundenswert sind
 	- Action Space explodiert kombinatorisch, deshalb nicht über ein finite fixed-size Action Space die Verteilung berechnen
