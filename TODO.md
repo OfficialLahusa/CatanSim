@@ -55,20 +55,21 @@
 - Roadmap v2
 	- Stand: Collector (gemischte Agents, Sibling-Gruppen, Rohergebnisse, Match-Seeds), Labels (playout_results.py), train.py (Aux Heads, Sibling-Ranking, Input-Normalisierung) und abgeleitete Features (sl159q7y) sind fertig
 		- Sibling-Gruppen: Varianz der Differenz zwischen Geschwistern 2,4x kleiner als mit unabhängigen Playouts (Sieg), 3,2x (VP-Anteil), kosten ~75% mehr Zeit pro Match
-	- Phase 0: vor dem Server-Run
-		- Erledigt: Pipeline ohne Rückfragen (prepare_dataset.py: Index, Label-Check vor der Vektorisierung, Vektorisierung aus den Chunks, Labels, Split nur als Indizes), Teilläufe im Collector (--parts, fortsetzbar, --first-match), lokaler Pilot
-		- Lokaler Pilot (Desktop, 32 Threads): 5000 Matches in 215 s, 0 Fehler, 9,97 Samples pro Match, ~70k Playouts/s, 0,70 MB und ~20 Dateien pro Match, Pipeline 19 s, Training mit allen Zusatz-Losses läuft
-		- Offen auf dem Server: .NET 10 SDK, einmal dotnet test (die CI läuft schon unter Ubuntu), Build mit -p:DownloadStateValueNet=false falls ohne Netz, Python-Umgebung (numpy, pyyaml, rich, scikit-learn)
-		- Offen auf dem Server: Pilot wiederholen (--calibrate, dann ~5k Matches durch Collector, prepare_dataset.py und ein kurzes train.py), danach Größe festlegen
-		- Hochrechnung Desktop für 400k Matches: ~4,8 h, ~280 GB, ~8M Dateien, ~4M Samples, Pipeline ~30 min (states.npy ~14 GB, wird direkt in die Datei geschrieben)
+	- Phase 0: erledigt
+		- Pipeline ohne Rückfragen (prepare_dataset.py), Teilläufe im Collector (--parts, fortsetzbar, --first-match), .NET 10, Pilot lokal und auf dem Server (0 Fehler, 0 übersprungene Samples)
+		- Server: 32 Threads am schnellsten, ~45k Playouts/s auf der SSD, auf der HDD nur ~20k => Rohdaten auf die SSD
+		- Pro Match ~10 Samples (5 + ~5 Siblings), ~2980 Playouts, 0,70 MB, ~20 Dateien
 		- Weitere abgeleitete Features (z.B. Expansionspotenzial) blockieren nicht: sie werden aus dem Basisvektor berechnet, gespeicherte Datensätze lassen sich migrieren
-	- Phase 1: Server-Run v2 mit dem Default-Mix plus Präzisions-Set
-		- Hauptlauf in Teilläufen, fortsetzbar mit demselben Befehl: DatasetCollector --matches 400000 --parts 8 --samples 5 --playouts 300 --threads <kalibriert> --seed <fest> --name v2
-		- Präzisions-Set als eigener Lauf mit eigenem Seed und Namen, nie im Trainings-Split: DatasetCollector --matches 6000 --samples 5 --playouts 2000 --seed <anderer> --name v2_precision (~30 min auf dem Desktop)
-		- Danach python prepare_dataset.py datasets/v2 prepared/v2 und für das Präzisions-Set getrennt
+	- Phase 1: Server-Run v2 (läuft seit 25.10.)
+		- Hauptlauf: DatasetCollector --matches 1000000 --parts 20 --samples 5 --playouts 300 --threads 32 --seed 20261025 --name v2, ~3 Mrd. Playouts, ~18,5 h, ~700 GB, ~20M Dateien
+		- Jederzeit abbrechbar (fertige Teile sind nutzbar), Fortsetzen mit demselben Befehl, Erweitern mit gleichem Seed und --first-match
+		- Lernkurve auf dem v1-Datensatz entscheidet, ob sich mehr Matches lohnen (6,25% bis 100% der Trainings-Matches mit dem sl159q7y-Setup)
+		- Danach Präzisions-Set als eigener Lauf, nie im Trainings-Split: DatasetCollector --matches 6000 --samples 5 --playouts 2000 --threads 32 --seed 777 --name v2_precision (~50 min)
+		- Dann python prepare_dataset.py für v2 und das Präzisions-Set getrennt, die vorbereiteten Arrays (~35 GB) auf die SSD
 		- Bisherige Datensätze folgen der alten Road-Building-Regel, der neue Run nutzt die korrigierte
 	- Phase 2: Training auf v2
 		- Baseline mit dem sl159q7y-Setup (1764 Features, Normalisierung), val KL ist wegen der anderen Playout-Agents nicht mit v1 vergleichbar => Vergleich im MCTS
+		- states.npy mit ~10M Samples ist ~35 GB: train.py liest zufällig, schnell nur wenn es in den RAM passt, sonst Teilmenge oder blockweises Laden
 		- Aux Heads und Sibling-Ranking zuschalten, Gewichte tunen, Maßstab ist die Ranking-Genauigkeit auf dem Präzisions-Set
 		- Umgewichten nach Position im Match / Matchlänge und nach Anzahl beendeter Playouts prüfen, Chance-Siblings ggf. aus dem Ranking nehmen
 		- Bewertung: Duell gegen sl159q7y, gegen 3 BuilderAgents, Kalibrierung pro VP-Rückstand
