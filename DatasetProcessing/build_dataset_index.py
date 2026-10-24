@@ -1,119 +1,117 @@
+"""
+Build the index of a dataset: one row per sample (entry_idx, group_idx, subdir_name, entry_name).
+
+Datasets are the directories below the base path that hold an `input` directory with the YAML samples and an
+`output` directory with the TXT win rates, at any depth (e.g. the parts of a partial run, datasets/v2/part_00).
+subdir_name is the dataset's path relative to the base path. Samples of one match share a group: the match seed when
+the collector wrote raw results (unique across runs), otherwise the run index within its dataset.
+
+Every YAML sample needs its TXT label and vice versa; a mismatch stops the index (before the long vectorization),
+unless --allow-missing skips the unmatched samples.
+
+Usage: python build_dataset_index.py <base path> [--output index.csv] [--allow-missing]
+"""
+
+import argparse
 import os
-import glob
+import sys
 from datetime import datetime
+from typing import List, Tuple
 
 from playout_results import load_match_seeds
 
-def rreplace(s, old, new, n):
-    """Replace the n rightmost occurrences of a string in the given string"""
-    li = s.rsplit(old, n)
-    return new.join(li)
+SKIPPED_DIRECTORIES = {"input", "output", "vectors", "samples", "playouts"}
 
-def build_dataset_index(base_path):
-    # Subdirectories im Base Path finden und prüfen, ob sie .yaml-Files enthalten
-    # Außerdem prüfen, ob es zu jedem .yaml-GameState eine gleichnamige .txt-Datei mit den zugehörigen Win Percentages gibt 
-    non_empty_subdirs = []
-    # Sortiert, damit Index und Split nicht von der Reihenfolge im Dateisystem abhängen
-    for subdir in sorted(next(os.walk(base_path))[1]):
-        yaml_files = glob.glob(os.path.join(base_path, subdir, "input/*.yaml"))
-        txt_files = glob.glob(os.path.join(base_path, subdir, "output/*.txt"))
-        if len(yaml_files) > 0:
-            non_empty_subdirs.append(subdir)
-        print(f"Subdir \"{subdir}\" contains {len(yaml_files)} YAML files in \"input\" directory and {len(txt_files)} TXT files in \"output\" directory.")
 
-        # Optimierung für schnelleres Cross-Checking bei gleicher Reihenfolge
-        yaml_files_set = set(yaml_files)
-        txt_files_set = set(txt_files)
+def find_datasets(base_path: str) -> List[str]:
+    """Paths (relative to the base path, with forward slashes, sorted) of all directories holding input/ and output/"""
+    datasets = []
+    for directory, subdirectories, _ in os.walk(base_path):
+        if "input" in subdirectories and "output" in subdirectories:
+            relative = os.path.relpath(directory, base_path).replace(os.sep, "/")
+            datasets.append("." if relative == "." else relative)
+        # Never descend into the sample directories, they hold millions of files
+        subdirectories[:] = sorted(d for d in subdirectories if d not in SKIPPED_DIRECTORIES)
+    return sorted(datasets)
 
-        # Prüfen, ob sich die YAML- und TXT-Files 1:1 zueinander zuordnen lassen
-        # Erst nach fehlenden TXT-Files suchen
-        for yaml_file in yaml_files:
-            # .yaml Extension durch .txt ersetzen
-            corresponding_file = rreplace(yaml_file, ".yaml", ".txt", 1)
-            # "input"-Ordner durch "output"-Ordner ersetzen
-            corresponding_file = rreplace(corresponding_file, "input", "output", 1)
-            # Schauen ob die Datei in txt_files existiert
-            if corresponding_file not in txt_files_set:
-                print(f"Missing TXT file: \"{corresponding_file}\"")
-        # Dann nach fehlenden YAML-Files suchen
-        for txt_file in txt_files:
-            # .txt Extension durch .yaml ersetzen
-            corresponding_file = rreplace(txt_file, ".txt", ".yaml", 1)
-            # "output"-Ordner durch "input"-Ordner ersetzen
-            corresponding_file = rreplace(corresponding_file, "output", "input", 1)
-            # Schauen ob die Datei in yaml_files existiert
-            if corresponding_file not in yaml_files_set:
-                print(f"Missing YAML file: \"{corresponding_file}\"")
 
-    
-    input("Continue building index on non-empty subdirs?")
+def _stems(directory: str, extension: str) -> set:
+    with os.scandir(directory) as entries:
+        return {entry.name[: -len(extension)] for entry in entries if entry.name.endswith(extension)}
 
-    # Index aus nicht-leeren Subdirectories aufbauen
+
+def parse_sample_name(name: str) -> Tuple[int, int, int]:
+    """Run index, state index and sibling index (-1 for none) of a sample name, e.g. r919_s4 or r919_s4_c2"""
+    parts = name.split("_")
+    return int(parts[0][1:]), int(parts[1][1:]), int(parts[2][1:]) if len(parts) > 2 else -1
+
+
+def build_dataset_index(base_path: str, allow_missing: bool = False) -> List[list]:
+    """The index rows [entry_idx, group_idx, subdir_name, entry_name] of all datasets below the base path"""
+    datasets = find_datasets(base_path)
+    if not datasets:
+        raise ValueError(f"No dataset (directory with input/ and output/) found below \"{os.path.abspath(base_path)}\".")
+
     index = []
-
-    # Gruppen-IDs: der Match-Seed, sofern der Collector Rohergebnisse geschrieben hat (eindeutig auch über mehrere Runs hinweg),
-    # sonst der Run-Index im Subdirectory. Beide werden auf fortlaufende Indices abgebildet.
     group_indices = {}
-    next_idx = 0
+    problems = []
 
-    for subdir in non_empty_subdirs:
-        subdir_name = os.path.basename(subdir)
-        match_seeds = load_match_seeds(os.path.join(base_path, subdir))
+    for subdir_name in datasets:
+        directory = os.path.join(base_path, subdir_name)
+        yaml_names = _stems(os.path.join(directory, "input"), ".yaml")
+        txt_names = _stems(os.path.join(directory, "output"), ".txt")
+        print(f"Dataset \"{subdir_name}\": {len(yaml_names)} YAML samples, {len(txt_names)} TXT labels.")
 
-        # Dateien in Subdir auflisten
-        files = glob.glob(os.path.join(base_path, subdir, "input/*.yaml"))
+        missing_labels = sorted(yaml_names - txt_names)
+        missing_samples = sorted(txt_names - yaml_names)
+        if missing_labels:
+            problems.append(f"{subdir_name}: {len(missing_labels)} sample(s) without label, e.g. {missing_labels[:3]}")
+        if missing_samples:
+            problems.append(f"{subdir_name}: {len(missing_samples)} label(s) without sample, e.g. {missing_samples[:3]}")
 
-        # Temporäre Liste aller Dateien im Subdirectory zum Sortieren und Gruppieren
-        files_in_subdir = []
-
-        for file in files:
-            # Dateipfad und Dateinamen auslesen
-            full_path = os.path.abspath(file)
-            basename = os.path.splitext(os.path.basename(file))[0]
-
-            # Dateinamen in Run-Index, State-Index und ggf. Sibling-Index unterteilen (z.B. "r919_s4" => 919, 4, -1 und "r919_s4_c2" => 919, 4, 2)
-            parts = basename.split("_")
-            run_idx_in_subdir, state_idx_in_run = int(parts[0][1:]), int(parts[1][1:])
-            sibling_idx = int(parts[2][1:]) if len(parts) > 2 else -1
-
-            #print(run_idx_in_subdir, state_idx_in_run, basename, full_path)
-            #print(file, os.path.abspath(file), basename, os.path.basename(os.path.dirname(os.path.dirname(file))))
-
-            files_in_subdir.append([full_path, run_idx_in_subdir, state_idx_in_run, sibling_idx])
-
-        # Dateinamen sortieren
-        files_in_subdir.sort(key=lambda entry: (entry[1], entry[2], entry[3]))
-
-        #print(*files_in_subdir, sep="\n")
-
-        # Dateinamen gruppieren und indizieren
-        for entry in files_in_subdir:
-            full_path, run_idx_in_subdir, state_idx_in_run, sibling_idx = entry
-            entry_name = os.path.splitext(os.path.basename(full_path))[0]
-
-            group_key = ("seed", match_seeds[entry_name]) if entry_name in match_seeds else ("run", subdir_name, run_idx_in_subdir)
+        # Group: the match seed if the collector wrote raw results (unique across runs), otherwise the run index in the
+        # dataset; both are mapped to consecutive indices
+        match_seeds = load_match_seeds(directory)
+        names = sorted(yaml_names & txt_names, key=parse_sample_name)
+        for name in names:
+            run_idx = parse_sample_name(name)[0]
+            group_key = ("seed", match_seeds[name]) if name in match_seeds else ("run", subdir_name, run_idx)
             group_idx = group_indices.setdefault(group_key, len(group_indices))
+            index.append([len(index), group_idx, subdir_name, name])
 
-            # Entry neuen Index geben
-            entry_idx = next_idx
-            next_idx += 1
+    if problems:
+        message = "Samples and labels don't match:\n  " + "\n  ".join(problems)
+        if not allow_missing:
+            raise ValueError(message + "\nFix the dataset or pass --allow-missing to skip the unmatched files.")
+        print("Warning: " + message + "\nThe unmatched files are skipped.")
 
-            # Zu Index hinzufügen (Idx, GroupIdx, SubDir, EntryName)
-            index.append([entry_idx, group_idx, subdir_name, entry_name])
-    
-    # Index als Datei speichern
-    output_file_name = "dataset_index_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
-    with open(output_file_name, "w") as output_file:
+    print(f"Index: {len(index)} samples in {len(group_indices)} groups from {len(datasets)} dataset(s).")
+    return index
+
+
+def write_index(index: List[list], path: str) -> None:
+    with open(path, "w") as output_file:
         output_file.write("entry_idx,group_idx,subdir_name,entry_name\n")
-        for entry in index:
-            entry_idx, group_idx, subdir_name, entry_name = entry
+        for entry_idx, group_idx, subdir_name, entry_name in index:
             output_file.write(f"{entry_idx},{group_idx},{subdir_name},{entry_name}\n")
-        print(f"Saved index as \"{os.path.realpath(output_file.name)}\"!")
+    print(f"Saved index as \"{os.path.realpath(path)}\".")
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Build the index of the datasets below a base path.")
+    parser.add_argument("base_path")
+    parser.add_argument("--output", default=None, help="index CSV (default dataset_index_<time>.csv)")
+    parser.add_argument("--allow-missing", action="store_true", help="skip samples without label and labels without sample")
+    args = parser.parse_args(argv)
+
+    try:
+        index = build_dataset_index(args.base_path, args.allow_missing)
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
+    write_index(index, args.output or "dataset_index_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv")
+    return 0
 
 
 if __name__ == "__main__":
-    base_path = input("Enter base path for dataset index scanning (Where the immediate subdirectories EACH contain an 'input' directory for YAML game states and an 'output' directory for TXT win rates). Default: Current\n")
-    if base_path.strip() == "":
-        base_path = "."
-    input(f"Processing path \"{os.path.abspath(base_path)}\" for indexing. Press [Enter] to continue.")
-    build_dataset_index(base_path)
+    sys.exit(main())

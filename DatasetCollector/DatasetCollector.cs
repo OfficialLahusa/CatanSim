@@ -107,12 +107,13 @@ namespace DatasetCollector
             using VectorChunkWriter vectors = new(_vectorDirectory, workerIdx);
             using SampleRecordWriter records = new(_datasetDirectory, workerIdx);
 
-            int matchIdx;
-            while (!cancellation.IsCancellationRequested && (matchIdx = Interlocked.Increment(ref _nextMatchIdx)) < _settings.Matches)
+            int localIdx;
+            while (!cancellation.IsCancellationRequested && (localIdx = Interlocked.Increment(ref _nextMatchIdx)) < _settings.Matches)
             {
                 try
                 {
-                    CollectMatch(matchIdx, vectors, records, cancellation);
+                    // Match indices (and with them the match seeds and sample names) continue those of earlier parts of the run
+                    CollectMatch(_settings.FirstMatch + localIdx, vectors, records, cancellation);
                 }
                 catch (Exception e)
                 {
@@ -473,6 +474,7 @@ namespace DatasetCollector
                 settings = new
                 {
                     threads = _settings.Threads,
+                    first_match = _settings.FirstMatch,
                     matches = _settings.Matches,
                     samples_per_match = _settings.SamplesPerMatch,
                     playouts_per_sample = _settings.PlayoutsPerSample,

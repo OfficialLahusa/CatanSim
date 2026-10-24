@@ -1,19 +1,21 @@
-import os
+"""
+Split an indexed dataset by group (all samples of a match land in the same split) into train, validation and test.
+
+Writes idx_train.npy, idx_val.npy and idx_test.npy (rows of states.npy etc., which train.py reads) and the groups of
+each split. Only groups.npy is needed; --copies also writes X_*/y_* copies of the states and win rates per split
+(about as large as the dataset itself).
+
+Usage: python split_dataset.py [--groups groups.npy] [--output-dir .] [--test 0.15] [--val 0.15] [--seed 42]
+                               [--copies --states states.npy --labels win_rates.npy]
+"""
+import argparse
+import sys
 import numpy as np
 from pathlib import Path
 from sklearn.model_selection import GroupShuffleSplit
 
-def split_dataset(state_mat_path: Path, win_rate_mat_path: Path, group_vec_path: Path, output_dir: Path, test_proportion: float, val_proportion: float, seed: int):
-    # Arrays aus Dateien laden
-    print("Loading arrays...")
-    state_matrix = np.load(state_mat_path)
-    win_rate_matrix = np.load(win_rate_mat_path)
-    groups_vector = np.load(group_vec_path)
 
-    print(f"State matrix: shape {state_matrix.shape}, dtype {state_matrix.dtype}")
-    print(f"Win rate matrix: shape {win_rate_matrix.shape}, dtype {win_rate_matrix.dtype}")
-    print(f"Group label vector: shape {groups_vector.shape}, dtype {groups_vector.dtype}")
-
+def split_indices(groups_vector: np.ndarray, test_proportion: float, val_proportion: float, seed: int):
     # Group Split TrainVal/Test
     splitter = GroupShuffleSplit(n_splits=1, test_size=test_proportion, random_state=seed)
     trainval_idx, test_idx = next(splitter.split(np.arange(groups_vector.shape[0]), groups=groups_vector))
@@ -23,81 +25,59 @@ def split_dataset(state_mat_path: Path, win_rate_mat_path: Path, group_vec_path:
     train_idx, val_idx = next(splitter.split(trainval_idx, groups=groups_vector[trainval_idx]))
     train_idx, val_idx = trainval_idx[train_idx], trainval_idx[val_idx]
 
-    print(f"Split sizes: train {train_idx.shape}, val {val_idx.shape}, test {test_idx.shape}")
+    # Verify no overlaps and group cohesion
+    for a, b in [(train_idx, val_idx), (train_idx, test_idx), (val_idx, test_idx)]:
+        assert np.intersect1d(a, b).size == 0
+        assert np.intersect1d(groups_vector[a], groups_vector[b]).size == 0
+    assert train_idx.size + val_idx.size + test_idx.size == groups_vector.shape[0]
 
-    # Verify no overlaps
-    print("Verifying integrity...")
-    assert set(train_idx) & set(val_idx)  == set()
-    assert set(train_idx) & set(test_idx) == set()
-    assert set(val_idx)   & set(test_idx) == set()
+    return np.sort(train_idx), np.sort(val_idx), np.sort(test_idx)
 
-    # Verify group cohesion
-    assert set(groups_vector[train_idx]) & set(groups_vector[val_idx])  == set()
-    assert set(groups_vector[train_idx]) & set(groups_vector[test_idx]) == set()
-    assert set(groups_vector[val_idx])   & set(groups_vector[test_idx]) == set()
-    print("Integrity verified!")
 
-    # X_train, X_val, X_test, Y_train, Y_val, Y_test als Dateien speichern
-    X_train = state_matrix[train_idx]
-    X_val = state_matrix[val_idx]
-    X_test = state_matrix[test_idx]
+def split_dataset(group_vec_path: Path, output_dir: Path, test_proportion: float, val_proportion: float, seed: int,
+                  state_mat_path: Path = None, win_rate_mat_path: Path = None):
+    groups_vector = np.load(group_vec_path)
+    print(f"Group label vector: shape {groups_vector.shape}, dtype {groups_vector.dtype}, {np.unique(groups_vector).size} groups")
 
-    y_train = win_rate_matrix[train_idx]
-    y_val = win_rate_matrix[val_idx]
-    y_test = win_rate_matrix[test_idx]
+    train_idx, val_idx, test_idx = split_indices(groups_vector, test_proportion, val_proportion, seed)
+    print(f"Split sizes: train {train_idx.shape}, val {val_idx.shape}, test {test_idx.shape} (no overlap, groups kept together)")
 
-    #print(X_train.shape, X_val.shape, X_test.shape)
-    #print(y_train.shape, y_val.shape, y_test.shape)
-    
     output_dir.mkdir(parents=True, exist_ok=True)
-    np.save(output_dir / "X_train.npy",   X_train)
-    np.save(output_dir / "X_val.npy",     X_val)
-    np.save(output_dir / "X_test.npy",    X_test)
-    np.save(output_dir / "y_train.npy",   y_train)
-    np.save(output_dir / "y_val.npy",     y_val)
-    np.save(output_dir / "y_test.npy",    y_test)
-    np.save(output_dir / "idx_train.npy", train_idx)
-    np.save(output_dir / "idx_val.npy",   val_idx)
-    np.save(output_dir / "idx_test.npy",  test_idx)
-    np.save(output_dir / "groups_train.npy", groups_vector[train_idx])
-    np.save(output_dir / "groups_val.npy",   groups_vector[val_idx])
-    np.save(output_dir / "groups_test.npy",  groups_vector[test_idx])
+    for name, indices in [("train", train_idx), ("val", val_idx), ("test", test_idx)]:
+        np.save(output_dir / f"idx_{name}.npy", indices)
+        np.save(output_dir / f"groups_{name}.npy", groups_vector[indices])
+
+    # Optional copies of the rows per split (memory mapped, so the dataset doesn't need to fit in RAM)
+    if state_mat_path is not None and win_rate_mat_path is not None:
+        state_matrix = np.load(state_mat_path, mmap_mode="r")
+        win_rate_matrix = np.load(win_rate_mat_path, mmap_mode="r")
+        for name, indices in [("train", train_idx), ("val", val_idx), ("test", test_idx)]:
+            np.save(output_dir / f"X_{name}.npy", state_matrix[indices])
+            np.save(output_dir / f"y_{name}.npy", win_rate_matrix[indices])
+
     print(f"Saved dataset splits to \"{output_dir}\".")
-    return
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Split an indexed dataset by group into train, validation and test.")
+    parser.add_argument("--groups", default="groups.npy")
+    parser.add_argument("--output-dir", default=".")
+    parser.add_argument("--test", type=float, default=0.15, help="test proportion of all samples")
+    parser.add_argument("--val", type=float, default=0.15, help="validation proportion of all samples")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--copies", action="store_true", help="also write X_*/y_* copies (needs --states and --labels)")
+    parser.add_argument("--states", default="states.npy")
+    parser.add_argument("--labels", default="win_rates.npy")
+    args = parser.parse_args(argv)
+
+    if not 0 < args.test < 1 or not 0 < args.val < 1 or args.test + args.val >= 1:
+        print("--test and --val must be between 0 and 1 and leave samples for training.", file=sys.stderr)
+        return 1
+
+    split_dataset(Path(args.groups), Path(args.output_dir), args.test, args.val, args.seed,
+                  Path(args.states) if args.copies else None, Path(args.labels) if args.copies else None)
+    return 0
+
 
 if __name__ == "__main__":
-    # Pfade zu numpy Array Dateien einlesen mit guten Defaults
-    default_state_mat_path = Path("states.npy")
-    state_mat_path = input(f"Enter the path of the game state matrix numpy array file. Default: \"{default_state_mat_path}\"\n").strip()
-    state_mat_path = Path(state_mat_path) if state_mat_path else default_state_mat_path
-    #print(state_mat_path)
-
-    default_win_rate_mat_path = Path("win_rates.npy")
-    win_rate_mat_path = input(f"Enter the path of the win rate matrix numpy array file. Default: \"{default_win_rate_mat_path}\"\n").strip()
-    win_rate_mat_path = Path(win_rate_mat_path) if win_rate_mat_path else default_win_rate_mat_path
-    #print(win_rate_mat_path)
-
-    default_group_vec_path = Path("groups.npy")
-    group_vec_path = input(f"Enter the path of the group label vector numpy array file. Default: \"{default_group_vec_path}\"\n").strip()
-    group_vec_path = Path(group_vec_path) if group_vec_path else default_group_vec_path
-    #print(group_vec_path)
-
-    # Split proportions einlesen
-    default_test_split_proportion = 0.15
-    test_split_proportion = input(f"Enter test split proportion of total. Default: {default_test_split_proportion}\n").strip()
-    test_split_proportion = float(test_split_proportion) if test_split_proportion else default_test_split_proportion
-
-    default_val_split_proportion = 0.15
-    val_split_proportion = input(f"Enter val split proportion of total. Default: {default_val_split_proportion}\n").strip()
-    val_split_proportion = float(val_split_proportion) if val_split_proportion else default_val_split_proportion
-
-    # Seed einlesen mit default
-    default_seed = 42
-    seed = input(f"Enter the seed for the split. Default: {default_seed}\n").strip()
-    seed = int(seed) if seed else default_seed
-
-    default_output_dir = Path(".")
-    output_dir = input(f"Enter the output directory. Default: \"{default_output_dir}\"\n").strip()
-    output_dir = Path(output_dir) if output_dir else default_output_dir
-    
-    split_dataset(state_mat_path, win_rate_mat_path, group_vec_path, output_dir, test_split_proportion, val_split_proportion, seed)
+    sys.exit(main())

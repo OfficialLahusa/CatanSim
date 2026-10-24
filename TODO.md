@@ -57,13 +57,16 @@
 	- Stand: Collector (gemischte Agents, Sibling-Gruppen, Rohergebnisse, Match-Seeds), Labels (playout_results.py), train.py (Aux Heads, Sibling-Ranking, Input-Normalisierung) und abgeleitete Features (sl159q7y) sind fertig
 		- Sibling-Gruppen: Varianz der Differenz zwischen Geschwistern 2,4x kleiner als mit unabhängigen Playouts (Sieg), 3,2x (VP-Anteil), kosten ~75% mehr Zeit pro Match
 	- Phase 0: vor dem Server-Run
-		- Pipeline-Skripte (build_dataset_index, vectorize_indexed_dataset, split_dataset) per Kommandozeile statt input(), fehlende .txt-Labels vor der Vektorisierung prüfen
-		- Pilot-Run auf dem Server: --calibrate, dann ~5k Matches einmal durch die ganze Pipeline (Durchsatz, Platz, Dateianzahl)
-		- Größe festlegen: z.B. 400k Matches à 5 Samples + 1 Sibling-Gruppe à 6 => ~4,2M Samples, auf dem Desktop ~6 h bei 300 Playouts, ~250 GB (normale Dateien ~88 KB, Siblings ~33 KB)
-		- Präzisions-Set als eigener Run: ~30k States mit 2000+ Playouts, mit Sibling-Gruppen (Kalibrierung und Ranking gegen lange Playouts)
+		- Erledigt: Pipeline ohne Rückfragen (prepare_dataset.py: Index, Label-Check vor der Vektorisierung, Vektorisierung aus den Chunks, Labels, Split nur als Indizes), Teilläufe im Collector (--parts, fortsetzbar, --first-match), lokaler Pilot
+		- Lokaler Pilot (Desktop, 32 Threads): 5000 Matches in 215 s, 0 Fehler, 9,97 Samples pro Match, ~70k Playouts/s, 0,70 MB und ~20 Dateien pro Match, Pipeline 19 s, Training mit allen Zusatz-Losses läuft
+		- Offen auf dem Server: .NET 9 SDK, einmal dotnet test (unter Linux lief bisher nichts), Build mit -p:DownloadStateValueNet=false falls ohne Netz, Python-Umgebung (numpy, pyyaml, rich, scikit-learn)
+		- Offen auf dem Server: Pilot wiederholen (--calibrate, dann ~5k Matches durch Collector, prepare_dataset.py und ein kurzes train.py), danach Größe festlegen
+		- Hochrechnung Desktop für 400k Matches: ~4,8 h, ~280 GB, ~8M Dateien, ~4M Samples, Pipeline ~30 min (states.npy ~14 GB, wird direkt in die Datei geschrieben)
 		- Weitere abgeleitete Features (z.B. Expansionspotenzial) blockieren nicht: sie werden aus dem Basisvektor berechnet, gespeicherte Datensätze lassen sich migrieren
 	- Phase 1: Server-Run v2 mit dem Default-Mix plus Präzisions-Set
-		- Aufruf z.B. DatasetCollector --matches 400000 --samples 5 --playouts 300 --threads auto (alle Optionen mit --help), auf dem Desktop ~60-74k Playouts/s
+		- Hauptlauf in Teilläufen, fortsetzbar mit demselben Befehl: DatasetCollector --matches 400000 --parts 8 --samples 5 --playouts 300 --threads <kalibriert> --seed <fest> --name v2
+		- Präzisions-Set als eigener Lauf mit eigenem Seed und Namen, nie im Trainings-Split: DatasetCollector --matches 6000 --samples 5 --playouts 2000 --seed <anderer> --name v2_precision (~30 min auf dem Desktop)
+		- Danach python prepare_dataset.py datasets/v2 prepared/v2 und für das Präzisions-Set getrennt
 		- Bisherige Datensätze folgen der alten Road-Building-Regel, der neue Run nutzt die korrigierte
 	- Phase 2: Training auf v2
 		- Baseline mit dem sl159q7y-Setup (1764 Features, Normalisierung), val KL ist wegen der anderen Playout-Agents nicht mit v1 vergleichbar => Vergleich im MCTS

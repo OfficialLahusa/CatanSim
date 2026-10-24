@@ -38,8 +38,16 @@
                 settings = settings with { Threads = threads };
             }
 
-            CollectionResult result = new DatasetCollector(settings).Collect();
-            return result.Errors > 0 ? 2 : 0;
+            try
+            {
+                CollectionResult result = PartialRuns.Collect(settings, Console.Out);
+                return result.Errors > 0 ? 2 : 0;
+            }
+            catch (InvalidOperationException e)
+            {
+                Console.Error.WriteLine(e.Message);
+                return 1;
+            }
         }
     }
 }

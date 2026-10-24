@@ -1,4 +1,13 @@
+"""
+Vectorize an indexed dataset: states.npy (float16, one row of FEATURE_DIM per index entry), win_rates.npy and
+groups.npy in the output directory. State vectors come from the collector's vector chunks where they exist, the rest
+is vectorized from the YAML samples. Every label is checked before the long part starts.
+
+Usage: python vectorize_indexed_dataset.py <index.csv> [--base-path .] [--workers 8] [--output-dir .]
+"""
+import argparse
 import os
+import sys
 import numpy as np
 from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor
@@ -44,24 +53,35 @@ def _process_entry(args):
     return entry_idx, vec
 
 
-def vectorize_states(base_path: Path, index, max_workers=None, chunksize=64):
-    # NP Array erstellen: f16 <Index Length>,<Feature vector length>
-    state_matrix = np.zeros((len(index), FEATURE_DIM), dtype=np.float16)
+def check_labels(base_path: Path, index):
+    """Raises if a sample of the index has no TXT label, before anything is vectorized"""
+    missing = [f"{subdir_name}/{entry_name}" for _, _, subdir_name, entry_name in index
+               if not (base_path / subdir_name / "output" / (entry_name + ".txt")).exists()]
+    if missing:
+        raise FileNotFoundError(f"{len(missing)} sample(s) of the index have no TXT label, e.g. {missing[:5]}")
 
-    # Vektoren, die der Collector schon als Chunks geschrieben hat, direkt übernehmen
-    chunk_vectors = {
-        subdir_name: load_vector_chunks(str(base_path / subdir_name))
-        for subdir_name in {entry[2] for entry in index}
-    }
+
+def vectorize_states(base_path: Path, index, max_workers=None, chunksize=64, output_dir: Path = Path(".")):
+    # Die Matrix wird direkt in die Datei geschrieben (f16 <Index Length>,<Feature vector length>), damit große Datensätze nicht doppelt in den RAM müssen
+    output_path = output_dir / "states.npy"
+    state_matrix = np.lib.format.open_memmap(output_path, mode="w+", dtype=np.float16, shape=(len(index), FEATURE_DIM))
+
+    # Vektoren, die der Collector schon als Chunks geschrieben hat, direkt übernehmen, die Chunks eines Datensatzes nach dem anderen
+    entries_by_subdir = {}
+    for entry in index:
+        entries_by_subdir.setdefault(entry[2], []).append(entry)
 
     # Nur die übrigen State YAMLs (z.B. ältere Datensätze ohne Chunks) multi-processed vektorisieren
     tasks = []
-    for entry_idx, group_idx, subdir_name, entry_name in index:
-        vec = chunk_vectors[subdir_name].get(entry_name)
-        if vec is not None:
-            state_matrix[entry_idx, :] = vec
-        else:
-            tasks.append((entry_idx, base_path, subdir_name, entry_name))
+    for subdir_name, entries in entries_by_subdir.items():
+        chunk_vectors = load_vector_chunks(str(base_path / subdir_name))
+        for entry_idx, group_idx, _, entry_name in entries:
+            vec = chunk_vectors.get(entry_name)
+            if vec is not None:
+                state_matrix[entry_idx, :] = vec
+            else:
+                tasks.append((entry_idx, base_path, subdir_name, entry_name))
+        del chunk_vectors
 
     print(f"{len(index) - len(tasks)} state vectors taken from vector chunks, {len(tasks)} to vectorize from YAML.")
  
@@ -87,15 +107,13 @@ def vectorize_states(base_path: Path, index, max_workers=None, chunksize=64):
                     state_matrix[entry_idx, :] = vec
                     progress.advance(task_id)
  
-    # Array der State-Matrix als Datei speichern
-    output_path = Path("states.npy")
-    np.save(output_path, state_matrix)
-    # Speicherbestätigung ausgeben
+    state_matrix.flush()
+    del state_matrix
     print(f"Saved state matrix as \"{output_path}\".")
     return
 
 
-def vectorize_win_rates(base_path: Path, index):
+def vectorize_win_rates(base_path: Path, index, output_dir: Path = Path(".")):
     # Win Percentages vektorisieren
     # NP Array erstellen: f16 <Index Length>,4
     win_rate_matrix = np.zeros((len(index), 4), dtype=np.float16)
@@ -114,14 +132,14 @@ def vectorize_win_rates(base_path: Path, index):
         win_rate_matrix[entry_idx, :] = win_rates
 
     # Array der Win-Percentage-Matrix als Datei speichern
-    output_path = Path("win_rates.npy")
+    output_path = output_dir / "win_rates.npy"
     np.save(output_path, win_rate_matrix)
     # Speicherbestätigung ausgeben
     print(f"Saved win rate matrix as \"{output_path}\".")
     return
 
 
-def vectorize_groups(base_path: Path, index):
+def vectorize_groups(base_path: Path, index, output_dir: Path = Path(".")):
     # Groups vektorisieren
     # NP Array erstellen: uint32 <Index Length>,
     group_vector = np.zeros((len(index),), dtype=np.uint32)
@@ -133,73 +151,48 @@ def vectorize_groups(base_path: Path, index):
         group_vector[entry_idx] = group_idx
     
     # Array des Group-Vektors als Datei speichern
-    output_path = Path("groups.npy")
+    output_path = output_dir / "groups.npy"
     np.save(output_path, group_vector)
     # Speicherbestätigung ausgeben
     print(f"Saved group labels as \"{output_path}\".")
     return
 
 
-def vectorize_dataset(base_path: Path, index, max_workers=None, chunksize=64):
-    vectorize_states(base_path, index, max_workers, chunksize)
-    vectorize_win_rates(base_path, index)
-    vectorize_groups(base_path, index)
+def vectorize_dataset(base_path: Path, index, max_workers=None, chunksize=64, output_dir: Path = Path(".")):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    check_labels(base_path, index)
+    vectorize_states(base_path, index, max_workers, chunksize, output_dir)
+    vectorize_win_rates(base_path, index, output_dir)
+    vectorize_groups(base_path, index, output_dir)
 
     # Finale Bestätigung ausgeben
     print("Dataset vectorization completed!")
     return
 
 
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Vectorize an indexed dataset into states.npy, win_rates.npy and groups.npy.")
+    parser.add_argument("index", help="index CSV from build_dataset_index.py")
+    parser.add_argument("--base-path", default=".", help="base path the index's dataset paths are relative to")
+    parser.add_argument("--workers", type=int, default=8, help="processes for samples without vector chunks")
+    parser.add_argument("--output-dir", default=".")
+    args = parser.parse_args(argv)
+
+    index = load_index_file(args.index)
+    num_groups = max(entry[1] for entry in index) + 1 if index else 0
+    print(f"Loaded index file containing {len(index)} entries across {num_groups} groups and {len({e[2] for e in index})} datasets.")
+
+    try:
+        vectorize_dataset(Path(args.base_path), index, args.workers, output_dir=Path(args.output_dir))
+    except FileNotFoundError as error:
+        print(error, file=sys.stderr)
+        return 1
+
+    for name in ("states", "win_rates", "groups"):
+        array = np.load(Path(args.output_dir) / f"{name}.npy", mmap_mode="r")
+        print(f"{name}.npy: shape {array.shape}, dtype {array.dtype}")
+    return 0
+
+
 if __name__ == "__main__":
-    index_path = input("Enter path of the index CSV file for the dataset.\n")
-    index_path = index_path.strip()
-    print()
-
-    index = load_index_file(index_path)
-    num_groups = max(index,key=lambda entry:entry[1])[1]+1
-    subdirectories = []
-    for entry in index:
-        subdir_name = entry[2]
-        if subdir_name not in subdirectories:
-            subdirectories.append(subdir_name)
-
-    print(f"Loaded index file containing {len(index)} entries across {num_groups} groups and {len(subdirectories)} subdirectories.\n")
-
-    # Show which subdirectories are expected
-    print("Dataset subdirectories expected by the index:")
-    for subdirectory in subdirectories:
-        print(f"\t- \"{subdirectory}\"")
-    print()
-
-    base_path = input("Enter base path of the dataset containing the subdirectories listed above. The immediate subdirectories should EACH contain an 'input' directory for YAML game states and an 'output' directory for TXT win rates). Default: Current\n")
-    if base_path.strip() == "":
-        base_path = "."
-    base_path = Path(base_path)
-
-    # Determine worker count
-    worker_count = input("Worker count? Default: 8\n").strip()
-    if worker_count == "":
-        worker_count = 8
-    else:
-        worker_count = int(worker_count)
-
-    input(f"Processing dataset at \"{os.path.abspath(base_path)}\" for vectorization. Press [Enter] to continue.\n")
-    vectorize_dataset(base_path, index, worker_count)
-
-    input("Output file verification:  Press [Enter] to continue.\n")
-    state_matrix = np.load(Path("states.npy"))
-    print(f"State matrix: shape {state_matrix.shape}, dtype {state_matrix.dtype}")
-    print(state_matrix)
-    print()
-
-    win_rate_matrix = np.load(Path("win_rates.npy"))
-    print(f"Win rate matrix: shape {win_rate_matrix.shape}, dtype {win_rate_matrix.dtype}")
-    print(win_rate_matrix)
-    print()
-
-    groups_vector = np.load(Path("groups.npy"))
-    print(f"Group label vector: shape {groups_vector.shape}, dtype {groups_vector.dtype}")
-    print(groups_vector)
-    print()
-
-    print("\nVerification done!")
+    sys.exit(main())

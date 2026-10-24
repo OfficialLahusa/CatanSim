@@ -248,6 +248,53 @@ namespace Tests
         }
 
         [Fact]
+        public void PartialRunsEqualASingleRunAndResume()
+        {
+            string root = Path.Combine(Path.GetTempPath(), "catansim-parts-" + Guid.NewGuid().ToString("N"));
+            var settings = new CollectorSettings { Threads = 2, Matches = 6, SamplesPerMatch = 2, PlayoutsPerSample = 3, Seed = 160, SiblingsPerGroup = 3, OutputDirectory = root };
+
+            try
+            {
+                PartialRuns.Collect(settings with { Name = "single" }, TextWriter.Null);
+                PartialRuns.Collect(settings with { Name = "parts", Parts = 3 }, TextWriter.Null);
+
+                // Three parts of two matches each, numbered on from the previous part, together the same files as the single run
+                string[] parts = Directory.GetDirectories(Path.Combine(root, "parts")).Select(path => Path.GetFileName(path)!).Order().ToArray();
+                Assert.Equal(["part_00", "part_01", "part_02"], parts);
+                Dictionary<string, string> Files(params string[] directories) => directories
+                    .SelectMany(directory => Directory.GetFiles(Path.Combine(directory, "input")).Concat(Directory.GetFiles(Path.Combine(directory, "output"))))
+                    .ToDictionary(path => Path.GetFileName(Path.GetDirectoryName(path)) + "/" + Path.GetFileName(path), File.ReadAllText);
+                Dictionary<string, string> single = Files(Path.Combine(root, "single"));
+                Dictionary<string, string> combined = Files(parts.Select(part => Path.Combine(root, "parts", part)).ToArray());
+                Assert.Equal(single.Keys.Order(), combined.Keys.Order());
+                Assert.All(single, file => Assert.Equal(file.Value, combined[file.Key]));
+                Assert.All(Directory.GetFiles(Path.Combine(root, "parts", "part_01", "input")), path => Assert.Matches(@"^r[23]_", Path.GetFileName(path)));
+
+                // Resuming: a finished part stays as it is, an unfinished one is collected again with the same result
+                string part0Metadata = Path.Combine(root, "parts", "part_00", "metadata.json");
+                DateTime part0Written = File.GetLastWriteTimeUtc(part0Metadata);
+                File.Delete(Path.Combine(root, "parts", "part_01", "metadata.json"));
+                File.Delete(Directory.GetFiles(Path.Combine(root, "parts", "part_01", "input"))[0]);
+                PartialRuns.Collect(settings with { Name = "parts", Parts = 3 }, TextWriter.Null);
+                Assert.Equal(part0Written, File.GetLastWriteTimeUtc(part0Metadata));
+                Dictionary<string, string> resumed = Files(parts.Select(part => Path.Combine(root, "parts", part)).ToArray());
+                Assert.Equal(combined.Keys.Order(), resumed.Keys.Order());
+                Assert.All(combined, file => Assert.Equal(file.Value, resumed[file.Key]));
+
+                // A part collected with other settings stops the run instead of being replaced
+                File.WriteAllText(Path.Combine(root, "parts", "part_02", "metadata.json"),
+                    File.ReadAllText(Path.Combine(root, "parts", "part_02", "metadata.json")).Replace("\"status\": \"finished\"", "\"status\": \"running\""));
+                var error = Assert.Throws<InvalidOperationException>(() => PartialRuns.Collect(settings with { Name = "parts", Parts = 3, PlayoutsPerSample = 4 }, TextWriter.Null));
+                Assert.Contains("other settings", error.Message);
+                Assert.True(Directory.Exists(Path.Combine(root, "parts", "part_02", "input")));
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
+        [Fact]
         public void SampledPositionsAreDistinctAndUniform()
         {
             TestUtil.Seed(153);
@@ -272,13 +319,13 @@ namespace Tests
         public void TheCommandLineSetsEverySetting()
         {
             var commandLine = CommandLine.Parse(["--matches", "7", "--samples", "3", "--playouts", "50", "--threads", "5", "--seed", "18446744073709551615",
-                "--agents", "builder=1", "--exploration", "0.05-0.1", "--center-desert", "--output", "out", "--name", "run", "--sibling-groups", "2", "--siblings", "8"]);
+                "--agents", "builder=1", "--exploration", "0.05-0.1", "--center-desert", "--output", "out", "--name", "run", "--sibling-groups", "2", "--siblings", "8", "--parts", "7", "--first-match", "100"]);
             CollectorSettings settings = commandLine.Settings;
 
             Assert.Equal((7, 3, 50, 5, ulong.MaxValue, true, "out", "run"),
                 (settings.Matches, settings.SamplesPerMatch, settings.PlayoutsPerSample, settings.Threads, settings.Seed, settings.CenterDesert, settings.OutputDirectory, settings.Name));
             Assert.Equal(new AgentMix(0, 0, 1, 0.05, 0.1), settings.Agents);
-            Assert.Equal((2, 8), (settings.SiblingGroupsPerMatch, settings.SiblingsPerGroup));
+            Assert.Equal((2, 8, 7, 100), (settings.SiblingGroupsPerMatch, settings.SiblingsPerGroup, settings.Parts, settings.FirstMatch));
             Assert.False(commandLine.CalibrateThreads);
 
             Assert.True(CommandLine.Parse(["--threads", "auto"]).CalibrateThreads);
@@ -287,6 +334,7 @@ namespace Tests
             Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--agents", "random=0"]));
             Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--unknown"]));
             Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--siblings", "1"]));
+            Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--matches", "3", "--parts", "4"]));
 
             Assert.Equal([32, 24, 16, 8], ThreadCalibration.Candidates(32));
             Assert.Equal([1], ThreadCalibration.Candidates(1));

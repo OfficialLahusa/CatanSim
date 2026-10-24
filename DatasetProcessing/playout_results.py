@@ -17,7 +17,7 @@ was realized once. Labels derived here:
 - mean rounds until the end
 So new labels need no new run, and the number of finished playouts stays available for weighting.
 
-Usage: python playout_results.py <index.csv> <base path>
+Usage: python playout_results.py <index.csv> <base path> [output directory]
   writes placements.npy (n, 4, 4), vp_shares.npy (n, 4), rounds_left.npy (n,), finished_playouts.npy (n,),
   match_seeds.npy (n,), sibling_groups.npy (n,), actors.npy (n,) and chance_moves.npy (n,) aligned with the index
   entries, for entries of datasets with raw results (NaN / 0 / -1 otherwise)
@@ -216,8 +216,15 @@ def build_label_arrays(base_path: str, index: List[list]) -> Dict[str, np.ndarra
     return arrays
 
 
+def save_label_arrays(arrays: Dict[str, np.ndarray], output_dir: str = ".") -> None:
+    os.makedirs(output_dir, exist_ok=True)
+    for name, array in arrays.items():
+        np.save(os.path.join(output_dir, f"{name}.npy"), array)
+        print(f"Saved {name}.npy {array.shape}")
+
+
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         print(__doc__)
         sys.exit(1)
 
@@ -227,6 +234,4 @@ if __name__ == "__main__":
     arrays = build_label_arrays(sys.argv[2], index)
     with_results = int((arrays["finished_playouts"] > 0).sum())
     print(f"{with_results} of {len(index)} entries have raw playout results.")
-    for name, array in arrays.items():
-        np.save(f"{name}.npy", array)
-        print(f"Saved {name}.npy {array.shape}")
+    save_label_arrays(arrays, sys.argv[3] if len(sys.argv) == 4 else ".")
