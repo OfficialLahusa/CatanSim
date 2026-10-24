@@ -94,6 +94,7 @@ namespace DatasetCollector
               --output DIR           Directory to create the dataset in (default datasets)
               --name NAME            Name of the dataset directory (default from the settings and the time)
               --calibrate            Only calibrate the thread count with the other settings and report it
+                                     (tries all, 3/4, 1/2 and 1/4 of the logical cores and 32 and 24 threads)
               --calibration-seconds  Seconds per calibration run (default 20, every thread count runs twice)
               --help                 Show this help
             """;

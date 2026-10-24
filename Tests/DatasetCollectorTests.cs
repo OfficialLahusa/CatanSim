@@ -337,7 +337,9 @@ namespace Tests
             Assert.Throws<ArgumentException>(() => CommandLine.Parse(["--matches", "3", "--parts", "4"]));
 
             Assert.Equal([32, 24, 16, 8], ThreadCalibration.Candidates(32));
-            Assert.Equal([1], ThreadCalibration.Candidates(1));
+            Assert.Equal([64, 48, 32, 24, 16], ThreadCalibration.Candidates(64));
+            Assert.Equal([32, 24, 16, 12, 8, 4], ThreadCalibration.Candidates(16));
+            Assert.Equal([32, 24, 1], ThreadCalibration.Candidates(1));
         }
 
         [Fact]

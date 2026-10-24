@@ -2,17 +2,22 @@ namespace DatasetCollector
 {
     /// <summary>
     /// Finds the fastest thread count for the real settings: short time-limited runs into a temporary directory with all,
-    /// 3/4, 1/2 and 1/4 of the logical cores, measured in playouts per second (matches still in progress at the end are
-    /// abandoned). A warm-up run comes first, as the first run measured about 25% too slow (JIT, the server GC growing its
-    /// heaps). Every candidate runs twice, in order and then in reverse order, so drift (heat, background load) affects all
-    /// of them alike; runs on a desktop vary by about 8-15%.
+    /// 3/4, 1/2 and 1/4 of the logical cores and always 32 and 24 threads (more threads than cores can still pay off when
+    /// writing to a slow disk), measured in playouts per second (matches still in progress at the end are abandoned).
+    /// A warm-up run comes first, as the first run measured about 25% too slow (JIT, the server GC growing its heaps).
+    /// Every candidate runs twice, in order and then in reverse order, so drift (heat, background load) affects all of them
+    /// alike; runs on a desktop vary by about 8-15%.
     /// </summary>
     public static class ThreadCalibration
     {
+        // Tested on every machine, whatever its number of logical cores
+        private static readonly int[] FixedCandidates = [32, 24];
+
         public static int[] Candidates(int logicalCores)
         {
             return new[] { logicalCores, logicalCores * 3 / 4, logicalCores / 2, logicalCores / 4 }
-                .Where(threads => threads >= 1).Distinct().ToArray();
+                .Concat(FixedCandidates)
+                .Where(threads => threads >= 1).Distinct().OrderDescending().ToArray();
         }
 
         public static int FindBestThreadCount(CollectorSettings settings, TimeSpan timePerRun, TextWriter log)
