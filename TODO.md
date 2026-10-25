@@ -87,8 +87,11 @@
 	- 2. max^n in der Suche: erledigt, OpponentModel {Random, MaxN, Paranoid}, MaxN ist Default im MCTSAgent
 		- Nutzen pro Spieler (P(Sieg) + β * Platzierungs-Score) wird als 4er-Vektor backpropagiert, jeder Knoten wählt per UCT auf dem Wert des Spielers, der entscheidet (bei Discards der Abwerfende), mit eigenem MinMax-Bereich pro Spieler
 		- MinMaxStats lock-frei: Random 186k => 253k, MaxN 148k => 256k Iterationen/s, max^n kostet damit nichts mehr
-		- Duell gleiches Net (sl159q7y), 0,25s pro Entscheidung, 20 min: MaxN 8:4 gegen Random (67%, p ≈ 0,19, noch nicht signifikant)
-		- Offen: längeres Duell (≥100 Spiele, auch 0,5s), Paranoid dagegen testen, Subtree-Reuse nach Gegnerzügen neu messen (war ~13%), später Gegnerzüge nach Policy-Prior gewichten
+		- Duelle gleiches Net (sl159q7y): 0,25s 8:4, 0,5s 59:41 gegen Random (59%, zusammen 67:45 = 60%, p ≈ 0,05)
+		- Gegen 3 BuilderAgents (0,5s, 30 gleiche Karten): MaxN 20/30, Random 15/30 (25% = gleich stark), gepaart 5:0 für MaxN, nie schlechter
+		- MinMax-Bereich ohne ausstehende Visits (korrekt): im Duell neu gegen alt 45:55 (p ≈ 0,35), kein Gewinn; der alte Fehler zog das Minimum gegen 0 und explorierte dadurch stärker
+			- => Explorationskonstante (bisher 1,414) mit dem korrekten Bereich per Duell neu tunen, z.B. 1,414 / 2 / 2,8
+		- Offen: Paranoid erst nach Fix testen (ausstehende Visits machen bei invertiertem Wert Kinder attraktiver statt unattraktiver), Subtree-Reuse nach Gegnerzügen neu messen (war ~13%), später Gegnerzüge nach Policy-Prior gewichten
 	- 3. GPU-Inference: erledigt mit DirectML (Windows, kein Installieren nötig), Linux bleibt auf der CPU; Auswahl automatisch, CATANSIM_INFERENCE=cpu|dml erzwingt
 		- Net allein bei Batch 256: CPU 89k States/s, DirectML mit fester Batchgröße 566k (6,4x), mit dynamischer nur 136k
 		- MCTS: 66k => 181k Iterationen/s (2,7x), jetzt bremst die Selektion auf der CPU (44% der Zeit, die GPU wartet die Hälfte)
