@@ -96,6 +96,8 @@ namespace Client
 
         // Keep playing agent moves until the game ends or play is stopped (Full Playout [E])
         private bool _autoplay;
+        // E toggles once per press, the key is polled every frame
+        private bool _fullPlayoutKeyDown;
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
 
@@ -521,22 +523,15 @@ namespace Client
 
             ImGui.SameLine();
 
-            if (ImGui.Button("Full Playout [E]"))
+            if (ImGui.Button(_autoplay || _agentMove != null ? "Stop [E]" : "Full Playout [E]"))
             {
-                StartFullPlayout();
+                ToggleFullPlayout();
             }
 
             if (_agentMove != null && _movingAgent != null)
             {
                 using (new ImGuiTextColor(ColorPalette.GetPlayerColor(_movingAgent.PlayerIndex)))
-                    ImGui.Text($"Player {_movingAgent.PlayerIndex} ({_movingAgent.GetType().Name}) is thinking... {_agentMoveClock.Elapsed.TotalSeconds:F1}s");
-
-                ImGui.SameLine();
-
-                if (ImGui.Button("Stop"))
-                {
-                    CancelAgentMove();
-                }
+                    ImGui.Text($"Player {_movingAgent.PlayerIndex} thinking: {_agentMoveClock.Elapsed.TotalSeconds:F1}s");
             }
 
             if (ImGui.Button("Undo Action [U]"))
@@ -629,10 +624,12 @@ namespace Client
                 RedoAction(!_muteQuickPlayouts);
             }
 
-            if (Keyboard.IsKeyPressed(Keyboard.Key.E))
+            bool fullPlayoutKeyDown = Keyboard.IsKeyPressed(Keyboard.Key.E);
+            if (fullPlayoutKeyDown && !_fullPlayoutKeyDown)
             {
-                StartFullPlayout();
+                ToggleFullPlayout();
             }
+            _fullPlayoutKeyDown = fullPlayoutKeyDown;
 
             if (Keyboard.IsKeyPressed(Keyboard.Key.B))
             {
@@ -993,12 +990,17 @@ namespace Client
         }
 
         /// <summary>
-        /// Plays agent moves in the background until the game ends or Stop is pressed
+        /// Plays agent moves in the background until the game ends, or stops the moves in progress
         /// </summary>
-        private void StartFullPlayout()
+        private void ToggleFullPlayout()
         {
-            if (_autoplay || _state.HasEnded) return;
+            if (_autoplay || _agentMove != null)
+            {
+                CancelAgentMove();
+                return;
+            }
 
+            if (_state.HasEnded) return;
             _autoplay = true;
             StartAgentMove(!_muteQuickPlayouts);
         }
