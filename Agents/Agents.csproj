@@ -57,7 +57,12 @@
     <Warning Text="Value net $(StateValueNetModel) is missing in Agents/Artifacts and could not be downloaded. GreedyAgent, MCTSAgent and the Client's net evaluation are unavailable until it is placed there." />
   </Target>
 
-  <ItemGroup>
+  <!-- On Windows the DirectML package runs the value net on the GPU (any DirectX 12 GPU, nothing to install) and includes
+       the CPU provider; elsewhere the CPU package. StateValueNet picks the provider (see InferenceProvider). -->
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
+  </ItemGroup>
+  <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
   </ItemGroup>
 

@@ -88,8 +88,10 @@
 		- Vollen 4er-Vektor backpropagieren, in jedem Knoten per UCT auf dem Wert des Spielers am Zug auswählen => Gegner spielen im Baum ihre besten Züge
 		- Zusammen mit dem Platzierungs-Tie-Breaker pro Spieler werden auch weit zurückliegende Gegner rational modelliert
 		- Paranoid (alle gegen mich) als Vergleich, später Gegnerzüge nach Policy-Prior gewichten; vermutlich größter einzelner Hebel, wenige Tage Aufwand
-	- 3. GPU-Inference: ONNX Runtime CUDA/TensorRT (Windows: DirectML) auf der RTX 5080 statt CPU, Inference ist ~95% der Suchzeit
-		- Bei Batches von 256 10-50x mehr Auswertungen pro Sekunde realistisch => tiefere Suche, größere Nets erst bezahlbar; Provider-Unterstützung und Latenz pro Batch prüfen
+	- 3. GPU-Inference: erledigt mit DirectML (Windows, kein Installieren nötig), Linux bleibt auf der CPU; Auswahl automatisch, CATANSIM_INFERENCE=cpu|dml erzwingt
+		- Net allein bei Batch 256: CPU 89k States/s, DirectML mit fester Batchgröße 566k (6,4x), mit dynamischer nur 136k
+		- MCTS: 66k => 181k Iterationen/s (2,7x), jetzt bremst die Selektion auf der CPU (44% der Zeit, die GPU wartet die Hälfte)
+		- Nächste Schritte: zwei Auswertungen gleichzeitig in Flug oder schnellere Selektion/Expansion; CUDA-EP (ORT 1.31) braucht CUDA 13, torch bringt nur 12.8 mit
 	- 4. Setup-Phase spezialisieren (siehe Initial-Placement-Datensatz): eigene Zeit, eigene Kandidaten mit Best-Response-Gegnern (max^n) durchsuchen, Sibling-Gruppen an Setup-Entscheidungen
 	- 5. Policy Head + PUCT (siehe PolicyNet): Suchfokus, Gegnermodell nach Policy statt max^n über alles, besserer Subtree-Reuse
 	- 6. Self-Play / Expert Iteration: Labels aus Playouts schwacher Agents binden das Net an deren Niveau
@@ -195,7 +197,7 @@
 	- Durchsatz (61k-66k Iterationen/s auf 32 Threads mit Server GC, Inference läuft 95% der Zeit und ist der Engpass)
 		- Quality Bench (30 Positionen, Übereinstimmung mit 20s-Referenz): 2,2s (entspricht den alten 5s) 89% => 5s 93%, Gewinn nur im Setup (87% => 100%), Turns bleiben bei 90%, mittlerer Regret 0,24 => 0,18 pp
 		- => Suche ist für das aktuelle Net fast konvergiert, Stärke begrenzen Net, zufälliges Gegnermodell und Hidden Information
-		- Inference beschleunigen: ONNX Graph Optimization Level und Execution Provider (DirectML, OpenVINO) prüfen, Quantisierung (fp16/int8) nur mit Abgleich der Outputs, kleineres Net
+		- Inference läuft unter Windows auf der GPU (DirectML, siehe Weg zum starken Agent), Quantisierung (fp16/int8) nur mit Abgleich der Outputs
 		- Expansion kostete unter Last (32 Threads, Workstation GC) ~47 us für GetValidActions und ~43 us für Outcome Variants (Roll, Robber, Dev-Kauf), relevant sobald die Inference schneller ist
 		- Spielstärke nach dem Pipelining prüfen (Selektion arbeitet eine Batch hinter den Ergebnissen), z.B. MCTS vor/nach gegeneinander bei gleicher Zeit
 	- State Value Netzwerkarchitekturen aus Initial Placement Paper prüfen
