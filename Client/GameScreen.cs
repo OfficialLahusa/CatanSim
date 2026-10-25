@@ -84,6 +84,18 @@ namespace Client
         private float _mctsThinkingSeconds = 0.5f;
         private readonly string[] _opponentModels = Enum.GetNames<OpponentModel>();
         private int _selectedOpponentModel = (int)OpponentModel.MaxN;
+
+        // Agent move computed in the background on a copy of the state, so the window stays responsive while an agent thinks.
+        // Only the UI thread touches _state; it applies the move once it is done and the state is still the one it was computed for.
+        private Task<Action>? _agentMove;
+        private CancellationTokenSource? _agentMoveCancellation;
+        private Agent? _movingAgent;
+        private GameState? _agentMoveStartState;
+        private bool _agentMovePlaySound;
+        private readonly System.Diagnostics.Stopwatch _agentMoveClock = new();
+
+        // Keep playing agent moves until the game ends or play is stopped (Play Game [P])
+        private bool _autoplay;
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
 
@@ -388,6 +400,7 @@ namespace Client
                         }
                         else
                         {
+                            CancelAgentMove();
                             _agents[agentIdx] = CreateAgent(_selectedAgentTypes[agentIdx], agentIdx);
                         }
                     }
@@ -501,14 +514,29 @@ namespace Client
 
             if (ImGui.Button("Play Action [R]"))
             {
-                PlayAgentAction();
+                StartAgentMove();
             }
 
             ImGui.SameLine();
 
-            if (ImGui.Button("Full Playout [E]"))
+            if (ImGui.Button(_autoplay || _agentMove != null ? "Stop [P]" : "Play Game [P]"))
             {
-                PlayFullAgentPlayout();
+                ToggleAutoplay();
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("Quick Playout [E]"))
+            {
+                PlayFullAgentPlayout(CreateDebugAgents(seat => new BuilderAgent(seat)));
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Plays the game to its end at once with BuilderAgents instead of the selected agents");
+
+            if (_agentMove != null && _movingAgent != null)
+            {
+                using (new ImGuiTextColor(ColorPalette.GetPlayerColor(_movingAgent.PlayerIndex)))
+                    ImGui.Text($"Player {_movingAgent.PlayerIndex} ({_movingAgent.GetType().Name}) is thinking... {_agentMoveClock.Elapsed.TotalSeconds:F1}s");
             }
 
             if (ImGui.Button("Undo Action [U]"))
@@ -588,7 +616,7 @@ namespace Client
             if (Keyboard.IsKeyPressed(Keyboard.Key.R)
                 || Keyboard.IsKeyPressed(Keyboard.Key.Right))
             {
-                PlayAgentAction(!_muteQuickPlayouts);
+                StartAgentMove(!_muteQuickPlayouts);
             }
 
             if (Keyboard.IsKeyPressed(Keyboard.Key.U))
@@ -603,7 +631,7 @@ namespace Client
 
             if (Keyboard.IsKeyPressed(Keyboard.Key.E))
             {
-                PlayFullAgentPlayout();
+                PlayFullAgentPlayout(CreateDebugAgents(seat => new BuilderAgent(seat)));
             }
 
             if (Keyboard.IsKeyPressed(Keyboard.Key.B))
@@ -677,10 +705,16 @@ namespace Client
 
             _window.DispatchEvents();
             GuiImpl.Update(_window, deltaTime);
+
+            PollAgentMove();
         }
 
         private void ProgressAgentsByAction(Action action)
         {
+            // Agents are only used by one thread at a time; a move applied by autoplay itself is already done, so autoplay goes on
+            if (_agentMove != null)
+                CancelAgentMove();
+
             foreach (Agent agent in _agents)
             {
                 agent.HandleAction(action);
@@ -689,17 +723,42 @@ namespace Client
 
         private void ResetAgents()
         {
+            // Agents are only used by one thread at a time
+            CancelAgentMove();
+
             foreach (Agent agent in _agents)
             {
                 agent.ResetToState(_state);
             }
         }
 
+        /// <summary>
+        /// Fast fixed agents for the debug playouts (E, B, O), independent of the selected agents, which may think for seconds per move
+        /// </summary>
+        private static Agent[] CreateDebugAgents(Func<sbyte, Agent> create)
+        {
+            return Enumerable.Range(0, PLAYER_COUNT).Select(seat => create((sbyte)seat)).ToArray();
+        }
+
+        private int FindActingPlayer()
+        {
+            // First player that is allowed to act on state
+            for (int playerIdx = 0; playerIdx < PLAYER_COUNT; playerIdx++)
+            {
+                if (_state.CanPlayerAct(playerIdx))
+                    return playerIdx;
+            }
+
+            throw new InvalidOperationException();
+        }
+
         private void BenchmarkPlayouts(int matches, bool verbose = true)
         {
             if (_state.HasEnded) return;
 
+            ResetAgents();
             _undoHistory.Clear();
+            Agent[] agents = CreateDebugAgents(seat => new BuilderAgent(seat));
 
             Clock playoutClock = new Clock();
             int playedActions = 0;
@@ -712,21 +771,8 @@ namespace Client
 
                 while (!_state.HasEnded)
                 {
-                    // Find first player that is allowed to act on state
-                    int? actingPlayerIdx = null;
-                    for (int playerIdx = 0; playerIdx < PLAYER_COUNT; playerIdx++)
-                    {
-                        if (_state.CanPlayerAct(playerIdx))
-                        {
-                            actingPlayerIdx = playerIdx;
-                            break;
-                        }
-                    }
-
-                    if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
-
                     // Query agent for current state
-                    Action playedAction = _agents[actingPlayerIdx.Value].Act(_state);
+                    Action playedAction = agents[FindActingPlayer()].Act(_state);
 
                     if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
 
@@ -734,7 +780,8 @@ namespace Client
                     playedAction.Apply(_state);
 
                     // Update agents
-                    ProgressAgentsByAction(playedAction);
+                    foreach (Agent agent in agents)
+                        agent.HandleAction(playedAction);
 
                     // Push to action stack
                     _playedActions.Push(playedAction);
@@ -762,13 +809,16 @@ namespace Client
                 _playedActions.Clear();
 
                 // Reset internal agent state
-                ResetAgents();
+                foreach (Agent agent in agents)
+                    agent.ResetToState(_state);
 
                 _eventLog.Clear();
                 _actionLogger.Init();
 
                 _rollDistribution = new float[_rollDistribution.Length];
             }
+
+            ResetAgents();
 
             if (verbose)
             {
@@ -792,31 +842,25 @@ namespace Client
             _diceWidget.UpdateSprites();
         }
 
-        private void PlayFullAgentPlayout(bool verbose = true)
+        /// <summary>
+        /// Plays the game to its end at once with the given agents (debug agents, see CreateDebugAgents); the selected agents
+        /// play live with Play Game instead
+        /// </summary>
+        private void PlayFullAgentPlayout(Agent[] agents, bool verbose = true)
         {
             if (_state.HasEnded) return;
 
+            ResetAgents();
             _undoHistory.Clear();
+            foreach (Agent agent in agents)
+                agent.ResetToState(_state);
 
             Clock playoutClock = new Clock();
 
             while (!_state.HasEnded)
             {
-                // Find first player that is allowed to act on state
-                int? actingPlayerIdx = null;
-                for (int playerIdx = 0; playerIdx < PLAYER_COUNT; playerIdx++)
-                {
-                    if (_state.CanPlayerAct(playerIdx))
-                    {
-                        actingPlayerIdx = playerIdx;
-                        break;
-                    }
-                }
-
-                if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
-
                 // Query agent for current state
-                Action playedAction = _agents[actingPlayerIdx.Value].Act(_state);
+                Action playedAction = agents[FindActingPlayer()].Act(_state);
 
                 if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
 
@@ -824,7 +868,8 @@ namespace Client
                 playedAction.Apply(_state);
 
                 // Update agents
-                ProgressAgentsByAction(playedAction);
+                foreach (Agent agent in agents)
+                    agent.HandleAction(playedAction);
 
                 // Push to action stack
                 _playedActions.Push(playedAction);
@@ -858,30 +903,119 @@ namespace Client
             _diceWidget.UpdateSprites();
         }
 
-        private void PlayAgentAction(bool playSound = true)
+        /// <summary>
+        /// Lets the acting player's agent compute its move in the background (see PollAgentMove); nothing if one is already thinking
+        /// </summary>
+        private void StartAgentMove(bool playSound = true)
         {
-            if (_state.HasEnded) return;
+            if (_agentMove != null || _state.HasEnded) return;
 
-            _undoHistory.Clear();
+            Agent agent = _agents[FindActingPlayer()];
+            GameState snapshot = new GameState(_state);
+            CancellationTokenSource cancellation = new();
 
-            // Find first player that is allowed to act on state
-            int? actingPlayerIdx = null;
-            for (int playerIdx = 0; playerIdx < PLAYER_COUNT; playerIdx++)
+            _movingAgent = agent;
+            _agentMoveStartState = new GameState(_state);
+            _agentMovePlaySound = playSound;
+            _agentMoveCancellation = cancellation;
+            _agentMoveClock.Restart();
+            _agentMove = Task.Run(() => agent.Act(snapshot, cancellation.Token));
+        }
+
+        /// <summary>
+        /// Plays the background move once it is done, unless it was cancelled or the game changed meanwhile; with autoplay
+        /// starts the next one
+        /// </summary>
+        private void PollAgentMove()
+        {
+            if (_agentMove == null || !_agentMove.IsCompleted) return;
+
+            Task<Action> move = _agentMove;
+            Agent agent = _movingAgent!;
+            GameState startState = _agentMoveStartState!;
+            bool cancelled = _agentMoveCancellation!.IsCancellationRequested;
+            bool playSound = _agentMovePlaySound;
+            ClearAgentMove();
+
+            if (move.IsFaulted)
             {
-                if (_state.CanPlayerAct(playerIdx))
-                {
-                    actingPlayerIdx = playerIdx;
-                    break;
-                }
+                _autoplay = false;
+                string message = move.Exception!.GetBaseException().Message;
+                Console.WriteLine($"Agent of player {agent.PlayerIndex} failed: {move.Exception}");
+                _eventLog.WriteLine(new ColoredStrEntry($"Agent of player {agent.PlayerIndex} failed: {message}", Color.Red));
+                return;
             }
 
-            if (!actingPlayerIdx.HasValue) throw new InvalidOperationException();
+            // A move for another state or by a replaced agent is dropped
+            if (cancelled || !ReferenceEquals(_agents[agent.PlayerIndex], agent) || !_state.Equals(startState))
+            {
+                _autoplay = false;
+                return;
+            }
 
-            // Query agent for current state
-            Action playedAction = _agents[actingPlayerIdx.Value].Act(_state);
+            Action playedAction = move.Result;
+            if (!playedAction.IsValidFor(_state))
+            {
+                _autoplay = false;
+                _eventLog.WriteLine(new ColoredStrEntry($"Agent of player {agent.PlayerIndex} returned an invalid move: {playedAction}", Color.Red));
+                return;
+            }
 
-            if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
+            _undoHistory.Clear();
+            ApplyAgentAction(playedAction, playSound);
 
+            if (_autoplay)
+            {
+                if (_state.HasEnded) _autoplay = false;
+                else StartAgentMove(playSound);
+            }
+        }
+
+        /// <summary>
+        /// Stops the agent move in progress (agents stop searching early if they support it) and waits for it, so the agents
+        /// are free again; also ends autoplay
+        /// </summary>
+        private void CancelAgentMove()
+        {
+            _autoplay = false;
+            if (_agentMove == null) return;
+
+            _agentMoveCancellation!.Cancel();
+            try
+            {
+                _agentMove.Wait();
+            }
+            catch (AggregateException)
+            {
+                // A failing move is dropped like a cancelled one
+            }
+            ClearAgentMove();
+        }
+
+        private void ClearAgentMove()
+        {
+            _agentMoveCancellation?.Dispose();
+            _agentMove = null;
+            _agentMoveCancellation = null;
+            _movingAgent = null;
+            _agentMoveStartState = null;
+        }
+
+        private void ToggleAutoplay()
+        {
+            if (_autoplay || _agentMove != null)
+            {
+                CancelAgentMove();
+                return;
+            }
+
+            if (_state.HasEnded) return;
+            _autoplay = true;
+            StartAgentMove(!_muteQuickPlayouts);
+        }
+
+        private void ApplyAgentAction(Action playedAction, bool playSound)
+        {
             // Apply action to state
             playedAction.Apply(_state);
 
@@ -1005,7 +1139,8 @@ namespace Client
 
         private void FindInconsistentHashes()
         {
-            PlayFullAgentPlayout(false);
+            // Random moves cover the most action types
+            PlayFullAgentPlayout(CreateDebugAgents(seat => new RandomAgent(seat)), false);
 
             while (_playedActions.Count > 0)
             {
@@ -1229,6 +1364,12 @@ namespace Client
 
         private void Window_KeyPressed(object? sender, KeyEventArgs e)
         {
+            // Once per press (polling in HandleInput would toggle every frame)
+            if (e.Code == Keyboard.Key.P && !ImGui.GetIO().WantCaptureKeyboard)
+            {
+                ToggleAutoplay();
+            }
+
             /*if (e.Code == Keyboard.Key.Enter)
             {
                 if (_spectatorMode) return;
