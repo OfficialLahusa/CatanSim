@@ -35,6 +35,7 @@ namespace Agents.MCTS
         // Value of places 1 to 4 on [0, 1], the same as PLACEMENT_SCORES in state_value_net.py
         private static readonly float[] PlacementScores = [1f, 2f / 3f, 1f / 3f, 0f];
         private double _placementWeight;
+        private OpponentModel _opponentModel;
 
         protected readonly object _treeLock = new object();
 
@@ -82,6 +83,19 @@ namespace Agents.MCTS
         }
 
         /// <summary>
+        /// How the search picks the other players' moves (see OpponentModel). Changing it starts a new tree at the next decision.
+        /// </summary>
+        public OpponentModel OpponentModel
+        {
+            get => _opponentModel;
+            set
+            {
+                if (value != _opponentModel) _tree = null;
+                _opponentModel = value;
+            }
+        }
+
+        /// <summary>
         /// Search time per decision, can be changed between decisions
         /// </summary>
         public double TimeLimitSeconds
@@ -91,7 +105,7 @@ namespace Agents.MCTS
         }
 
         public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414, double timeLimitSeconds = TIME_LIMIT_SECONDS,
-            StateValueNet? valueNet = null, IStateVectorizer? vectorizer = null, double placementWeight = 0)
+            StateValueNet? valueNet = null, IStateVectorizer? vectorizer = null, double placementWeight = 0, OpponentModel opponentModel = OpponentModel.MaxN)
             : base(playerIndex)
         {
             _explorationParameter = explorationParameter;
@@ -99,6 +113,7 @@ namespace Agents.MCTS
             _stateValueNet = valueNet ?? DefaultValueNet.Value;
             _stateVectorizer = vectorizer ?? DefaultVectorizer;
             PlacementWeight = placementWeight;
+            _opponentModel = opponentModel;
 
             ResetToState(initialState);
         }
@@ -109,7 +124,7 @@ namespace Agents.MCTS
             // Otherwise (first move, missed or manual actions, undo) start over on a private copy of the state.
             if (_tree == null || !_tree.RootState.Equals(state))
             {
-                _tree = new MCTSTree(new GameState(state), PlayerIndex, _explorationParameter);
+                _tree = new MCTSTree(new GameState(state), PlayerIndex, _explorationParameter, model: _opponentModel);
             }
 
             RunForTime(_timeLimitSeconds);
@@ -176,7 +191,7 @@ namespace Agents.MCTS
             // Pipelined batches: while the value net evaluates one batch, the previous one is backpropagated and the next one selected.
             // Selection therefore runs one batch behind on results, but the visits of the batch in evaluation are already counted.
             LeafBatch? evaluatedBatch = null;
-            Task<double[]>? evaluation = null;
+            Task<double[]>? evaluation = null; // utilities per leaf and player
 
             uint iterationCounter = 0;
             do
@@ -227,11 +242,14 @@ namespace Agents.MCTS
 
             // Simulation
             // Ended matches have a known result, everything else is estimated by the value net
-            double result = stateAtLeaf.HasEnded ? TerminalResult(stateAtLeaf) : SimulateML(stateAtLeaf);
+            Span<double> utilities = stackalloc double[MCTSNode.PlayerCount];
+            if (stateAtLeaf.HasEnded) TerminalUtilities(stateAtLeaf, utilities);
+            else SimulateUtilities(stateAtLeaf, utilities);
 
             // Backpropagation
             // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root
-            tree.Backpropagate(leafNode, result);
+            if (tree.Model == OpponentModel.Random) tree.Backpropagate(leafNode, utilities[PlayerIndex]);
+            else tree.Backpropagate(leafNode, utilities);
         }
 
         protected void RunBatchedIterations(uint batchSize)
@@ -280,7 +298,8 @@ namespace Agents.MCTS
         }
 
         /// <summary>
-        /// Results of the leaves of a batch. Only reads the batch, so it can run while the tree is in use.
+        /// Utilities of the leaves of a batch, one per player (flat: leaf * 4 + player). Only reads the batch, so it can run
+        /// while the tree is in use.
         /// </summary>
         private double[] EvaluateBatch(LeafBatch batch)
         {
@@ -288,7 +307,7 @@ namespace Agents.MCTS
             // Ended matches have a known result, everything else is estimated by the value net in one batched run
             _evaluationTime.Start();
             var leaves = batch.Leaves;
-            double[] results = new double[leaves.Length];
+            double[] utilities = new double[leaves.Length * MCTSNode.PlayerCount];
 
             float[]? outputs = null, placements = null;
             if (leaves.Any(leaf => !leaf.stateAtLeaf.HasEnded))
@@ -299,33 +318,71 @@ namespace Agents.MCTS
 
             for (int i = 0; i < leaves.Length; i++)
             {
-                results[i] = leaves[i].stateAtLeaf.HasEnded
-                    ? TerminalResult(leaves[i].stateAtLeaf)
-                    : ValuationToScore(outputs.AsSpan(i * 4, 4)) + (placements == null ? 0 : _placementWeight * PlacementScore(placements.AsSpan(i * 16 + PlayerIndex * 4, 4)));
+                Span<double> destination = utilities.AsSpan(i * MCTSNode.PlayerCount, MCTSNode.PlayerCount);
+                if (leaves[i].stateAtLeaf.HasEnded)
+                    TerminalUtilities(leaves[i].stateAtLeaf, destination);
+                else
+                    LeafUtilities(outputs.AsSpan(i * 4, 4), placements == null ? default : placements.AsSpan(i * 16, 16), destination);
             }
             _evaluationTime.Stop();
 
-            return results;
+            return utilities;
         }
 
-        private void BackpropagateBatch(MCTSTree tree, LeafBatch batch, double[] results)
+        private void BackpropagateBatch(MCTSTree tree, LeafBatch batch, double[] utilities)
         {
             var leaves = batch.Leaves;
             _backpropagationTime.Start();
             Parallel.For(0, leaves.Length, i =>
             {
                 // Backpropagation
-                // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root
-                tree.Backpropagate(leaves[i].leafNode, results[i], pathAlreadyMarked: true);
+                // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root;
+                // the opponent models that use every player's values get all four utilities, Random only the owner's
+                if (tree.Model == OpponentModel.Random)
+                    tree.Backpropagate(leaves[i].leafNode, utilities[i * MCTSNode.PlayerCount + PlayerIndex], pathAlreadyMarked: true);
+                else
+                    tree.Backpropagate(leaves[i].leafNode, utilities.AsSpan(i * MCTSNode.PlayerCount, MCTSNode.PlayerCount), pathAlreadyMarked: true);
             });
             _backpropagationTime.Stop();
         }
 
-        protected double TerminalResult(GameState state)
+        /// <summary>
+        /// Every player's utility from the value net: the win probability, plus the placement weight times the expected
+        /// placement score if the placements are given
+        /// </summary>
+        private void LeafUtilities(ReadOnlySpan<float> winProbabilities, ReadOnlySpan<float> placements, Span<double> destination)
+        {
+            float sum = 0;
+            foreach (float value in winProbabilities)
+                sum += value;
+
+            for (int player = 0; player < MCTSNode.PlayerCount; player++)
+            {
+                destination[player] = winProbabilities[player] / sum;
+                if (!placements.IsEmpty)
+                    destination[player] += _placementWeight * PlacementScore(placements.Slice(player * 4, 4));
+            }
+        }
+
+        /// <summary>
+        /// Every player's utility in an ended match: 1 for the winner, plus the placement weight times the actual placement score
+        /// </summary>
+        private void TerminalUtilities(GameState state, Span<double> destination)
         {
             // Players can only win on their own turn, so the turn player of an ended match is the winner
-            double win = state.Turn.PlayerIndex == PlayerIndex ? 1 : 0;
-            return _placementWeight > 0 ? win + _placementWeight * TerminalPlacementScore(state, PlayerIndex) : win;
+            for (int player = 0; player < MCTSNode.PlayerCount; player++)
+            {
+                destination[player] = state.Turn.PlayerIndex == player ? 1 : 0;
+                if (_placementWeight > 0)
+                    destination[player] += _placementWeight * TerminalPlacementScore(state, player);
+            }
+        }
+
+        protected double TerminalResult(GameState state)
+        {
+            Span<double> utilities = stackalloc double[MCTSNode.PlayerCount];
+            TerminalUtilities(state, utilities);
+            return utilities[PlayerIndex];
         }
 
         /// <summary>
@@ -391,13 +448,25 @@ namespace Agents.MCTS
 
         protected double SimulateML(GameState state)
         {
-            if (_placementWeight == 0)
-                return ValuationToScore(StateValueFunc(state));
+            Span<double> utilities = stackalloc double[MCTSNode.PlayerCount];
+            SimulateUtilities(state, utilities);
+            return utilities[PlayerIndex];
+        }
 
+        private void SimulateUtilities(GameState state, Span<double> destination)
+        {
             float[] features = new float[_stateVectorizer.FeatureDim];
             _stateVectorizer.VectorizeInto(state, features);
-            (float[] winProbabilities, float[] placements) = _stateValueNet.RunWithPlacements(new DenseTensor<float>(features, [1, features.Length]));
-            return ValuationToScore(winProbabilities) + _placementWeight * PlacementScore(placements.AsSpan(PlayerIndex * 4, 4));
+            var input = new DenseTensor<float>(features, [1, features.Length]);
+
+            if (_placementWeight == 0)
+            {
+                LeafUtilities(_stateValueNet.Run(input), default, destination);
+                return;
+            }
+
+            (float[] winProbabilities, float[] placements) = _stateValueNet.RunWithPlacements(input);
+            LeafUtilities(winProbabilities, placements, destination);
         }
 
         protected float ValuationToScore(ReadOnlySpan<float> valuation)

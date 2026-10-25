@@ -33,8 +33,16 @@ namespace Agents.MCTS
             set => Volatile.Write(ref _totalScoreBits, BitConverter.DoubleToInt64Bits(value));
         }
 
+        // Sums of every player's result, for searches that model the opponents (see OpponentModel), stored as bits like TotalScore
+        public const int PlayerCount = 4;
+        private long _score0Bits, _score1Bits, _score2Bits, _score3Bits;
+
         // Player to act in the node's state, known for the root and for expanded nodes (UnknownPlayer before)
         public sbyte ActivePlayerIndex { get; set; }
+
+        // Player whose actions the children are, i.e. who decides here (for discards the discarding player, not the turn
+        // player), set on expansion; UnknownPlayer for outcome groups, whose children are sampled
+        public sbyte DeciderIndex { get; private set; } = UnknownPlayer;
         public bool IsOutputRandomnessGroup { get; set; }
 
         // Probability of this outcome among its siblings (only meaningful for children of a randomness group)
@@ -69,9 +77,10 @@ namespace Agents.MCTS
         /// <summary>
         /// Makes the children visible to all threads at once
         /// </summary>
-        internal void PublishChildren(MCTSNode[] children, bool ownerDecides)
+        internal void PublishChildren(MCTSNode[] children, bool ownerDecides, sbyte deciderIndex = UnknownPlayer)
         {
             OwnerDecides = ownerDecides;
+            DeciderIndex = deciderIndex;
             Volatile.Write(ref _children, children);
         }
 
@@ -112,6 +121,65 @@ namespace Agents.MCTS
         }
 
         /// <summary>
+        /// UCT of a child on one player's result (normalized with that player's value range), inverted for a player who
+        /// wants that result low (the paranoid opponent model)
+        /// </summary>
+        internal double GetUCT(double explorationParameter, double logParentVisits, MinMaxStats.Range? valueRange, int player, bool invert)
+        {
+            uint visitCountSnapshot = VisitCount;
+            if (visitCountSnapshot == 0)
+                return 1e9;
+
+            double meanValue = PlayerScore(player) / visitCountSnapshot;
+            if (valueRange != null)
+                meanValue = valueRange.Value.Normalize(meanValue);
+            if (invert)
+                meanValue = 1 - meanValue;
+
+            return meanValue + explorationParameter * Math.Sqrt(logParentVisits / visitCountSnapshot);
+        }
+
+        /// <summary>
+        /// Sum of the player's results
+        /// </summary>
+        public double PlayerScore(int player)
+        {
+            return BitConverter.Int64BitsToDouble(Volatile.Read(ref ScoreBits(player)));
+        }
+
+        /// <summary>
+        /// Adds one result per player, without a lock
+        /// </summary>
+        public void AddResults(ReadOnlySpan<double> values)
+        {
+            for (int player = 0; player < PlayerCount; player++)
+                AddTo(ref ScoreBits(player), values[player]);
+        }
+
+        private ref long ScoreBits(int player)
+        {
+            switch (player)
+            {
+                case 0: return ref _score0Bits;
+                case 1: return ref _score1Bits;
+                case 2: return ref _score2Bits;
+                case 3: return ref _score3Bits;
+                default: throw new ArgumentOutOfRangeException(nameof(player));
+            }
+        }
+
+        private static void AddTo(ref long bits, double value)
+        {
+            long initial, added;
+            do
+            {
+                initial = Volatile.Read(ref bits);
+                added = BitConverter.DoubleToInt64Bits(BitConverter.Int64BitsToDouble(initial) + value);
+            }
+            while (Interlocked.CompareExchange(ref bits, added, initial) != initial);
+        }
+
+        /// <summary>
         /// Cuts the link to the parent, so this node can become the root of a reused subtree
         /// </summary>
         public void DetachFromParent()
@@ -126,13 +194,7 @@ namespace Agents.MCTS
 
         public void AddResult(double value)
         {
-            long initial, added;
-            do
-            {
-                initial = Volatile.Read(ref _totalScoreBits);
-                added = BitConverter.DoubleToInt64Bits(BitConverter.Int64BitsToDouble(initial) + value);
-            }
-            while (Interlocked.CompareExchange(ref _totalScoreBits, added, initial) != initial);
+            AddTo(ref _totalScoreBits, value);
         }
     }
 }

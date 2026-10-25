@@ -78,16 +78,17 @@
 		- Bewertung: Duell gegen sl159q7y, gegen 3 BuilderAgents, Kalibrierung pro VP-Rückstand
 		- Platzierung als Tie-Breaker: Plumbing fertig (zweiter ONNX-Output "placements", MCTSAgent.PlacementWeight β, train.py --ranking-placement-weight), mit dem ersten v2-Modell β per Duell tunen (0 / 0,03 / 0,1)
 			- Wert im MCTS = P(Sieg) + β * Platzierungs-Score (1. = 1 bis 4. = 0), Terminal-States ebenso aus der tatsächlichen Platzierung
-			- Hilft dem eigenen Spiel weit hinten (alle Optionen sonst ~0), nicht dem Gegnermodell: Gegnerzüge werden im Baum zufällig gewählt, dafür bräuchte es Werte pro Spieler (max^n)
+			- Hilft dem eigenen Spiel weit hinten (alle Optionen sonst ~0) und mit max^n auch dem Gegnermodell (Nutzen pro Spieler mit eigenem Platzierungs-Score)
 	- Phase 3: Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), Augmentation (Spielerrotation, 12 Brett-Symmetrien), Expansionspotenzial, Inference-Budget ~2-3x
 	- Phase 4: Policy Head => Search-distillierte Targets / Self-Play (Expert Iteration) => Belief-aware Net
 	- Nebenbei: alte State-Matrizen in Agents/Training/dataset löschen (~60 GB)
 - Weg zum starken Agent (über Catanatron hinaus), nach Hebel sortiert
 	- 1. Messen: Catanatron-Bridge (Python-Player, der den State an die C#-Engine gibt, gleiche Perfect-Information-Ebene, ~3-5 Tage) plus Leaderboard (siehe unten)
-	- 2. max^n in der Suche: das Net liefert schon die Gewinnchancen aller 4 Spieler, genutzt wird nur die eigene, Gegnerzüge werden im Baum zufällig gewählt
-		- Vollen 4er-Vektor backpropagieren, in jedem Knoten per UCT auf dem Wert des Spielers am Zug auswählen => Gegner spielen im Baum ihre besten Züge
-		- Zusammen mit dem Platzierungs-Tie-Breaker pro Spieler werden auch weit zurückliegende Gegner rational modelliert
-		- Paranoid (alle gegen mich) als Vergleich, später Gegnerzüge nach Policy-Prior gewichten; vermutlich größter einzelner Hebel, wenige Tage Aufwand
+	- 2. max^n in der Suche: erledigt, OpponentModel {Random, MaxN, Paranoid}, MaxN ist Default im MCTSAgent
+		- Nutzen pro Spieler (P(Sieg) + β * Platzierungs-Score) wird als 4er-Vektor backpropagiert, jeder Knoten wählt per UCT auf dem Wert des Spielers, der entscheidet (bei Discards der Abwerfende), mit eigenem MinMax-Bereich pro Spieler
+		- MinMaxStats lock-frei: Random 186k => 253k, MaxN 148k => 256k Iterationen/s, max^n kostet damit nichts mehr
+		- Duell gleiches Net (sl159q7y), 0,25s pro Entscheidung, 20 min: MaxN 8:4 gegen Random (67%, p ≈ 0,19, noch nicht signifikant)
+		- Offen: längeres Duell (≥100 Spiele, auch 0,5s), Paranoid dagegen testen, Subtree-Reuse nach Gegnerzügen neu messen (war ~13%), später Gegnerzüge nach Policy-Prior gewichten
 	- 3. GPU-Inference: erledigt mit DirectML (Windows, kein Installieren nötig), Linux bleibt auf der CPU; Auswahl automatisch, CATANSIM_INFERENCE=cpu|dml erzwingt
 		- Net allein bei Batch 256: CPU 89k States/s, DirectML mit fester Batchgröße 566k (6,4x), mit dynamischer nur 136k
 		- MCTS: 66k => 181k Iterationen/s (2,7x), jetzt bremst die Selektion auf der CPU (44% der Zeit, die GPU wartet die Hälfte)
@@ -196,7 +197,7 @@
 		- Dann immer das ganze Budget nutzen um seinen Initiativabschnitt fertigzurechnen und dann diesen Pfad auch instantly fertig spielen
 	- Durchsatz (61k-66k Iterationen/s auf 32 Threads mit Server GC, Inference läuft 95% der Zeit und ist der Engpass)
 		- Quality Bench (30 Positionen, Übereinstimmung mit 20s-Referenz): 2,2s (entspricht den alten 5s) 89% => 5s 93%, Gewinn nur im Setup (87% => 100%), Turns bleiben bei 90%, mittlerer Regret 0,24 => 0,18 pp
-		- => Suche ist für das aktuelle Net fast konvergiert, Stärke begrenzen Net, zufälliges Gegnermodell und Hidden Information
+		- => Suche ist für das aktuelle Net fast konvergiert, Stärke begrenzen Net, zufälliges Gegnermodell (inzwischen max^n) und Hidden Information
 		- Inference läuft unter Windows auf der GPU (DirectML, siehe Weg zum starken Agent), Quantisierung (fp16/int8) nur mit Abgleich der Outputs
 		- Expansion kostete unter Last (32 Threads, Workstation GC) ~47 us für GetValidActions und ~43 us für Outcome Variants (Roll, Robber, Dev-Kauf), relevant sobald die Inference schneller ist
 		- Spielstärke nach dem Pipelining prüfen (Selektion arbeitet eine Batch hinter den Ergebnissen), z.B. MCTS vor/nach gegeneinander bei gleicher Zeit

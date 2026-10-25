@@ -13,6 +13,15 @@ using Action = Common.Actions.Action;
 
 namespace Agents.MCTS
 {
+    /// <summary>
+    /// How the search picks the moves of the other players:
+    /// Random samples them uniformly (the owner's moves by UCT on its own value);
+    /// MaxN picks every player's moves by UCT on that player's own value, from the value net's estimates for all players;
+    /// Paranoid has the others pick the moves that are worst for the owner.
+    /// MaxN is the agent default: 8:4 against Random in a duel with the same net (0.25 s per decision), at the same search speed.
+    /// </summary>
+    public enum OpponentModel { Random, MaxN, Paranoid }
+
     public class MCTSTree
     {
         public GameState RootState;
@@ -24,13 +33,25 @@ namespace Agents.MCTS
         // Running value range of the tree, used to normalize Q values during selection (null disables normalization)
         public MinMaxStats? ValueBounds { get; private set; }
 
-        public MCTSTree(GameState rootState, sbyte ownerIdx, double explorationParameter, bool normalizeValues = true)
+        // One value range per player for the opponent models that use every player's values (null without normalization)
+        public MinMaxStats[]? PlayerBounds { get; private set; }
+
+        public OpponentModel Model { get; }
+
+        public MCTSTree(GameState rootState, sbyte ownerIdx, double explorationParameter, bool normalizeValues = true, OpponentModel model = OpponentModel.Random)
         {
             RootState = rootState;
             RootNode = new MCTSNode((sbyte)rootState.Turn.PlayerIndex, null, null, false);
             _ownerIdx = ownerIdx;
             _explorationParameter = explorationParameter;
+            Model = model;
             ValueBounds = normalizeValues ? new MinMaxStats() : null;
+            PlayerBounds = normalizeValues && model != OpponentModel.Random ? NewPlayerBounds() : null;
+        }
+
+        private static MinMaxStats[] NewPlayerBounds()
+        {
+            return Enumerable.Range(0, MCTSNode.PlayerCount).Select(_ => new MinMaxStats()).ToArray();
         }
 
         public Action GetMostPromisingMove()
@@ -78,16 +99,22 @@ namespace Agents.MCTS
             RootNode = newRoot;
             RootState = newRootState;
 
-            // Rebuild the value range from the kept subtree, so values of discarded branches no longer stretch it
+            // Rebuild the value ranges from the kept subtree, so values of discarded branches no longer stretch them
             if (ValueBounds != null)
             {
                 ValueBounds = new MinMaxStats();
+                PlayerBounds = PlayerBounds != null ? NewPlayerBounds() : null;
 
                 Stack<MCTSNode> pending = new([newRoot]);
                 while (pending.TryPop(out MCTSNode? node))
                 {
-                    if (node.VisitCount > 0)
-                        ValueBounds.Update(node.TotalScore / node.VisitCount);
+                    uint visits = node.VisitCount;
+                    if (visits > 0)
+                    {
+                        ValueBounds.Update(node.TotalScore / visits);
+                        for (int player = 0; PlayerBounds != null && player < MCTSNode.PlayerCount; player++)
+                            PlayerBounds[player].Update(node.PlayerScore(player) / visits);
+                    }
 
                     foreach (MCTSNode child in node.Children)
                         pending.Push(child);
@@ -189,7 +216,7 @@ namespace Agents.MCTS
                         }
 
                         // Outcomes are sampled, never chosen
-                        groupNode.PublishChildren(outcomes, ownerDecides: false);
+                        groupNode.PublishChildren(outcomes, ownerDecides: false, MCTSNode.UnknownPlayer);
                     }
                     // Otherwise just add the node directly as a child
                     else
@@ -199,7 +226,8 @@ namespace Agents.MCTS
                     }
                 }
 
-                node.PublishChildren([.. children], HasDecidingPower(node.ActivePlayerIndex, children));
+                node.PublishChildren([.. children], HasDecidingPower(node.ActivePlayerIndex, children),
+                    actions.Count > 0 ? actions[0].PlayerIndex : MCTSNode.UnknownPlayer);
             }
         }
 
@@ -218,6 +246,32 @@ namespace Agents.MCTS
 
                 // Keep the tree-wide value range up to date with the node's new mean value
                 ValueBounds?.Update(currentNode.TotalScore / currentNode.VisitCount);
+
+                currentNode = currentNode.Parent;
+            }
+        }
+
+        /// <summary>
+        /// Backpropagation of a result per player (the opponent models that use every player's values); the owner's result
+        /// also goes into TotalScore
+        /// </summary>
+        public void Backpropagate(MCTSNode node, ReadOnlySpan<double> results, bool pathAlreadyMarked = false)
+        {
+            MCTSNode? currentNode = node;
+            double ownerResult = results[_ownerIdx];
+
+            while (currentNode != null)
+            {
+                if (!pathAlreadyMarked)
+                    currentNode.IncrementVisitCount();
+
+                currentNode.AddResults(results);
+                currentNode.AddResult(ownerResult);
+
+                uint visits = currentNode.VisitCount;
+                ValueBounds?.Update(currentNode.TotalScore / visits);
+                for (int player = 0; PlayerBounds != null && player < MCTSNode.PlayerCount; player++)
+                    PlayerBounds[player].Update(currentNode.PlayerScore(player) / visits);
 
                 currentNode = currentNode.Parent;
             }
@@ -246,31 +300,56 @@ namespace Agents.MCTS
                 return SampleOutcome(children);
             }
 
-            // Otherwise select random move if the player this agent is representing has no deciding power over the next action
-            // This is to avoid the AI from making intentional bad moves on other players' turns
-            if (!node.OwnerDecides)
+            if (Model == OpponentModel.Random)
             {
-                return children[_random.Next(children.Length)];
+                // Select a random move if the player this agent is representing has no deciding power over the next action
+                // This is to avoid the AI from making intentional bad moves on other players' turns
+                if (!node.OwnerDecides)
+                {
+                    return children[_random.Next(children.Length)];
+                }
+
+                // Only select best move if the player has deciding power, in one pass with values shared by all children
+                double logParentVisits = Math.Log(node.VisitCount);
+                MinMaxStats.Range? valueRange = ValueBounds?.GetRange();
+
+                MCTSNode best = children[0];
+                double bestValue = double.NegativeInfinity;
+                foreach (MCTSNode child in children)
+                {
+                    // Slight random jitter to break ties (especially important for unexplored nodes)
+                    double value = child.GetUCT(_explorationParameter, logParentVisits, valueRange) + _random.NextDouble() * 1e-5;
+                    if (value > bestValue)
+                    {
+                        best = child;
+                        bestValue = value;
+                    }
+                }
+
+                return best;
             }
 
-            // Only select best move if the player has deciding power, in one pass with values shared by all children
-            double logParentVisits = Math.Log(node.VisitCount);
-            MinMaxStats.Range? valueRange = ValueBounds?.GetRange();
+            // Every decision by UCT: on the deciding player's own value (MaxN), or for the others on the owner's value
+            // turned around (Paranoid)
+            int decider = node.DeciderIndex;
+            int valuePlayer = Model == OpponentModel.MaxN ? decider : _ownerIdx;
+            bool invert = Model == OpponentModel.Paranoid && decider != _ownerIdx;
+            double logVisits = Math.Log(node.VisitCount);
+            MinMaxStats.Range? range = PlayerBounds?[valuePlayer].GetRange();
 
-            MCTSNode best = children[0];
-            double bestValue = double.NegativeInfinity;
+            MCTSNode chosen = children[0];
+            double chosenValue = double.NegativeInfinity;
             foreach (MCTSNode child in children)
             {
-                // Slight random jitter to break ties (especially important for unexplored nodes)
-                double value = child.GetUCT(_explorationParameter, logParentVisits, valueRange) + _random.NextDouble() * 1e-5;
-                if (value > bestValue)
+                double value = child.GetUCT(_explorationParameter, logVisits, range, valuePlayer, invert) + _random.NextDouble() * 1e-5;
+                if (value > chosenValue)
                 {
-                    best = child;
-                    bestValue = value;
+                    chosen = child;
+                    chosenValue = value;
                 }
             }
 
-            return best;
+            return chosen;
         }
 
         private MCTSNode SampleOutcome(MCTSNode[] outcomes)
