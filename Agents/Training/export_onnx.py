@@ -32,9 +32,10 @@ def export(ckpt_path: str, out_path: str, in_dim: int):
 
 def export_model(model: nn.Module, out_path: str, in_dim: int) -> float:
     """Exportiert ein StateValueNet (im eval-Modus) nach ONNX und prüft die Parität.
-    Modelle mit Aux Heads bekommen einen zweiten Output "placements" (der C#-Code liest "logits" über den Namen).
+    Modelle mit trainiertem Platzierungs-Head (--placement-weight > 0) bekommen einen zweiten Output "placements"
+    (der C#-Code liest "logits" über den Namen); Aux Heads nur für andere Losses werden nicht exportiert.
     Gibt die maximale Abweichung zwischen PyTorch und ONNX zurück."""
-    with_placements = getattr(model, "aux", None) is not None
+    with_placements = getattr(model, "aux", None) is not None and getattr(model, "placements_trained", False)
     exported = ExportedValueNet(model).eval() if with_placements else model
     output_names = ["logits", "placements"] if with_placements else ["logits"]
 

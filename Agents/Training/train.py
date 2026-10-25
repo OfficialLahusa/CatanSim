@@ -141,6 +141,9 @@ def main():
                          ("placements", args.ranking_placement_weight)]:
         if weight > 0 and name not in full_ds.aux_paths:
             raise SystemExit(f"--{name} loss needs {name}.npy in --aux-dir (from DatasetProcessing/playout_results.py)")
+    if args.ranking_placement_weight > 0 and args.placement_weight == 0:
+        # Das Ranking trainiert nur Unterschiede innerhalb der Gruppen, das absolute Niveau kommt vom Platzierungs-Loss
+        raise SystemExit("--ranking-placement-weight needs --placement-weight > 0")
     print(f"Aux labels: {', '.join(full_ds.aux_paths) or 'none'}")
 
     train_idx, val_idx = np.load(args.train_idx), np.load(args.val_idx)

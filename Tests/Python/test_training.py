@@ -115,6 +115,15 @@ class TrainingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             self.assertLess(export_model(normalized.model.eval(), os.path.join(directory, "normalized.onnx"), 32), 1e-4)
 
+        # Aux heads for other losses only: the placements head is untrained, so the export leaves it out
+        rounds_only = StateValueModule(in_dim=32, rounds_weight=1.0)
+        self.assertIsNotNone(rounds_only.model.aux)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "rounds_only.onnx")
+            self.assertLess(export_model(rounds_only.model.eval(), path, 32), 1e-4)
+            session = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+            self.assertEqual(["logits"], [output.name for output in session.get_outputs()])
+
         # Without auxiliary losses the model has exactly the parameters of earlier checkpoints
         plain = StateValueModule(in_dim=32)
         self.assertIsNone(plain.model.aux)

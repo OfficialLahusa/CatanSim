@@ -39,6 +39,9 @@ class StateValueNet(nn.Module):
             "rounds_left": nn.Linear(int(hidden/2), 1),
         }) if aux_heads else None
 
+        # Nur dann exportiert export_onnx die Platzierungen: mit Aux Heads für andere Losses wäre der Head untrainiert
+        self.placements_trained = False
+
     def _normalize(self, x):
         return x if self.input_mean is None else (x - self.input_mean) * self.input_scale
 
@@ -64,6 +67,7 @@ class StateValueModule(L.LightningModule):
         self.save_hyperparameters()
         aux_heads = placement_weight > 0 or vp_share_weight > 0 or rounds_weight > 0 or ranking_placement_weight > 0
         self.model = StateValueNet(in_dim, aux_heads=aux_heads, normalize_inputs=normalize_inputs)
+        self.model.placements_trained = placement_weight > 0
 
     def set_input_normalization(self, states):
         """Mittelwert und Skala pro Feature aus Trainings-States. Binäre Features (nur 0 und 1) bleiben unverändert,
