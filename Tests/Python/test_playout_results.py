@@ -14,7 +14,7 @@ import numpy as np
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(REPO, "DatasetProcessing"))
 
-from playout_results import PLAYOUT_DTYPE, build_label_arrays, derive_labels, load_samples, placements  # noqa: E402
+from playout_results import PLAYOUT_DTYPE, build_label_arrays, derive_labels, effective_match_seed, load_samples, placements  # noqa: E402
 
 HEADER = ("name,group,match,sample,position,match_length,round,terminal,playouts,finished,playout_offset,"
           "match_winner,match_vp,match_rounds,match_agents,end_winner,end_vp,sibling_group,source,actor,move,chance")
@@ -120,6 +120,14 @@ class PlayoutResultsTest(unittest.TestCase):
         self.assertEqual([-1, 1, -1, 1], arrays["actors"].tolist())
         self.assertTrue(np.isnan(arrays["rounds_left"][2]))
         np.testing.assert_allclose(arrays["placements"][0, 1], [1, 0, 0, 0])
+
+    def test_match_seeds_that_give_the_same_dotnet_random_share_their_effective_seed(self):
+        # Folded to 32 bits like Seeds.ToInt32, then the absolute value like Random(int)
+        self.assertEqual(5, effective_match_seed(5))
+        self.assertEqual(5, effective_match_seed(5 << 32))           # same low and high halves after folding
+        self.assertEqual(5, effective_match_seed(0xFFFFFFFB))        # folds to -5
+        self.assertEqual(2**31 - 1, effective_match_seed(0x80000000))  # int.MinValue
+        self.assertNotEqual(effective_match_seed(5), effective_match_seed(6))
 
 
 if __name__ == "__main__":

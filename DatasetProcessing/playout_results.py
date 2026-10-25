@@ -123,6 +123,19 @@ def load_match_seeds(dataset_dir: str) -> Dict[str, int]:
     return seeds
 
 
+def effective_match_seed(match_seed: int) -> int:
+    """
+    The seed a match was actually played with. The collector folds the 64-bit match seed to 32 bits (Seeds.ToInt32) and
+    .NET's Random(int) uses its absolute value (int.MinValue as int.MaxValue), so different match seeds can give the same
+    match (same seed) or the same match apart from the dice (seeds s and -s). Samples are grouped by this seed, so that
+    such matches always end up in the same split.
+    """
+    folded = (match_seed ^ (match_seed >> 32)) & 0xFFFFFFFF
+    if folded >= 1 << 31:
+        folded -= 1 << 32
+    return (1 << 31) - 1 if folded == -(1 << 31) else abs(folded)
+
+
 def placements(winners: np.ndarray, vp: np.ndarray) -> np.ndarray:
     """
     Placement distribution per game and player, shape (games, 4, 4) with [game, player, place].
@@ -197,21 +210,28 @@ def build_label_arrays(base_path: str, index: List[list]) -> Dict[str, np.ndarra
     }
     group_ids: Dict[tuple, int] = {}
 
-    samples_by_subdir = {subdir: load_samples(os.path.join(base_path, subdir)) for subdir in sorted({entry[2] for entry in index})}
-    for entry_idx, _, subdir_name, entry_name in index:
-        sample = samples_by_subdir[subdir_name].get(entry_name)
-        if sample is None:
-            continue
-        labels = derive_labels(sample)
-        arrays["placements"][entry_idx] = labels.placements
-        arrays["vp_shares"][entry_idx] = labels.vp_shares
-        arrays["rounds_left"][entry_idx] = labels.rounds_left
-        arrays["finished_playouts"][entry_idx] = labels.finished
-        arrays["match_seeds"][entry_idx] = sample.match_seed
-        if sample.sibling_group:
-            arrays["sibling_groups"][entry_idx] = group_ids.setdefault((subdir_name, sample.sibling_group), len(group_ids))
-            arrays["actors"][entry_idx] = sample.actor
-            arrays["chance_moves"][entry_idx] = sample.chance
+    # One dataset (part) at a time: the raw results of a whole run don't fit in memory together (1M matches ~ 40 GB)
+    entries_by_subdir: Dict[str, List[list]] = {}
+    for entry in index:
+        entries_by_subdir.setdefault(entry[2], []).append(entry)
+
+    for subdir_name in sorted(entries_by_subdir):
+        samples = load_samples(os.path.join(base_path, subdir_name))
+        for entry_idx, _, _, entry_name in entries_by_subdir[subdir_name]:
+            sample = samples.get(entry_name)
+            if sample is None:
+                continue
+            labels = derive_labels(sample)
+            arrays["placements"][entry_idx] = labels.placements
+            arrays["vp_shares"][entry_idx] = labels.vp_shares
+            arrays["rounds_left"][entry_idx] = labels.rounds_left
+            arrays["finished_playouts"][entry_idx] = labels.finished
+            arrays["match_seeds"][entry_idx] = sample.match_seed
+            if sample.sibling_group:
+                arrays["sibling_groups"][entry_idx] = group_ids.setdefault((subdir_name, sample.sibling_group), len(group_ids))
+                arrays["actors"][entry_idx] = sample.actor
+                arrays["chance_moves"][entry_idx] = sample.chance
+        del samples
 
     return arrays
 

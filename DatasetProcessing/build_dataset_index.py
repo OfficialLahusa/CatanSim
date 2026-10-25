@@ -3,8 +3,9 @@ Build the index of a dataset: one row per sample (entry_idx, group_idx, subdir_n
 
 Datasets are the directories below the base path that hold an `input` directory with the YAML samples and an
 `output` directory with the TXT win rates, at any depth (e.g. the parts of a partial run, datasets/v2/part_00).
-subdir_name is the dataset's path relative to the base path. Samples of one match share a group: the match seed when
-the collector wrote raw results (unique across runs), otherwise the run index within its dataset.
+subdir_name is the dataset's path relative to the base path. Samples of one match share a group: the seed the match was
+played with when the collector wrote raw results (see playout_results.effective_match_seed; matches with the same one can
+be identical, so they share the group as well), otherwise the run index within its dataset.
 
 Every YAML sample needs its TXT label and vice versa; a mismatch stops the index (before the long vectorization),
 unless --allow-missing skips the unmatched samples.
@@ -18,7 +19,7 @@ import sys
 from datetime import datetime
 from typing import List, Tuple
 
-from playout_results import load_match_seeds
+from playout_results import effective_match_seed, load_match_seeds
 
 SKIPPED_DIRECTORIES = {"input", "output", "vectors", "samples", "playouts"}
 
@@ -69,13 +70,13 @@ def build_dataset_index(base_path: str, allow_missing: bool = False) -> List[lis
         if missing_samples:
             problems.append(f"{subdir_name}: {len(missing_samples)} label(s) without sample, e.g. {missing_samples[:3]}")
 
-        # Group: the match seed if the collector wrote raw results (unique across runs), otherwise the run index in the
-        # dataset; both are mapped to consecutive indices
+        # Group: the effective match seed if the collector wrote raw results (also across runs), otherwise the run index
+        # in the dataset; both are mapped to consecutive indices
         match_seeds = load_match_seeds(directory)
         names = sorted(yaml_names & txt_names, key=parse_sample_name)
         for name in names:
             run_idx = parse_sample_name(name)[0]
-            group_key = ("seed", match_seeds[name]) if name in match_seeds else ("run", subdir_name, run_idx)
+            group_key = ("seed", effective_match_seed(match_seeds[name])) if name in match_seeds else ("run", subdir_name, run_idx)
             group_idx = group_indices.setdefault(group_key, len(group_indices))
             index.append([len(index), group_idx, subdir_name, name])
 
