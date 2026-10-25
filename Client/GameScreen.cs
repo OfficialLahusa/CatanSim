@@ -94,7 +94,7 @@ namespace Client
         private bool _agentMovePlaySound;
         private readonly System.Diagnostics.Stopwatch _agentMoveClock = new();
 
-        // Keep playing agent moves until the game ends or play is stopped (Full Playout [E])
+        // Keep playing agent moves until the game ends or autoplay is stopped (Start/Stop Autoplay [E])
         private bool _autoplay;
         // E toggles once per press, the key is polled every frame
         private bool _fullPlayoutKeyDown;
@@ -437,7 +437,7 @@ namespace Client
 
                 if (ImGui.Button("Simulate Random Playouts"))
                 {
-                    // The playouts copy a snapshot: _state keeps changing on the UI thread (e.g. during a full playout) while they run
+                    // The playouts copy a snapshot: _state keeps changing on the UI thread (e.g. during autoplay) while they run
                     GameState startState = new GameState(_state);
                     Task.Run(() => SimulateRandomRollouts(startState, _randomPlayoutCount, _randomPlayoutThreadCount));
                 }
@@ -523,15 +523,9 @@ namespace Client
 
             ImGui.SameLine();
 
-            if (ImGui.Button(_autoplay || _agentMove != null ? "Stop [E]" : "Full Playout [E]"))
+            if (ImGui.Button(_autoplay || _agentMove != null ? "Stop Autoplay [E]" : "Start Autoplay [E]"))
             {
-                ToggleFullPlayout();
-            }
-
-            if (_agentMove != null && _movingAgent != null)
-            {
-                using (new ImGuiTextColor(ColorPalette.GetPlayerColor(_movingAgent.PlayerIndex)))
-                    ImGui.Text($"Player {_movingAgent.PlayerIndex} thinking: {_agentMoveClock.Elapsed.TotalSeconds:F1}s");
+                ToggleAutoplay();
             }
 
             if (ImGui.Button("Undo Action [U]"))
@@ -550,6 +544,12 @@ namespace Client
             }
             if (!redoPossible)
                 ImGui.PopStyleVar();
+
+            if (_agentMove != null && _movingAgent != null)
+            {
+                using (new ImGuiTextColor(ColorPalette.GetPlayerColor(_movingAgent.PlayerIndex)))
+                    ImGui.Text($"Player {_movingAgent.PlayerIndex} thinking: {_agentMoveClock.Elapsed.TotalSeconds:F1}s");
+            }
 
             /*ImGui.Text($"{_legalActions.Count} Legal Actions");
 
@@ -627,7 +627,7 @@ namespace Client
             bool fullPlayoutKeyDown = Keyboard.IsKeyPressed(Keyboard.Key.E);
             if (fullPlayoutKeyDown && !_fullPlayoutKeyDown)
             {
-                ToggleFullPlayout();
+                ToggleAutoplay();
             }
             _fullPlayoutKeyDown = fullPlayoutKeyDown;
 
@@ -832,7 +832,7 @@ namespace Client
         }
 
         /// <summary>
-        /// Plays the game to its end at once, blocking (for FindInconsistentHashes; Full Playout [E] plays live in the background)
+        /// Plays the game to its end at once, blocking (for FindInconsistentHashes; autoplay [E] plays live in the background)
         /// </summary>
         private void PlayFullAgentPlayout(Agent[] agents, bool verbose = true)
         {
@@ -992,7 +992,7 @@ namespace Client
         /// <summary>
         /// Plays agent moves in the background until the game ends, or stops the moves in progress
         /// </summary>
-        private void ToggleFullPlayout()
+        private void ToggleAutoplay()
         {
             if (_autoplay || _agentMove != null)
             {
