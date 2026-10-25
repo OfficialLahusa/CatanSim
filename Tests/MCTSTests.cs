@@ -225,6 +225,23 @@ namespace Tests
         }
 
         [SkippableFact]
+        public void AnIterationLimitReplacesTheTimeLimit()
+        {
+            TestUtil.SkipWithoutModel();
+            TestUtil.Seed(147);
+            GameState state = TestUtil.NewGame();
+            TestUtil.PlayRandomGame(state, maxActions: 60);
+            sbyte acting = TestUtil.ActingPlayer(state);
+
+            // A time limit far too long for the test, so only the iteration limit can end the search
+            MCTSAgent agent = new(acting, state, timeLimitSeconds: 600, iterationLimit: 3000);
+            Action move = agent.Act(state);
+
+            Assert.True(move.IsValidFor(state));
+            Assert.InRange(agent.LastSearch!.Iterations, 3000, 3000 + 256);
+        }
+
+        [SkippableFact]
         public void AgentKeepsItsTreeInSyncWithTheGame()
         {
             TestUtil.SkipWithoutModel();

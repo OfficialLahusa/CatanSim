@@ -82,6 +82,10 @@ namespace Client
         private int[] _selectedAgentTypes;
         private const int MCTS_AGENT_TYPE = 4;
         private float _mctsThinkingSeconds = 0.5f;
+        // Search budget per decision: thinking time or a number of iterations (~250k iterations per second on the GPU)
+        private readonly string[] _mctsBudgetTypes = ["Time", "Iterations"];
+        private int _selectedMctsBudget = 0;
+        private int _mctsIterations = 125_000;
         private readonly string[] _opponentModels = Enum.GetNames<OpponentModel>();
         private int _selectedOpponentModel = (int)OpponentModel.MaxN;
 
@@ -189,9 +193,25 @@ namespace Client
                 1 => new SimpleAgent(agentIdx),
                 2 => new BuilderAgent(agentIdx),
                 3 => new GreedyAgent(agentIdx),
-                MCTS_AGENT_TYPE => new MCTSAgent(agentIdx, _state, timeLimitSeconds: _mctsThinkingSeconds, opponentModel: (OpponentModel)_selectedOpponentModel),
+                MCTS_AGENT_TYPE => new MCTSAgent(agentIdx, _state, timeLimitSeconds: _mctsThinkingSeconds, opponentModel: (OpponentModel)_selectedOpponentModel,
+                    iterationLimit: MctsIterationLimit),
                 _ => throw new InvalidOperationException()
             };
+        }
+
+        // 0 searches for the thinking time
+        private long MctsIterationLimit => _selectedMctsBudget == 1 ? _mctsIterations : 0;
+
+        private void ApplyMctsBudget()
+        {
+            foreach (Agent agent in _agents)
+            {
+                if (agent is MCTSAgent mctsAgent)
+                {
+                    mctsAgent.TimeLimitSeconds = _mctsThinkingSeconds;
+                    mctsAgent.IterationLimit = MctsIterationLimit;
+                }
+            }
         }
 
         public void Draw(Time deltaTime)
@@ -408,16 +428,26 @@ namespace Client
                     }
                 }
 
-                // Both apply to the MCTS agents already selected as well, from their next decision on
+                // All apply to the MCTS agents already selected as well, from their next decision on
                 ImGui.SetNextItemWidth(120);
-                if (ImGui.InputFloat("MCTS Thinking Time (s)", ref _mctsThinkingSeconds, 0.5f, 5f, "%.2f"))
+                if (ImGui.Combo("MCTS Budget", ref _selectedMctsBudget, _mctsBudgetTypes, _mctsBudgetTypes.Length))
                 {
-                    _mctsThinkingSeconds = Math.Clamp(_mctsThinkingSeconds, 0.05f, 600f);
-                    foreach (Agent agent in _agents)
+                    ApplyMctsBudget();
+                }
+
+                ImGui.SetNextItemWidth(120);
+                if (_selectedMctsBudget == 0)
+                {
+                    if (ImGui.InputFloat("MCTS Thinking Time (s)", ref _mctsThinkingSeconds, 0.5f, 5f, "%.2f"))
                     {
-                        if (agent is MCTSAgent mctsAgent)
-                            mctsAgent.TimeLimitSeconds = _mctsThinkingSeconds;
+                        _mctsThinkingSeconds = Math.Clamp(_mctsThinkingSeconds, 0.05f, 600f);
+                        ApplyMctsBudget();
                     }
+                }
+                else if (ImGui.InputInt("MCTS Iterations", ref _mctsIterations, 10_000, 100_000))
+                {
+                    _mctsIterations = Math.Clamp(_mctsIterations, 256, 100_000_000);
+                    ApplyMctsBudget();
                 }
 
                 ImGui.SetNextItemWidth(120);

@@ -23,6 +23,7 @@ namespace Agents.MCTS
         protected MCTSTree? _tree;
         protected double _explorationParameter;
         protected double _timeLimitSeconds;
+        protected long _iterationLimit;
         protected Random _random = Random.Shared;
 
         // The default net is shared by all agents that aren't given another one, and loaded on first use
@@ -51,7 +52,7 @@ namespace Agents.MCTS
         }
 
         /// <summary>
-        /// Statistics of the last RunForTime call
+        /// Statistics of the last search (RunForTime or RunBatchedIterations)
         /// </summary>
         public SearchStatistics? LastSearch { get; private set; }
 
@@ -93,7 +94,7 @@ namespace Agents.MCTS
         }
 
         /// <summary>
-        /// Search time per decision, can be changed between decisions
+        /// Search time per decision, can be changed between decisions; not used while IterationLimit is set
         /// </summary>
         public double TimeLimitSeconds
         {
@@ -101,12 +102,29 @@ namespace Agents.MCTS
             set => _timeLimitSeconds = value;
         }
 
+        /// <summary>
+        /// Iterations per decision instead of the time limit (0 searches for TimeLimitSeconds). Unlike time, the search quality
+        /// then doesn't depend on the load, e.g. with several games running at once. Rounded up to whole batches; can be
+        /// changed between decisions.
+        /// </summary>
+        public long IterationLimit
+        {
+            get => _iterationLimit;
+            set
+            {
+                if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "The iteration limit must not be negative.");
+                _iterationLimit = value;
+            }
+        }
+
         public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414, double timeLimitSeconds = TIME_LIMIT_SECONDS,
-            StateValueNet? valueNet = null, IStateVectorizer? vectorizer = null, double placementWeight = 0, OpponentModel opponentModel = OpponentModel.MaxN)
+            StateValueNet? valueNet = null, IStateVectorizer? vectorizer = null, double placementWeight = 0, OpponentModel opponentModel = OpponentModel.MaxN,
+            long iterationLimit = 0)
             : base(playerIndex)
         {
             _explorationParameter = explorationParameter;
             _timeLimitSeconds = timeLimitSeconds;
+            IterationLimit = iterationLimit;
             _stateValueNet = valueNet ?? DefaultValueNet.Value;
             _stateVectorizer = vectorizer ?? DefaultVectorizer;
             PlacementWeight = placementWeight;
@@ -121,7 +139,7 @@ namespace Agents.MCTS
         }
 
         /// <summary>
-        /// Searches until the time limit or until the token is cancelled (after the batch in progress)
+        /// Searches until the time or iteration limit or until the token is cancelled (after the batch in progress)
         /// </summary>
         public override Action Act(GameState state, CancellationToken cancellation)
         {
@@ -132,7 +150,8 @@ namespace Agents.MCTS
                 _tree = new MCTSTree(new GameState(state), PlayerIndex, _explorationParameter, model: _opponentModel);
             }
 
-            RunForTime(_timeLimitSeconds, cancellation);
+            if (_iterationLimit > 0) RunBatchedIterations(_iterationLimit, cancellation);
+            else RunForTime(_timeLimitSeconds, cancellation);
 
             return _tree.GetMostPromisingMove();
         }
@@ -183,6 +202,20 @@ namespace Agents.MCTS
         public void RunForTime(double timeLimitSeconds, CancellationToken cancellation = default)
         {
             Console.WriteLine($"Running MCTS for {timeLimitSeconds}s:");
+            RunSearch(timeLimitSeconds, 0, cancellation);
+        }
+
+        /// <summary>
+        /// The batched search of RunForTime, for a number of iterations (rounded up to whole batches) instead of a time
+        /// </summary>
+        public void RunBatchedIterations(long iterations, CancellationToken cancellation = default)
+        {
+            Console.WriteLine($"Running MCTS for {iterations} iterations:");
+            RunSearch(double.PositiveInfinity, iterations, cancellation);
+        }
+
+        private void RunSearch(double timeLimitSeconds, long iterationLimit, CancellationToken cancellation)
+        {
             Stopwatch stopwatch = Stopwatch.StartNew();
             _distinctLeaves = 0;
             _selectionTime.Reset();
@@ -216,7 +249,8 @@ namespace Agents.MCTS
 
                 iterationCounter += BATCH_SIZE;
             }
-            while (stopwatch.Elapsed.TotalSeconds < timeLimitSeconds && !cancellation.IsCancellationRequested);
+            while ((iterationLimit > 0 ? iterationCounter < iterationLimit : stopwatch.Elapsed.TotalSeconds < timeLimitSeconds)
+                && !cancellation.IsCancellationRequested);
 
             _evaluationWaitTime.Start();
             BackpropagateBatch(tree, evaluatedBatch, evaluation.Result);
