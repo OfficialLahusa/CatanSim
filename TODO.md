@@ -96,8 +96,16 @@
 	- 4. Setup-Phase spezialisieren (siehe Initial-Placement-Datensatz): eigene Zeit, eigene Kandidaten mit Best-Response-Gegnern (max^n) durchsuchen, Sibling-Gruppen an Setup-Entscheidungen
 	- 5. Policy Head + PUCT (siehe PolicyNet): Suchfokus, Gegnermodell nach Policy statt max^n über alles, besserer Subtree-Reuse
 	- 6. Self-Play / Expert Iteration: Labels aus Playouts schwacher Agents binden das Net an deren Niveau
-		- Schleife: MCTS mit dem aktuellen Net spielt, Value-Targets aus Ergebnis und Root-Werten, Policy-Targets aus Visit Counts, neues Net, wiederholen
-		- Braucht GPU-Inference, viele parallele Spiele (Batches über Spiele hinweg) und das Leaderboard; der Server eignet sich für die Spielerzeugung
+		- Schleife: Spiele mit Net N erzeugen => Targets => N weitertrainieren => Gate (Duell N+1 gegen N, Builder-Check) => N+1, Replay-Fenster über die letzten Generationen
+		- Generator (neuer Collector-Modus): 64-256 Spiele parallel mit kleinen Batches pro Baum, ein Inference-Service bündelt alle Leaves zu 256er-Batches auf der GPU
+			- Ein max^n-Baum pro Spiel für alle 4 Sitze, Root wandert nach jedem Zug mit => kein Reuse-Problem nach Gegnerzügen
+			- Exploration: Dirichlet-Noise an der Root, Sampling nach Visits im Setup und den ersten Runden, ~400-800 Iterationen pro Zug, Playout Cap Randomization (nur volle Suchen aufzeichnen)
+			- Aufzeichnen: State, Root-Wertvektor q (4 Spieler), Visit-Verteilung, am Ende Sieger und Platzierungen
+			- Grob ~80-100k Spiele/Tag auf der RTX 5080, der Server nur auf der CPU (oder CUDA-EP)
+		- Value-Target = λ·z + (1-λ)·q mit λ ~0,3-0,5: Spielergebnis z allein ist in Catan zu verrauscht, Playout-Labels sind zu stark an schwache Agents gebunden
+		- Anfangs alte Playout-Daten beimischen (50/50, dann weniger), weitertrainieren statt neu, Input-Normalisierung einfrieren
+		- Stufen: 1. Value-only Self-Play (geht jetzt, ~1-2 Wochen) => 2. Policy Head + PUCT, Visit-Verteilungen als Policy-Targets => 3. Liga aus alten Nets und Buildern, KataGo-Tricks
+		- Risiken: Perfect Information (lernt nichts über Unsicherheit), Spielerhandel im Baum, Kollaps in einen ausnutzbaren Stil (Builder-Check im Gate)
 	- 7. Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), erst mit GPU-Inference bezahlbar
 	- Kleinere Suchverbesserungen: Pondering während Gegnerzügen, Transpositionen über State Hashes, Aktionsabstraktion (Trade-Varianten bündeln), Roll sofort zurückgeben wenn keine Dev Card lohnt
 	- Für Menschen (übermenschlich im echten Spiel) zusätzlich: Hidden Information (Belief Tracker, Determinisierung/ISMCTS, siehe Simulator) und Spielerhandel mit Verhandlung
