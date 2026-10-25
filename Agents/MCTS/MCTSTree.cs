@@ -243,9 +243,11 @@ namespace Agents.MCTS
                     currentNode.IncrementVisitCount();
 
                 currentNode.AddResult(result);
+                if (pathAlreadyMarked)
+                    currentNode.ResolvePendingVisit();
 
                 // Keep the tree-wide value range up to date with the node's new mean value
-                ValueBounds?.Update(currentNode.TotalScore / currentNode.VisitCount);
+                UpdateBounds(currentNode);
 
                 currentNode = currentNode.Parent;
             }
@@ -267,24 +269,40 @@ namespace Agents.MCTS
 
                 currentNode.AddResults(results);
                 currentNode.AddResult(ownerResult);
+                if (pathAlreadyMarked)
+                    currentNode.ResolvePendingVisit();
 
-                uint visits = currentNode.VisitCount;
-                ValueBounds?.Update(currentNode.TotalScore / visits);
-                for (int player = 0; PlayerBounds != null && player < MCTSNode.PlayerCount; player++)
-                    PlayerBounds[player].Update(currentNode.PlayerScore(player) / visits);
+                UpdateBounds(currentNode);
 
                 currentNode = currentNode.Parent;
             }
+        }
+
+        /// <summary>
+        /// Widens the value ranges with the node's mean values. The means count only visits whose results are in: pending visits
+        /// of other leaves in flight have no result yet and would pull the means (and so the minimums, which never recover)
+        /// towards 0.
+        /// </summary>
+        private void UpdateBounds(MCTSNode node)
+        {
+            if (ValueBounds == null) return;
+
+            uint visits = node.ResolvedVisitCount;
+            if (visits == 0) return;
+
+            ValueBounds.Update(node.TotalScore / visits);
+            for (int player = 0; PlayerBounds != null && player < MCTSNode.PlayerCount; player++)
+                PlayerBounds[player].Update(node.PlayerScore(player) / visits);
         }
 
         public void MarkPendingPath(MCTSNode node)
         {
             MCTSNode? currentNode = node;
 
-            // Go up in tree until root is reached and add new result to each passed node
+            // Go up in tree until root is reached and count a visit at each passed node, whose result Backpropagate adds later
             while (currentNode != null)
             {
-                currentNode.IncrementVisitCount();
+                currentNode.MarkPendingVisit();
                 currentNode = currentNode.Parent;
             }
         }

@@ -123,6 +123,27 @@ namespace Tests
         }
 
         [Fact]
+        public void PendingVisitsDoNotWidenTheValueRange()
+        {
+            TestUtil.Seed(143);
+            GameState state = TestUtil.EmptyNormalTurn(0);
+            TestUtil.GiveCards(state, 0, ResourceCardType.Grain, 4);
+            MCTSTree tree = new(new GameState(state), 0, 1.414);
+            tree.ExpandNode(tree.RootNode, new GameState(state));
+            MCTSNode[] children = tree.RootNode.Children.ToArray();
+
+            // Ten leaves in flight below the first child, then one result for the second: only that result counts for the means
+            for (int i = 0; i < 10; i++)
+                tree.MarkPendingPath(children[0]);
+            tree.MarkPendingPath(children[1]);
+            tree.Backpropagate(children[1], 0.5, pathAlreadyMarked: true);
+
+            Assert.Equal(11u, tree.RootNode.VisitCount);
+            Assert.Equal(1u, tree.RootNode.ResolvedVisitCount);
+            Assert.Equal(new MinMaxStats.Range(0.5, 0.5), tree.ValueBounds!.GetRange());
+        }
+
+        [Fact]
         public void SearchNeverChangesTheTreesOwnActions()
         {
             // Regression test for shared tree actions being re-applied (and their history rewritten) by every iteration

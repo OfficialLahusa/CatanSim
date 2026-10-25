@@ -25,7 +25,10 @@ namespace Agents.MCTS
             set => Volatile.Write(ref _visitCount, (int)value);
         }
 
-        // Sum of binary (1 for win, 0 for loss) or double (win percentage) results, stored as bits so it can be added to without a lock
+        // Visits counted by MarkPendingPath whose result is not back yet; they lower the mean in selection (virtual loss)
+        private int _pendingVisits = 0;
+
+        // Sum of the owner's results (win probability, plus the placement tie-breaker if used), stored as bits so it can be added to without a lock
         private long _totalScoreBits = 0;
         public double TotalScore
         {
@@ -190,6 +193,36 @@ namespace Agents.MCTS
         public void IncrementVisitCount()
         {
             Interlocked.Increment(ref _visitCount);
+        }
+
+        /// <summary>
+        /// Counts a visit whose result comes later (see MCTSTree.MarkPendingPath)
+        /// </summary>
+        internal void MarkPendingVisit()
+        {
+            Interlocked.Increment(ref _pendingVisits);
+            Interlocked.Increment(ref _visitCount);
+        }
+
+        /// <summary>
+        /// The result of a pending visit has been added
+        /// </summary>
+        internal void ResolvePendingVisit()
+        {
+            Interlocked.Decrement(ref _pendingVisits);
+        }
+
+        /// <summary>
+        /// Visits whose results are already in the scores, i.e. without the pending ones: the divisor of the true mean value
+        /// </summary>
+        public uint ResolvedVisitCount
+        {
+            get
+            {
+                uint visits = VisitCount;
+                int pending = Volatile.Read(ref _pendingVisits);
+                return pending <= 0 ? visits : visits > (uint)pending ? visits - (uint)pending : 0;
+            }
         }
 
         public void AddResult(double value)
