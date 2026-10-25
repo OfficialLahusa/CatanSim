@@ -82,6 +82,23 @@
 	- Phase 3: Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), Augmentation (Spielerrotation, 12 Brett-Symmetrien), Expansionspotenzial, Inference-Budget ~2-3x
 	- Phase 4: Policy Head => Search-distillierte Targets / Self-Play (Expert Iteration) => Belief-aware Net
 	- Nebenbei: alte State-Matrizen in Agents/Training/dataset löschen (~60 GB)
+- Weg zum starken Agent (über Catanatron hinaus), nach Hebel sortiert
+	- 1. Messen: Catanatron-Bridge (Python-Player, der den State an die C#-Engine gibt, gleiche Perfect-Information-Ebene, ~3-5 Tage) plus Leaderboard (siehe unten)
+	- 2. max^n in der Suche: das Net liefert schon die Gewinnchancen aller 4 Spieler, genutzt wird nur die eigene, Gegnerzüge werden im Baum zufällig gewählt
+		- Vollen 4er-Vektor backpropagieren, in jedem Knoten per UCT auf dem Wert des Spielers am Zug auswählen => Gegner spielen im Baum ihre besten Züge
+		- Zusammen mit dem Platzierungs-Tie-Breaker pro Spieler werden auch weit zurückliegende Gegner rational modelliert
+		- Paranoid (alle gegen mich) als Vergleich, später Gegnerzüge nach Policy-Prior gewichten; vermutlich größter einzelner Hebel, wenige Tage Aufwand
+	- 3. GPU-Inference: ONNX Runtime CUDA/TensorRT (Windows: DirectML) auf der RTX 5080 statt CPU, Inference ist ~95% der Suchzeit
+		- Bei Batches von 256 10-50x mehr Auswertungen pro Sekunde realistisch => tiefere Suche, größere Nets erst bezahlbar; Provider-Unterstützung und Latenz pro Batch prüfen
+	- 4. Setup-Phase spezialisieren (siehe Initial-Placement-Datensatz): eigene Zeit, eigene Kandidaten mit Best-Response-Gegnern (max^n) durchsuchen, Sibling-Gruppen an Setup-Entscheidungen
+	- 5. Policy Head + PUCT (siehe PolicyNet): Suchfokus, Gegnermodell nach Policy statt max^n über alles, besserer Subtree-Reuse
+	- 6. Self-Play / Expert Iteration: Labels aus Playouts schwacher Agents binden das Net an deren Niveau
+		- Schleife: MCTS mit dem aktuellen Net spielt, Value-Targets aus Ergebnis und Root-Werten, Policy-Targets aus Visit Counts, neues Net, wiederholen
+		- Braucht GPU-Inference, viele parallele Spiele (Batches über Spiele hinweg) und das Leaderboard; der Server eignet sich für die Spielerzeugung
+	- 7. Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), erst mit GPU-Inference bezahlbar
+	- Kleinere Suchverbesserungen: Pondering während Gegnerzügen, Transpositionen über State Hashes, Aktionsabstraktion (Trade-Varianten bündeln), Roll sofort zurückgeben wenn keine Dev Card lohnt
+	- Für Menschen (übermenschlich im echten Spiel) zusätzlich: Hidden Information (Belief Tracker, Determinisierung/ISMCTS, siehe Simulator) und Spielerhandel mit Verhandlung
+	- Reihenfolge: Messen => max^n => GPU-Inference => v2-Modell und Setup => Policy Head => Self-Play => Hidden Information und Handel
 - Leaderboard für Agents verschiedener Herkunft (MCTS mit verschiedenen Modellen und Zeiten, BuilderAgent, später Catanatron über eine Bridge)
 	- Batch-Fit Plackett-Luce über alle Spiele (wie BayesElo/Ordo bei Schach-Engines) statt Online-Elo/TrueSkill: reihenfolgeunabhängig und am genauesten für Agents, die sich nicht verändern
 		- Ganze Platzierung pro Spiel (Sieger, dann nach VP, Gleichstände anteilig) statt nur Sieg, umgerechnet auf Elo-Skala (400 * log10 Stärke), Konfidenzintervalle per Bootstrap
