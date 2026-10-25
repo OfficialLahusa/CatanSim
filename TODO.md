@@ -63,7 +63,10 @@
 	- Phase 1: Server-Run v2 (läuft seit 25.10.)
 		- Hauptlauf: DatasetCollector --matches 1000000 --parts 20 --samples 5 --playouts 300 --threads 32 --seed 20261025 --name v2, ~3 Mrd. Playouts, ~18,5 h, ~700 GB, ~20M Dateien
 		- Jederzeit abbrechbar (fertige Teile sind nutzbar), Fortsetzen mit demselben Befehl, Erweitern mit gleichem Seed und --first-match
-		- Lernkurve auf dem v1-Datensatz entscheidet, ob sich mehr Matches lohnen (6,25% bis 100% der Trainings-Matches mit dem sl159q7y-Setup)
+		- Lernkurve auf dem v1-Datensatz (sl159q7y-Setup, 6,25% bis 100% der 420k Trainings-Matches): val KL 0.0683 / 0.0555 / 0.0454 / 0.0379 / 0.0318
+			- ~17% weniger KL pro Verdopplung (18,7% => 16,1%, flacht leicht ab, kein Plateau), Potenzgesetz mit Exponent -0,28 => das MLP ist datenlimitiert
+			- Hochrechnung: 1M Matches (~700k Training) ~0.027 (-14%), 2M Matches ~0.0225 (-29%) => 1M voll laufen lassen, Erweiterung auf 2M lohnt sich vermutlich
+			- Datensatz zum Training auf eine SSD legen: auf der HDD (D:) wird zufällig gelesen, sobald states.npy nicht mehr im RAM-Cache liegt, dann steht die GPU (2% Auslastung)
 		- Danach Präzisions-Set als eigener Lauf, nie im Trainings-Split: DatasetCollector --matches 6000 --samples 5 --playouts 2000 --threads 32 --seed 777 --name v2_precision (~50 min)
 		- Dann python prepare_dataset.py für v2 und das Präzisions-Set getrennt, die vorbereiteten Arrays (~35 GB) auf die SSD
 		- Bisherige Datensätze folgen der alten Road-Building-Regel, der neue Run nutzt die korrigierte
@@ -129,6 +132,11 @@
 	- Evaluation über val KL hinaus: Kalibrierung pro VP-Rückstand, Ranking von Geschwister-States gegen lange Playouts, Quality Bench gegen tiefe Suche, Self-Play bei gleicher Zeit
 	- Inference-Budget: das Net darf ~2-3x teurer werden (kostet laut Quality Bench ~4 Punkte Übereinstimmung), alternativ kleines Net für Leaves und großes für Root/Policy
 	- Reihenfolge siehe Roadmap v2
+	- Schätzung: 25-45% weniger KL bei gleichen Daten (Symmetrie und Weight Sharing wirken wie 4-10x mehr Daten), netto ~+50 bis +180 Elo nach Abzug der langsameren Inference, also weniger als der Sprung durch die abgeleiteten Features (+380)
+	- Vorher günstig messen, in Stufen:
+		1. Augmentation am jetzigen MLP (Spielerrotation, 12 Brett-Symmetrien) auf dem 3M-Datensatz: isoliert den "mehr Daten durch Symmetrie"-Anteil, Lernkurve sagt den Wert voraus (4x effektive Daten ~ -32% KL)
+		2. Spieler-symmetrisches MLP (geteilter Encoder pro Spielerblock, DeepSets-artig): halber Weg zum Transformer
+		3. Erst dann der Transformer, Vergleich bei gleichen Daten, gleicher Denkzeit und im Duell
 - PolicyNet
 	- Wahrscheinlichkeitsverteilung darüber welche Moves aus einem State wie erkundenswert sind
 	- Action Space explodiert kombinatorisch, deshalb nicht über ein finite fixed-size Action Space die Verteilung berechnen
