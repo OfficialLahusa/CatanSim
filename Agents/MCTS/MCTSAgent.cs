@@ -83,16 +83,13 @@ namespace Agents.MCTS
         }
 
         /// <summary>
-        /// How the search picks the other players' moves (see OpponentModel). Changing it starts a new tree at the next decision.
+        /// How the search picks the other players' moves (see OpponentModel). Changing it starts a new tree at the next decision,
+        /// so it can be set while the agent is thinking.
         /// </summary>
         public OpponentModel OpponentModel
         {
             get => _opponentModel;
-            set
-            {
-                if (value != _opponentModel) _tree = null;
-                _opponentModel = value;
-            }
+            set => _opponentModel = value;
         }
 
         /// <summary>
@@ -121,8 +118,8 @@ namespace Agents.MCTS
         public override Action Act(GameState state)
         {
             // Reuse the tree kept up to date by HandleAction as long as it describes exactly this state.
-            // Otherwise (first move, missed or manual actions, undo) start over on a private copy of the state.
-            if (_tree == null || !_tree.RootState.Equals(state))
+            // Otherwise (first move, missed or manual actions, undo, another opponent model) start over on a private copy of the state.
+            if (_tree == null || _tree.Model != _opponentModel || !_tree.RootState.Equals(state))
             {
                 _tree = new MCTSTree(new GameState(state), PlayerIndex, _explorationParameter, model: _opponentModel);
             }

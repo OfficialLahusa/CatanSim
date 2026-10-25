@@ -80,7 +80,10 @@ namespace Client
         private Agent[] _agents;
         private readonly string[] _agentTypes = ["RandomAgent", "SimpleAgent", "BuilderAgent", "GreedyAgent", "MCTSAgent"];
         private int[] _selectedAgentTypes;
-        private float _mctsThinkingSeconds = (float)MCTSAgent.TIME_LIMIT_SECONDS;
+        private const int MCTS_AGENT_TYPE = 4;
+        private float _mctsThinkingSeconds = 0.5f;
+        private readonly string[] _opponentModels = Enum.GetNames<OpponentModel>();
+        private int _selectedOpponentModel = (int)OpponentModel.MaxN;
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
 
@@ -146,10 +149,11 @@ namespace Client
             _selectedAgentTypes = new int[PLAYER_COUNT];
             _agents = new Agent[PLAYER_COUNT];
 
+            // MCTSAgent by default, SimpleAgent without the value net
             for(sbyte i = 0; i < PLAYER_COUNT; i++)
             {
-                _selectedAgentTypes[i] = 1;
-                _agents[i] = new SimpleAgent(i);
+                _selectedAgentTypes[i] = _stateValueNet != null ? MCTS_AGENT_TYPE : 1;
+                _agents[i] = CreateAgent(_selectedAgentTypes[i], i);
             }
 
             _mapView = new View(ClientUtils.RoundVec2f(_renderer.GetTileCenter(3, 3)), new Vector2f(window.Size.X, window.Size.Y)); ;
@@ -161,6 +165,19 @@ namespace Client
             _window.Resized += Window_Resized;
             _window.KeyPressed += Window_KeyPressed;
             _window.MouseButtonPressed += Window_MouseButtonPressed;
+        }
+
+        private Agent CreateAgent(int agentType, sbyte agentIdx)
+        {
+            return agentType switch
+            {
+                0 => new RandomAgent(agentIdx),
+                1 => new SimpleAgent(agentIdx),
+                2 => new BuilderAgent(agentIdx),
+                3 => new GreedyAgent(agentIdx),
+                MCTS_AGENT_TYPE => new MCTSAgent(agentIdx, _state, timeLimitSeconds: _mctsThinkingSeconds, opponentModel: (OpponentModel)_selectedOpponentModel),
+                _ => throw new InvalidOperationException()
+            };
         }
 
         public void Draw(Time deltaTime)
@@ -364,27 +381,20 @@ namespace Client
                     if (ImGui.Combo($"##Agent {agentIdx}", ref _selectedAgentTypes[agentIdx], _agentTypes, _agentTypes.Length))
                     {
                         // GreedyAgent and MCTSAgent evaluate states with the value net
-                        if (_selectedAgentTypes[agentIdx] is 3 or 4 && _stateValueNet == null)
+                        if (_selectedAgentTypes[agentIdx] is 3 or MCTS_AGENT_TYPE && _stateValueNet == null)
                         {
                             _eventLog.WriteLine(new ColoredStrEntry($"{_agentTypes[_selectedAgentTypes[agentIdx]]} needs the value net {StateValueNet.DefaultModelFile}, which is missing", Color.Red));
                             _selectedAgentTypes[agentIdx] = previousAgentType;
                         }
                         else
                         {
-                            _agents[agentIdx] = _selectedAgentTypes[agentIdx] switch
-                            {
-                                0 => new RandomAgent(agentIdx),
-                                1 => new SimpleAgent(agentIdx),
-                                2 => new BuilderAgent(agentIdx),
-                                3 => new GreedyAgent(agentIdx),
-                                4 => new MCTSAgent(agentIdx, _state, timeLimitSeconds: _mctsThinkingSeconds),
-                                _ => throw new InvalidOperationException()
-                            };
+                            _agents[agentIdx] = CreateAgent(_selectedAgentTypes[agentIdx], agentIdx);
                         }
                     }
                 }
 
-                // Applies to the MCTS agents already selected as well, from their next decision on
+                // Both apply to the MCTS agents already selected as well, from their next decision on
+                ImGui.SetNextItemWidth(120);
                 if (ImGui.InputFloat("MCTS Thinking Time (s)", ref _mctsThinkingSeconds, 0.5f, 5f, "%.2f"))
                 {
                     _mctsThinkingSeconds = Math.Clamp(_mctsThinkingSeconds, 0.05f, 600f);
@@ -392,6 +402,17 @@ namespace Client
                     {
                         if (agent is MCTSAgent mctsAgent)
                             mctsAgent.TimeLimitSeconds = _mctsThinkingSeconds;
+                    }
+                }
+
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(100);
+                if (ImGui.Combo("Opponent Model", ref _selectedOpponentModel, _opponentModels, _opponentModels.Length))
+                {
+                    foreach (Agent agent in _agents)
+                    {
+                        if (agent is MCTSAgent mctsAgent)
+                            mctsAgent.OpponentModel = (OpponentModel)_selectedOpponentModel;
                     }
                 }
 
