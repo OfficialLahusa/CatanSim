@@ -94,7 +94,7 @@ namespace Client
         private bool _agentMovePlaySound;
         private readonly System.Diagnostics.Stopwatch _agentMoveClock = new();
 
-        // Keep playing agent moves until the game ends or play is stopped (Play Game [P])
+        // Keep playing agent moves until the game ends or play is stopped (Full Playout [E])
         private bool _autoplay;
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
@@ -435,7 +435,9 @@ namespace Client
 
                 if (ImGui.Button("Simulate Random Playouts"))
                 {
-                    Task.Run(() => SimulateRandomRollouts(_randomPlayoutCount, _randomPlayoutThreadCount));
+                    // The playouts copy a snapshot: _state keeps changing on the UI thread (e.g. during a full playout) while they run
+                    GameState startState = new GameState(_state);
+                    Task.Run(() => SimulateRandomRollouts(startState, _randomPlayoutCount, _randomPlayoutThreadCount));
                 }
 
                 ImGui.TreePop();
@@ -519,24 +521,22 @@ namespace Client
 
             ImGui.SameLine();
 
-            if (ImGui.Button(_autoplay || _agentMove != null ? "Stop [P]" : "Play Game [P]"))
+            if (ImGui.Button("Full Playout [E]"))
             {
-                ToggleAutoplay();
+                StartFullPlayout();
             }
-
-            ImGui.SameLine();
-
-            if (ImGui.Button("Quick Playout [E]"))
-            {
-                PlayFullAgentPlayout(CreateDebugAgents(seat => new BuilderAgent(seat)));
-            }
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Plays the game to its end at once with BuilderAgents instead of the selected agents");
 
             if (_agentMove != null && _movingAgent != null)
             {
                 using (new ImGuiTextColor(ColorPalette.GetPlayerColor(_movingAgent.PlayerIndex)))
                     ImGui.Text($"Player {_movingAgent.PlayerIndex} ({_movingAgent.GetType().Name}) is thinking... {_agentMoveClock.Elapsed.TotalSeconds:F1}s");
+
+                ImGui.SameLine();
+
+                if (ImGui.Button("Stop"))
+                {
+                    CancelAgentMove();
+                }
             }
 
             if (ImGui.Button("Undo Action [U]"))
@@ -631,7 +631,7 @@ namespace Client
 
             if (Keyboard.IsKeyPressed(Keyboard.Key.E))
             {
-                PlayFullAgentPlayout(CreateDebugAgents(seat => new BuilderAgent(seat)));
+                StartFullPlayout();
             }
 
             if (Keyboard.IsKeyPressed(Keyboard.Key.B))
@@ -732,14 +732,6 @@ namespace Client
             }
         }
 
-        /// <summary>
-        /// Fast fixed agents for the debug playouts (E, B, O), independent of the selected agents, which may think for seconds per move
-        /// </summary>
-        private static Agent[] CreateDebugAgents(Func<sbyte, Agent> create)
-        {
-            return Enumerable.Range(0, PLAYER_COUNT).Select(seat => create((sbyte)seat)).ToArray();
-        }
-
         private int FindActingPlayer()
         {
             // First player that is allowed to act on state
@@ -758,7 +750,7 @@ namespace Client
 
             ResetAgents();
             _undoHistory.Clear();
-            Agent[] agents = CreateDebugAgents(seat => new BuilderAgent(seat));
+            Agent[] agents = _agents;
 
             Clock playoutClock = new Clock();
             int playedActions = 0;
@@ -843,8 +835,7 @@ namespace Client
         }
 
         /// <summary>
-        /// Plays the game to its end at once with the given agents (debug agents, see CreateDebugAgents); the selected agents
-        /// play live with Play Game instead
+        /// Plays the game to its end at once, blocking (for FindInconsistentHashes; Full Playout [E] plays live in the background)
         /// </summary>
         private void PlayFullAgentPlayout(Agent[] agents, bool verbose = true)
         {
@@ -1001,15 +992,13 @@ namespace Client
             _agentMoveStartState = null;
         }
 
-        private void ToggleAutoplay()
+        /// <summary>
+        /// Plays agent moves in the background until the game ends or Stop is pressed
+        /// </summary>
+        private void StartFullPlayout()
         {
-            if (_autoplay || _agentMove != null)
-            {
-                CancelAgentMove();
-                return;
-            }
+            if (_autoplay || _state.HasEnded) return;
 
-            if (_state.HasEnded) return;
             _autoplay = true;
             StartAgentMove(!_muteQuickPlayouts);
         }
@@ -1139,8 +1128,7 @@ namespace Client
 
         private void FindInconsistentHashes()
         {
-            // Random moves cover the most action types
-            PlayFullAgentPlayout(CreateDebugAgents(seat => new RandomAgent(seat)), false);
+            PlayFullAgentPlayout(_agents, false);
 
             while (_playedActions.Count > 0)
             {
@@ -1189,7 +1177,7 @@ namespace Client
             }
         }
 
-        private async Task SimulateRandomRollouts(int playoutCount, int threadCount)
+        private async Task SimulateRandomRollouts(GameState startState, int playoutCount, int threadCount)
         {
             Console.WriteLine($"Simulating {playoutCount:n0} random playouts...");
 
@@ -1213,7 +1201,7 @@ namespace Client
             {
                 while (runs.TryDequeue(out int runIdx))
                 {
-                    GameState simState = new GameState(_state);
+                    GameState simState = new GameState(startState);
                     while (!simState.HasEnded)
                     {
                         // Find first player that is allowed to act on state
@@ -1364,12 +1352,6 @@ namespace Client
 
         private void Window_KeyPressed(object? sender, KeyEventArgs e)
         {
-            // Once per press (polling in HandleInput would toggle every frame)
-            if (e.Code == Keyboard.Key.P && !ImGui.GetIO().WantCaptureKeyboard)
-            {
-                ToggleAutoplay();
-            }
-
             /*if (e.Code == Keyboard.Key.Enter)
             {
                 if (_spectatorMode) return;
