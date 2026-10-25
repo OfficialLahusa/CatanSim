@@ -79,6 +79,14 @@
 	- Phase 3: Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), Augmentation (Spielerrotation, 12 Brett-Symmetrien), Expansionspotenzial, Inference-Budget ~2-3x
 	- Phase 4: Policy Head => Search-distillierte Targets / Self-Play (Expert Iteration) => Belief-aware Net
 	- Nebenbei: alte State-Matrizen in Agents/Training/dataset löschen (~60 GB)
+- Leaderboard für Agents verschiedener Herkunft (MCTS mit verschiedenen Modellen und Zeiten, BuilderAgent, später Catanatron über eine Bridge)
+	- Batch-Fit Plackett-Luce über alle Spiele (wie BayesElo/Ordo bei Schach-Engines) statt Online-Elo/TrueSkill: reihenfolgeunabhängig und am genauesten für Agents, die sich nicht verändern
+		- Ganze Platzierung pro Spiel (Sieger, dann nach VP, Gleichstände anteilig) statt nur Sieg, umgerechnet auf Elo-Skala (400 * log10 Stärke), Konfidenzintervalle per Bootstrap
+		- Anker-Agent mit festem Wert (z.B. RandomAgent oder BuilderAgent), damit die Skala beim Hinzufügen stabil bleibt
+	- Turnier-Runner (ModelMatch verallgemeinern): zufällige 4er-Besetzungen aus dem Pool, Sitze ausbalanciert rotieren oder Sitzeffekt im Modell, eine CSV-Zeile pro Spiel (Agents pro Sitz, VP, Sieger, Runden)
+	- Feste Denkzeit pro Entscheidung, MCTS 0,5 s und MCTS 5 s sind getrennte Einträge
+	- Für schnelle A/B-Entscheidungen (ist das neue Modell besser?) weiter 2-gegen-2-Duelle, dazu SPRT als Abbruchkriterium
+	- Online-Alternative für laufende Ratings: OpenSkill (Weng-Lin, Plackett-Luce, offene Alternative zu TrueSkill)
 - Agents/env: OpenMP-Konflikt (libiomp5md.dll von conda-MKL und torch), torch läuft nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren oder Duplikat entfernen
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Größter Hebel: im Setup reicht die Suche nicht über den eigenen Zug hinaus (PV = Settlement + Road), die Entscheidung ist praktisch eine 1-Ply-Bewertung des Nets
