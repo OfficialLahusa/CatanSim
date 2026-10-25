@@ -117,6 +117,14 @@ namespace Agents.MCTS
 
         public override Action Act(GameState state)
         {
+            return Act(state, CancellationToken.None);
+        }
+
+        /// <summary>
+        /// Searches until the time limit or until the token is cancelled (after the batch in progress)
+        /// </summary>
+        public override Action Act(GameState state, CancellationToken cancellation)
+        {
             // Reuse the tree kept up to date by HandleAction as long as it describes exactly this state.
             // Otherwise (first move, missed or manual actions, undo, another opponent model) start over on a private copy of the state.
             if (_tree == null || _tree.Model != _opponentModel || !_tree.RootState.Equals(state))
@@ -124,7 +132,7 @@ namespace Agents.MCTS
                 _tree = new MCTSTree(new GameState(state), PlayerIndex, _explorationParameter, model: _opponentModel);
             }
 
-            RunForTime(_timeLimitSeconds);
+            RunForTime(_timeLimitSeconds, cancellation);
 
             return _tree.GetMostPromisingMove();
         }
@@ -172,7 +180,7 @@ namespace Agents.MCTS
             Console.WriteLine($"Simulation took {runtime.TotalSeconds}s.");
         }
 
-        public void RunForTime(double timeLimitSeconds)
+        public void RunForTime(double timeLimitSeconds, CancellationToken cancellation = default)
         {
             Console.WriteLine($"Running MCTS for {timeLimitSeconds}s:");
             Stopwatch stopwatch = Stopwatch.StartNew();
@@ -208,7 +216,7 @@ namespace Agents.MCTS
 
                 iterationCounter += BATCH_SIZE;
             }
-            while (stopwatch.Elapsed.TotalSeconds < timeLimitSeconds);
+            while (stopwatch.Elapsed.TotalSeconds < timeLimitSeconds && !cancellation.IsCancellationRequested);
 
             _evaluationWaitTime.Start();
             BackpropagateBatch(tree, evaluatedBatch, evaluation.Result);

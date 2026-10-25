@@ -207,6 +207,24 @@ namespace Tests
         }
 
         [SkippableFact]
+        public void CancellingStopsTheSearchEarlyWithAValidMove()
+        {
+            TestUtil.SkipWithoutModel();
+            TestUtil.Seed(146);
+            GameState state = TestUtil.NewGame();
+            TestUtil.PlayRandomGame(state, maxActions: 60);
+            sbyte acting = TestUtil.ActingPlayer(state);
+
+            MCTSAgent agent = new(acting, state, timeLimitSeconds: 60);
+            using CancellationTokenSource cancellation = new(TimeSpan.FromMilliseconds(200));
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            Action move = agent.Act(state, cancellation.Token);
+
+            Assert.True(stopwatch.Elapsed.TotalSeconds < 10, $"search ran {stopwatch.Elapsed.TotalSeconds:F1}s after the cancellation");
+            Assert.True(move.IsValidFor(state));
+        }
+
+        [SkippableFact]
         public void AgentKeepsItsTreeInSyncWithTheGame()
         {
             TestUtil.SkipWithoutModel();

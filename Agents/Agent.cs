@@ -20,6 +20,15 @@ namespace Agents
 
         public abstract Action Act(GameState state);
 
+        /// <summary>
+        /// Act that may stop early once the token is cancelled; only agents that think for long check it. The move of a
+        /// cancelled call is not meant to be played.
+        /// </summary>
+        public virtual Action Act(GameState state, CancellationToken cancellation)
+        {
+            return Act(state);
+        }
+
         public virtual void HandleAction(Action action) { }
 
         public virtual void ResetToState(GameState state) { }
