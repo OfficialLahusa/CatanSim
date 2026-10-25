@@ -405,8 +405,7 @@ namespace Client
                     }
                 }
 
-                ImGui.SameLine();
-                ImGui.SetNextItemWidth(100);
+                ImGui.SetNextItemWidth(120);
                 if (ImGui.Combo("Opponent Model", ref _selectedOpponentModel, _opponentModels, _opponentModels.Length))
                 {
                     foreach (Agent agent in _agents)
