@@ -75,18 +75,14 @@ namespace Client.Logging
             _lines = new();
         }
 
+        /// <summary>
+        /// Removes the section of the last logged action (on undo). Lines written since then belong to no action and stay.
+        /// </summary>
         public void PopSection()
         {
-            if (_lines.Count > 0)
+            if (_sections.Count > 0)
             {
-                _lines.Clear();
-            }
-            else
-            {
-                if (_sections.Count > 0)
-                {
-                    _sections.RemoveAt(_sections.Count - 1);
-                }
+                _sections.RemoveAt(_sections.Count - 1);
             }
         }
 

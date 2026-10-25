@@ -1478,6 +1478,9 @@ namespace Client
             // Reset internal agent state
             ResetAgents();
 
+            // Log and roll histogram of the loaded game instead of the previous one's
+            RebuildLogAndRollDistribution();
+
             // Update visuals
             _renderer.Board = _state.Board;
             _renderer.Update();
@@ -1491,6 +1494,46 @@ namespace Client
             _diceWidget.Active = _state.Turn.MustRoll;
             _diceWidget.RollResult = _state.Turn.LastRoll;
             _diceWidget.UpdateSprites();
+        }
+
+        /// <summary>
+        /// Rebuilds the event log (one section per played action, as undo expects) and the roll histogram from the played actions,
+        /// by reverting a copy of the state to the start and replaying them
+        /// </summary>
+        private void RebuildLogAndRollDistribution()
+        {
+            _eventLog.Clear();
+            _actionLogger.Init();
+            _rollDistribution = new float[_rollDistribution.Length];
+
+            // The stack enumerates the latest action first
+            Action[] actions = _playedActions.Reverse().ToArray();
+            foreach (Action action in actions)
+            {
+                if (action is RollAction rollAction && rollAction.History != null)
+                    _rollDistribution[rollAction.History.RollResult.Total]++;
+            }
+
+            try
+            {
+                GameState replay = new GameState(_state);
+                for (int i = actions.Length - 1; i >= 0; i--)
+                    actions[i].Revert(replay);
+
+                foreach (Action action in actions)
+                {
+                    action.Apply(replay);
+                    _actionLogger.Log(action, replay);
+                }
+            }
+            catch (Exception e)
+            {
+                _eventLog.Clear();
+                _actionLogger.Init();
+                _eventLog.WriteLine(new ColoredStrEntry($"Could not rebuild the log of the loaded game: {e.Message}", Color.Red));
+            }
+
+            _actionLogger.UpdateTracking(_state);
         }
 
         public void WriteSaveFile(string filepath)
