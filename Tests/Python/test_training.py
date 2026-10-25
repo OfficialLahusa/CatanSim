@@ -67,7 +67,24 @@ class TrainingTest(unittest.TestCase):
         # Without groups in the batch there is nothing to compare
         self.assertEqual(0, sibling_ranking(right, labels, torch.full((4,), -1), actors)[2])
 
-    def test_a_model_with_auxiliary_heads_exports_only_the_value(self):
+    def test_the_placement_score_lets_the_ranking_learn_far_behind(self):
+        # The actor (player 1) never wins in either sibling, but finishes second more often in the first
+        win_rates = torch.tensor([[0.5, 0.0, 0.3, 0.2], [0.5, 0.0, 0.3, 0.2]])
+        placement_labels = torch.tensor([[[0.5, 0.2, 0.2, 0.1], [0.0, 0.6, 0.3, 0.1], [0.3, 0.1, 0.4, 0.2], [0.2, 0.1, 0.1, 0.6]],
+                                         [[0.5, 0.2, 0.2, 0.1], [0.0, 0.2, 0.3, 0.5], [0.3, 0.4, 0.2, 0.1], [0.2, 0.2, 0.3, 0.3]]])
+        groups, actors = torch.tensor([3, 3]), torch.tensor([1, 1])
+        logits = torch.zeros(2, 4)
+
+        # On the win rates alone there is nothing to rank, with the placement score the first sibling has to come out ahead
+        self.assertEqual(0.0, sibling_ranking(logits, win_rates, groups, actors)[0].item())
+        right = torch.zeros(2, 4, 4)
+        right[0, 1, 1] = 3.0  # the net puts player 1 in second place in the first sibling
+        loss_right = sibling_ranking(logits, win_rates, groups, actors, right, placement_labels, 0.5)[0]
+        loss_flat = sibling_ranking(logits, win_rates, groups, actors, torch.zeros(2, 4, 4), placement_labels, 0.5)[0]
+        self.assertGreater(loss_flat.item(), 0.0)
+        self.assertLess(loss_right.item(), loss_flat.item())
+
+    def test_a_model_with_auxiliary_heads_exports_the_value_and_the_placements(self):
         torch.manual_seed(0)
         module = StateValueModule(in_dim=32, placement_weight=1.0, vp_share_weight=1.0, rounds_weight=1.0, ranking_weight=1.0)
         model = module.model.eval()
@@ -79,8 +96,12 @@ class TrainingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = os.path.join(directory, "state_value_net.onnx")
             self.assertLess(export_model(model, path, 32), 1e-4)
+            # The C# side reads "logits" by name and the placement distribution logits from "placements"
             session = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
-            self.assertEqual(["logits"], [output.name for output in session.get_outputs()])
+            self.assertEqual(["logits", "placements"], [output.name for output in session.get_outputs()])
+            logits, placements = session.run(None, {"state": np.zeros((2, 32), dtype=np.float32)})
+            self.assertEqual((2, 4), logits.shape)
+            self.assertEqual((2, 4, 4), placements.shape)
 
         # Input normalization is part of the model, so the export applies it too
         normalized = StateValueModule(in_dim=32, normalize_inputs=True)

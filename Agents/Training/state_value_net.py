@@ -9,6 +9,9 @@ PLAYER_COUNT = 4
 # Runden bis Spielende werden für den Aux Head auf etwa [0, 1] skaliert
 ROUNDS_LEFT_SCALE = 30.0
 
+# Platzierungs-Score: Wert der Plätze 1 bis 4 auf [0, 1], gleich wie PlacementScore im MCTSAgent
+PLACEMENT_SCORES = (1.0, 2.0 / 3.0, 1.0 / 3.0, 0.0)
+
 
 class StateValueNet(nn.Module):
     def __init__(self, in_dim, hidden=2048, aux_heads=False, normalize_inputs=False):
@@ -55,10 +58,11 @@ class StateValueNet(nn.Module):
 
 class StateValueModule(L.LightningModule):
     def __init__(self, in_dim, lr=1e-3, weight_decay=1e-4,
-                 placement_weight=0.0, vp_share_weight=0.0, rounds_weight=0.0, ranking_weight=0.0, normalize_inputs=False):
+                 placement_weight=0.0, vp_share_weight=0.0, rounds_weight=0.0, ranking_weight=0.0, normalize_inputs=False,
+                 ranking_placement_weight=0.0):
         super().__init__()
         self.save_hyperparameters()
-        aux_heads = placement_weight > 0 or vp_share_weight > 0 or rounds_weight > 0
+        aux_heads = placement_weight > 0 or vp_share_weight > 0 or rounds_weight > 0 or ranking_placement_weight > 0
         self.model = StateValueNet(in_dim, aux_heads=aux_heads, normalize_inputs=normalize_inputs)
 
     def set_input_normalization(self, states):
@@ -101,7 +105,9 @@ class StateValueModule(L.LightningModule):
             self.log(f"{stage}_rounds_loss", rounds_loss, sync_dist=True)
             total = total + hp.rounds_weight * rounds_loss
         if hp.ranking_weight > 0:
-            ranking_loss, accuracy, pairs = sibling_ranking(logits, y, batch["sibling_groups"], batch["actors"])
+            ranking_loss, accuracy, pairs = sibling_ranking(
+                logits, y, batch["sibling_groups"], batch["actors"],
+                outputs.get("placements"), batch["placements"], hp.get("ranking_placement_weight", 0.0))
             if pairs > 0:
                 self.log(f"{stage}_ranking_loss", ranking_loss, sync_dist=True)
                 self.log(f"{stage}_ranking_accuracy", accuracy, sync_dist=True)
@@ -147,11 +153,18 @@ def masked_rounds_loss(prediction, rounds_left):
     return F.smooth_l1_loss(prediction[valid].float(), rounds_left[valid].float() / ROUNDS_LEFT_SCALE)
 
 
-def sibling_ranking(logits, win_rates, groups, actors):
+def placement_score(placements):
+    """Platzierungs-Score [..., Spieler] aus Platzierungsverteilungen [..., Spieler, 4 Plätze]"""
+    return (placements * placements.new_tensor(PLACEMENT_SCORES)).sum(dim=-1)
+
+
+def sibling_ranking(logits, win_rates, groups, actors, placement_logits=None, placement_labels=None, placement_weight=0.0):
     """
-    Paarweiser Loss innerhalb der Sibling-Gruppen im Batch: die Differenz der vorhergesagten Gewinnwahrscheinlichkeiten des
-    Spielers am Zug soll der Differenz der Labels entsprechen. Die Labels einer Gruppe stammen aus Playouts mit denselben
-    Seeds, deshalb ist ihre Differenz deutlich genauer als die einzelnen Labels.
+    Paarweiser Loss innerhalb der Sibling-Gruppen im Batch: die Differenz der vorhergesagten Werte des Spielers am Zug soll
+    der Differenz der Labels entsprechen. Die Labels einer Gruppe stammen aus Playouts mit denselben Seeds, deshalb ist ihre
+    Differenz deutlich genauer als die einzelnen Labels.
+    Der Wert ist die Gewinnwahrscheinlichkeit plus placement_weight mal den Platzierungs-Score (wie die Utility im MCTSAgent),
+    so hat das Ranking auch dann etwas zu lernen, wenn der Spieler am Zug weit zurückliegt und alle Gewinn-Labels 0 sind.
     Gibt Loss, Anteil der Paare mit richtiger Reihenfolge (bei mindestens 2 Punkten Unterschied im Label) und Anzahl Paare zurück.
     """
     in_group = groups >= 0
@@ -160,6 +173,9 @@ def sibling_ranking(logits, win_rates, groups, actors):
 
     probs = F.softmax(logits[in_group].float(), dim=-1)
     labels = win_rates[in_group].float()
+    if placement_weight > 0:
+        probs = probs + placement_weight * placement_score(F.softmax(placement_logits[in_group].float(), dim=-1))
+        labels = labels + placement_weight * placement_score(placement_labels[in_group].float())
     groups, actors = groups[in_group], actors[in_group].long()
 
     # Wert des Spielers am Zug, der zwischen den Zügen der Gruppe wählt

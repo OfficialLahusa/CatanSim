@@ -32,6 +32,10 @@ namespace Agents.MCTS
         protected readonly StateValueNet _stateValueNet;
         protected readonly IStateVectorizer _stateVectorizer;
 
+        // Value of places 1 to 4 on [0, 1], the same as PLACEMENT_SCORES in state_value_net.py
+        private static readonly float[] PlacementScores = [1f, 2f / 3f, 1f / 3f, 0f];
+        private double _placementWeight;
+
         protected readonly object _treeLock = new object();
 
         /// <summary>
@@ -60,6 +64,24 @@ namespace Agents.MCTS
         /// <param name="valueNet">Value net for the leaves, the default model if null</param>
         /// <param name="vectorizer">Encoding the value net was trained on, the current StateVectorizer if null</param>
         /// <summary>
+        /// Weight of the placement score in the search value: the value of a state is the win probability plus this weight
+        /// times the expected placement score (1 for first place to 0 for last), so the search can tell options apart when it
+        /// is far behind and all of them have a win probability of about 0. 0 searches for the win probability alone; above 0
+        /// needs a value net with placements (HasPlacements). Can be changed between decisions.
+        /// </summary>
+        public double PlacementWeight
+        {
+            get => _placementWeight;
+            set
+            {
+                if (value < 0) throw new ArgumentOutOfRangeException(nameof(value), "The placement weight must not be negative.");
+                if (value > 0 && !_stateValueNet.HasPlacements)
+                    throw new ArgumentException("A placement weight above 0 needs a value net with a placements output.", nameof(value));
+                _placementWeight = value;
+            }
+        }
+
+        /// <summary>
         /// Search time per decision, can be changed between decisions
         /// </summary>
         public double TimeLimitSeconds
@@ -69,13 +91,14 @@ namespace Agents.MCTS
         }
 
         public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414, double timeLimitSeconds = TIME_LIMIT_SECONDS,
-            StateValueNet? valueNet = null, IStateVectorizer? vectorizer = null)
+            StateValueNet? valueNet = null, IStateVectorizer? vectorizer = null, double placementWeight = 0)
             : base(playerIndex)
         {
             _explorationParameter = explorationParameter;
             _timeLimitSeconds = timeLimitSeconds;
             _stateValueNet = valueNet ?? DefaultValueNet.Value;
             _stateVectorizer = vectorizer ?? DefaultVectorizer;
+            PlacementWeight = placementWeight;
 
             ResetToState(initialState);
         }
@@ -267,13 +290,18 @@ namespace Agents.MCTS
             var leaves = batch.Leaves;
             double[] results = new double[leaves.Length];
 
-            float[]? outputs = leaves.Any(leaf => !leaf.stateAtLeaf.HasEnded) ? _stateValueNet.Run(batch.Features) : null;
+            float[]? outputs = null, placements = null;
+            if (leaves.Any(leaf => !leaf.stateAtLeaf.HasEnded))
+            {
+                if (_placementWeight > 0) (outputs, placements) = _stateValueNet.RunWithPlacements(batch.Features);
+                else outputs = _stateValueNet.Run(batch.Features);
+            }
 
             for (int i = 0; i < leaves.Length; i++)
             {
                 results[i] = leaves[i].stateAtLeaf.HasEnded
                     ? TerminalResult(leaves[i].stateAtLeaf)
-                    : ValuationToScore(outputs.AsSpan(i * 4, 4));
+                    : ValuationToScore(outputs.AsSpan(i * 4, 4)) + (placements == null ? 0 : _placementWeight * PlacementScore(placements.AsSpan(i * 16 + PlayerIndex * 4, 4)));
             }
             _evaluationTime.Stop();
 
@@ -296,7 +324,44 @@ namespace Agents.MCTS
         protected double TerminalResult(GameState state)
         {
             // Players can only win on their own turn, so the turn player of an ended match is the winner
-            return state.Turn.PlayerIndex == PlayerIndex ? 1 : 0;
+            double win = state.Turn.PlayerIndex == PlayerIndex ? 1 : 0;
+            return _placementWeight > 0 ? win + _placementWeight * TerminalPlacementScore(state, PlayerIndex) : win;
+        }
+
+        /// <summary>
+        /// Expected placement score of a placement distribution over places 1 to 4
+        /// </summary>
+        public static float PlacementScore(ReadOnlySpan<float> placementDistribution)
+        {
+            float score = 0;
+            for (int place = 0; place < PlacementScores.Length; place++)
+                score += placementDistribution[place] * PlacementScores[place];
+            return score;
+        }
+
+        /// <summary>
+        /// Placement score of a player in an ended match: the winner is first, the others are ranked by victory points, and
+        /// players with equal victory points share their places (the same rule as the placement labels in playout_results.py)
+        /// </summary>
+        public static float TerminalPlacementScore(GameState state, int player)
+        {
+            int winner = state.Turn.PlayerIndex;
+            if (player == winner) return PlacementScores[0];
+
+            int points = state.Players[player].VictoryPoints.Total;
+            int better = 1, tied = 0;
+            for (int p = 0; p < state.Players.Length; p++)
+            {
+                if (p == winner) continue;
+                int other = state.Players[p].VictoryPoints.Total;
+                if (other > points) better++;
+                else if (other == points) tied++;
+            }
+
+            float score = 0;
+            for (int place = better; place < better + tied; place++)
+                score += PlacementScores[place];
+            return score / tied;
         }
 
         protected double SimulatePlayout(GameState state)
@@ -326,7 +391,13 @@ namespace Agents.MCTS
 
         protected double SimulateML(GameState state)
         {
-            return ValuationToScore(StateValueFunc(state));
+            if (_placementWeight == 0)
+                return ValuationToScore(StateValueFunc(state));
+
+            float[] features = new float[_stateVectorizer.FeatureDim];
+            _stateVectorizer.VectorizeInto(state, features);
+            (float[] winProbabilities, float[] placements) = _stateValueNet.RunWithPlacements(new DenseTensor<float>(features, [1, features.Length]));
+            return ValuationToScore(winProbabilities) + _placementWeight * PlacementScore(placements.AsSpan(PlayerIndex * 4, 4));
         }
 
         protected float ValuationToScore(ReadOnlySpan<float> valuation)

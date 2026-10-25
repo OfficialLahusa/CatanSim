@@ -28,6 +28,14 @@ namespace Agents.Inference
 
         private InferenceSession _session;
 
+        public const int PlayerCount = 4;
+
+        /// <summary>
+        /// Whether the model also predicts each player's placement distribution (output "placements", models trained with
+        /// auxiliary heads)
+        /// </summary>
+        public bool HasPlacements { get; }
+
         public StateValueNet(string modelPath, int intraOpThreads = 0)
         {
             string resolvedPath = ResolveModelPath(modelPath);
@@ -39,6 +47,7 @@ namespace Agents.Inference
             };
 
             _session = new InferenceSession(resolvedPath, options);
+            HasPlacements = _session.OutputMetadata.ContainsKey("placements");
         }
 
         /// <summary>
@@ -51,24 +60,8 @@ namespace Agents.Inference
 
         public float[] Run(DenseTensor<float> inputTensor)
         {
-            var inputs = new List<NamedOnnxValue>
-            {
-                NamedOnnxValue.CreateFromTensor("state", inputTensor)
-            };
-
-            float[] logits;
-            int batchSize;
-
-            using (var results = _session.Run(inputs))
-            {
-                var outputTensor = results.First().AsTensor<float>();
-                batchSize = outputTensor.Dimensions[0]; // works for batch=1 or batched leaf-eval
-                logits = outputTensor.ToArray(); // row-major flat: [batch * NumPlayers]
-            }
-
-            var winProbabilities = SoftmaxPerRow(logits, batchSize, 4);
-
-            return winProbabilities;
+            float[] logits = RunOnlyLogits(inputTensor);
+            return SoftmaxPerRow(logits, logits.Length / PlayerCount, PlayerCount);
         }
 
         public float[] RunOnlyLogits(DenseTensor<float> inputTensor)
@@ -78,17 +71,31 @@ namespace Agents.Inference
                 NamedOnnxValue.CreateFromTensor("state", inputTensor)
             };
 
-            float[] logits;
-            int batchSize;
+            // Only the value output is computed, models with a second output skip it here
+            using var results = _session.Run(inputs, ["logits"]);
+            return results.First().AsTensor<float>().ToArray(); // row-major flat: [batch * NumPlayers], works for batch=1 or batched leaf-eval
+        }
 
-            using (var results = _session.Run(inputs))
+        /// <summary>
+        /// Win probabilities [batch * players] and placement distributions [batch * players * places], each row of 4 places
+        /// summing to 1, of a model with HasPlacements
+        /// </summary>
+        public (float[] winProbabilities, float[] placements) RunWithPlacements(DenseTensor<float> inputTensor)
+        {
+            if (!HasPlacements)
+                throw new InvalidOperationException("The value net has no placements output (it was trained without auxiliary heads).");
+
+            var inputs = new List<NamedOnnxValue>
             {
-                var outputTensor = results.First().AsTensor<float>();
-                batchSize = outputTensor.Dimensions[0]; // works for batch=1 or batched leaf-eval
-                logits = outputTensor.ToArray(); // row-major flat: [batch * NumPlayers]
-            }
+                NamedOnnxValue.CreateFromTensor("state", inputTensor)
+            };
 
-            return logits;
+            using var results = _session.Run(inputs, ["logits", "placements"]);
+            float[] logits = results.First(result => result.Name == "logits").AsTensor<float>().ToArray();
+            float[] placementLogits = results.First(result => result.Name == "placements").AsTensor<float>().ToArray();
+
+            int batchSize = logits.Length / PlayerCount;
+            return (SoftmaxPerRow(logits, batchSize, PlayerCount), SoftmaxPerRow(placementLogits, batchSize * PlayerCount, PlayerCount));
         }
 
         /// <summary>

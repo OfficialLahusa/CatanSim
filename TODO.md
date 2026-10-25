@@ -73,7 +73,9 @@
 		- Aux Heads und Sibling-Ranking zuschalten, Gewichte tunen, Maßstab ist die Ranking-Genauigkeit auf dem Präzisions-Set
 		- Umgewichten nach Position im Match / Matchlänge und nach Anzahl beendeter Playouts prüfen, Chance-Siblings ggf. aus dem Ranking nehmen
 		- Bewertung: Duell gegen sl159q7y, gegen 3 BuilderAgents, Kalibrierung pro VP-Rückstand
-		- Optional Platzierung als Tie-Breaker im MCTS-Wert, damit weit zurückliegende Gegner im Baum nicht zufällig modelliert werden (braucht zweiten ONNX-Output und StateValueNet in C#)
+		- Platzierung als Tie-Breaker: Plumbing fertig (zweiter ONNX-Output "placements", MCTSAgent.PlacementWeight β, train.py --ranking-placement-weight), mit dem ersten v2-Modell β per Duell tunen (0 / 0,03 / 0,1)
+			- Wert im MCTS = P(Sieg) + β * Platzierungs-Score (1. = 1 bis 4. = 0), Terminal-States ebenso aus der tatsächlichen Platzierung
+			- Hilft dem eigenen Spiel weit hinten (alle Optionen sonst ~0), nicht dem Gegnermodell: Gegnerzüge werden im Baum zufällig gewählt, dafür bräuchte es Werte pro Spieler (max^n)
 	- Phase 3: Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), Augmentation (Spielerrotation, 12 Brett-Symmetrien), Expansionspotenzial, Inference-Budget ~2-3x
 	- Phase 4: Policy Head => Search-distillierte Targets / Self-Play (Expert Iteration) => Belief-aware Net
 	- Nebenbei: alte State-Matrizen in Agents/Training/dataset löschen (~60 GB)

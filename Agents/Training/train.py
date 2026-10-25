@@ -122,6 +122,8 @@ def main():
     parser.add_argument("--vp-share-weight", type=float, default=0.0)
     parser.add_argument("--rounds-weight", type=float, default=0.0)
     parser.add_argument("--ranking-weight", type=float, default=0.0)
+    # Sibling-Ranking auf Gewinnwahrscheinlichkeit plus dieses Gewicht mal den Platzierungs-Score (braucht placements.npy)
+    parser.add_argument("--ranking-placement-weight", type=float, default=0.0)
     # Inputs im Modell standardisieren (Statistik aus bis zu 200k Trainings-States)
     parser.add_argument("--normalize-inputs", action="store_true")
     parser.add_argument("--batch-size", type=int, default=2048)
@@ -135,7 +137,8 @@ def main():
 
     full_ds = StateDataset(args.states, args.labels, args.aux_dir)
     for name, weight in [("placements", args.placement_weight), ("vp_shares", args.vp_share_weight),
-                         ("rounds_left", args.rounds_weight), ("sibling_groups", args.ranking_weight)]:
+                         ("rounds_left", args.rounds_weight), ("sibling_groups", args.ranking_weight),
+                         ("placements", args.ranking_placement_weight)]:
         if weight > 0 and name not in full_ds.aux_paths:
             raise SystemExit(f"--{name} loss needs {name}.npy in --aux-dir (from DatasetProcessing/playout_results.py)")
     print(f"Aux labels: {', '.join(full_ds.aux_paths) or 'none'}")
@@ -153,7 +156,8 @@ def main():
 
     in_dim = full_ds.states.shape[1]
     model = StateValueModule(in_dim=in_dim, lr=args.lr, placement_weight=args.placement_weight, vp_share_weight=args.vp_share_weight,
-                             rounds_weight=args.rounds_weight, ranking_weight=args.ranking_weight, normalize_inputs=args.normalize_inputs)
+                             rounds_weight=args.rounds_weight, ranking_weight=args.ranking_weight, normalize_inputs=args.normalize_inputs,
+                             ranking_placement_weight=args.ranking_placement_weight)
     if args.normalize_inputs:
         sample = np.sort(np.random.default_rng(0).choice(train_idx, min(len(train_idx), 200_000), replace=False))
         scaled = model.set_input_normalization(full_ds.states[sample])
