@@ -86,22 +86,30 @@
 			- Duell C gegen xnebmrjf (MaxN, 60k Iterationen, 12 parallel, 1,5 h): 50:36 (58%, ~+57 Elo, 95%-KI -16 bis +135, p ≈ 0,08 einseitig) => Tendenz klar, aber nicht signifikant
 				- Sitzvorteil dominiert: C auf Plätzen 0+2 30/43, auf 1+3 20/43 => vordere Seite gewinnt 62% => nächster Modellvergleich mit gespiegelten Paaren
 			- C ist jetzt Default-Modell (Hugging Face und Agents.csproj)
+		- Varianten auf dem neuen Layout erledigt (26.10., Training dank schnellerem Laden 25 statt 42 min):
+			- D uq5qtpk0 (C plus Zahlenchip-Paare): kein Effekt (Präzisions-KL +0.00003 +/- 0.00016) => die abgeleiteten Features rechnen schon in Pips, 6 und 8 sehen darüber schon gleich aus
+			- E1 hxp6hhgy (C plus Häfen und Endspiel-Features, 1965 Features): val KL 0.0149, Präzisions-KL 0.0108 (-14%), Endspiel-KL (Führender 9+ VP) -33% (0.0157 => 0.0106), bester Zug 61,0%, Regret 0,39pp
+				- Fehler steigen nicht mehr zum Spielende hin an (0.010-0.011 in allen Phasen)
+			- E2 02l97say (E1 plus Brett-Symmetrien): val KL 0.0147, Präzisions-KL 0.0106 (-2% gegen E1, signifikant), Endspiel-KL 0.0098, bester Zug 61,3%, Regret 0,38pp
+				- Brett-Symmetrien bringen wenig (anders als Rotation -26%): 1M Karten decken die Brettvielfalt schon ab
+			- Lücke train/val geschlossen: xnebmrjf 0.0126/0.0215, mit Rotation train ~ val (C 0.0175/0.0170, E2 0.0165/0.0147, train mit Dropout und Augmentation) => größeres Net (Schritt 7) jetzt sinnvoll
+			- Gespiegeltes Duell E2 gegen C läuft
 		- Nächste Schritte daraus, nach erwartetem Gewinn pro Aufwand:
 			- 1. (erledigt, Aux ja, Ranking nein) Sibling-Ranking-Loss und Aux Heads zuschalten (in train.py fertig, ~20 min Training pro Variante): Ranking trainiert direkt die Zugreihenfolge, wo v2 am meisten gewonnen hat; Aux Heads regularisieren
 			- 2. (erledigt, -26% KL) Augmentation per Spielerrotation: in train.py (--augment-rotation, augmentation.py), Paritätstest gegen echte rotierte Spielzustände
 				- Nur zyklische Rotationen (Spieler p => p + k) erhalten die Zugreihenfolge, nur nach der Setup-Phase (die Schlangenreihenfolge beginnt immer bei Spieler 0)
 				- Sitzvorteil kein Problem: er steckt nach dem Setup vollständig im State (Plätze, Zug, Karten), Playout-Limit (50.000 Runden) irrelevant
-			- 3. Augmentation per Zahlenchip-Paaren: 2/12, 3/11, 4/10, 5/9, 6/8 haben dieselbe Würfelwahrscheinlichkeit, jedes Paar unabhängig tauschbar => 32 regelgetreue Sichten, mit Rotation bis 128x
+			- 3. (erledigt, kein Effekt) Augmentation per Zahlenchip-Paaren: 2/12, 3/11, 4/10, 5/9, 6/8 haben dieselbe Würfelwahrscheinlichkeit, jedes Paar unabhängig tauschbar => 32 regelgetreue Sichten, mit Rotation bis 128x
 				- Nur Wertumbelegung (Zahlen der Tiles, letzter Wurf), die 7 bleibt; abgeleitete Features (Pips, Produktion) bleiben gleich => kein neues Layout nötig
 				- Paritätstest wie bei der Rotation: Zahlen im echten Spielzustand tauschen, vektorisieren, mit dem umbelegten Vektor vergleichen
 				- Holz/Lehm-Tausch (gleiche Baukosten) bewusst nicht: verschiebt die Verteilung (3 Wälder und 4 Hügel statt 4/3)
-			- 4. Häfen als Features, Voraussetzung für Brett-Symmetrien
+			- 4. (erledigt) Häfen als Features, Voraussetzung für Brett-Symmetrien
 				- Bisher sieht das Net Häfen nur als Privilegien ihrer Besitzer: nicht, wo ein freier Hafen liegt und welchen Typ er hat (Positionen fest, Typen zufällig) => es kann "zum passenden 2:1-Hafen bauen" nicht bewerten
 				- Pro Küsten-Kreuzung (30 von 54) der Hafentyp (3:1 plus 5x 2:1, kein Hafen = alles 0): 180 Features, regelgetreu (ein Hafen markiert 2 Küsten-Kreuzungen) und unabhängig von festen Slots
 				- Neues Layout: beide Vektorizer, Paritäts-Fixtures, neu vektorisieren (Rohdaten liegen auf dem Server)
-			- 5. Brett-Symmetrien (6 Drehungen x Spiegelung = 12 Sichten, Tiles/Kreuzungen/Kanten/Häfen/Räuber über die Adjazenztabellen permutieren) erst mit den Hafen-Features: ohne sie verwischen Drehungen das implizite Wissen über die festen Hafen-Positionen; zusammen mit Rotation bis 48x effektive Daten
-			- 6. Endspiel-Features: in diesem Zug erreichbare VP (Hand plus Trades), mögliche Verlängerung der längsten Straße auf freien Kanten, Ritter-Rennen um die größte Rittermacht, erwartete VP aus dem restlichen Dev-Deck
-			- 7. Größeres Net (z.B. 4096 breit, länger trainieren) erst wenn die Lücke train/val nach der Augmentation kleiner wird
+			- 5. (erledigt, -2% KL) Brett-Symmetrien (6 Drehungen x Spiegelung = 12 Sichten, Tiles/Kreuzungen/Kanten/Häfen/Räuber über die Adjazenztabellen permutieren) erst mit den Hafen-Features: ohne sie verwischen Drehungen das implizite Wissen über die festen Hafen-Positionen; zusammen mit Rotation bis 48x effektive Daten
+			- 6. (erledigt, -14% KL, Endspiel -33%) Endspiel-Features: in diesem Zug erreichbare VP (Hand plus Trades), mögliche Verlängerung der längsten Straße auf freien Kanten, Ritter-Rennen um die größte Rittermacht, erwartete VP aus dem restlichen Dev-Deck
+			- 7. (als nächstes, Lücke ist geschlossen) Größeres Net (z.B. 4096 breit, länger trainieren) erst wenn die Lücke train/val nach der Augmentation kleiner wird
 		- Beobachtungen aus Beispielpartie (xnebmrjf, 4x MCTS, 20 Runden, Sieger mit 10 VP über Längste Straße und 8x 2:1-Holz-Hafen):
 			- Das komplette Dev-Deck (25 Karten) war nach 20 Runden gekauft, zwei eingeschlossene Spieler bauten nach dem Setup keine Straße und keine Siedlung mehr (7 VP über Rittermacht, 6 VP über drei VP-Karten)
 			- Ursachen vermutlich Perfect Information (das Net sieht die genaue Deck-Zusammensetzung und versteckte VP-Karten) und die Playout-Labels (Wert von Dev-Karten für schwache Agents) => beobachten, Self-Play und Hidden Information beheben es
