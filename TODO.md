@@ -78,9 +78,16 @@
 			- Gegen 3 BuilderAgents (125k Iterationen, gleiche Karten, Zwischenstand nach 30 min): xnebmrjf 10/16, sl159q7y 2/7
 			- Datenlimitiert, nicht kapazitätslimitiert: train loss 0.0126 gegen val loss 0.0215 (beide mit ~0.005 Label-Rauschen) => das Net lernt Trainings-States und ihr Label-Rauschen auswendig, ein größeres Net allein würde das verstärken
 			- KL auf dem Präzisions-Set steigt mit dem Spielfortschritt: 0.014 (Führender 0-4 VP) bis 0.024 (9+ VP) => Fehler sitzen im Endspiel
+		- Varianten erledigt (26.10., gleiches Setup wie xnebmrjf, Präzisions-Set ohne die 7 überlappenden Matches):
+			- A v8u5u50a (Aux Heads): val KL 0.0202, Präzisions-KL 0.0158, bester Zug 57,0%, Regret 0,49pp
+			- B 4tsf0tc9 (Aux plus Sibling-Ranking): val KL 0.0201, Präzisions-KL 0.0157, bester Zug 57,0%, Regret 0,49pp => Ranking bringt nichts über Aux hinaus, doppelte Trainingszeit
+			- C zjahe050 (Aux plus Spielerrotation): val KL 0.0170, Präzisions-KL 0.0126 (-26% gegen xnebmrjf 0.0170), bester Zug 59,8%, Regret 0,41pp, Endspiel-KL -35% (0.0243 => 0.0157)
+			- Duell C gegen xnebmrjf (MaxN, 60k Iterationen, 12 parallel, 1,5 h): 50:36 (58%, ~+57 Elo, 95%-KI -16 bis +135, p ≈ 0,08 einseitig) => Tendenz klar, aber nicht signifikant
+				- Sitzvorteil dominiert: C auf Plätzen 0+2 30/43, auf 1+3 20/43 => vordere Seite gewinnt 62% => nächster Modellvergleich mit gespiegelten Paaren
+			- C ist Kandidat fürs neue Default-Modell (Hugging Face Upload offen)
 		- Nächste Schritte daraus, nach erwartetem Gewinn pro Aufwand:
-			- 1. Sibling-Ranking-Loss und Aux Heads zuschalten (in train.py fertig, ~20 min Training pro Variante): Ranking trainiert direkt die Zugreihenfolge, wo v2 am meisten gewonnen hat; Aux Heads regularisieren
-			- 2. Augmentation per Spielerrotation: in train.py (--augment-rotation, augmentation.py), Paritätstest gegen echte rotierte Spielzustände
+			- 1. (erledigt, Aux ja, Ranking nein) Sibling-Ranking-Loss und Aux Heads zuschalten (in train.py fertig, ~20 min Training pro Variante): Ranking trainiert direkt die Zugreihenfolge, wo v2 am meisten gewonnen hat; Aux Heads regularisieren
+			- 2. (erledigt, -26% KL) Augmentation per Spielerrotation: in train.py (--augment-rotation, augmentation.py), Paritätstest gegen echte rotierte Spielzustände
 				- Nur zyklische Rotationen (Spieler p => p + k) erhalten die Zugreihenfolge, nur nach der Setup-Phase (die Schlangenreihenfolge beginnt immer bei Spieler 0)
 				- Sitzvorteil kein Problem: er steckt nach dem Setup vollständig im State (Plätze, Zug, Karten), Playout-Limit (50.000 Runden) irrelevant
 			- 3. Augmentation per Zahlenchip-Paaren: 2/12, 3/11, 4/10, 5/9, 6/8 haben dieselbe Würfelwahrscheinlichkeit, jedes Paar unabhängig tauschbar => 32 regelgetreue Sichten, mit Rotation bis 128x
