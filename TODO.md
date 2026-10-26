@@ -75,6 +75,19 @@
 			- v2-Labels sind deutlich flacher als v1 (Uniform-KL 0,50 statt 0,77, gemischte Agents mit 30% Random): KL zwischen v1- und v2-Modellen nicht vergleichbar
 			- Präzisions-Set (evaluate_precision.py): Paar-Genauigkeit 73,2% statt 67,7%, bester Zug 55,6% statt 47,9%, Regret 0,52 statt 0,78pp, kalibriert auch weit hinten
 			- Duell gegen sl159q7y (MaxN, 60k Iterationen, 12 parallel): 55:32 (63%, p ≈ 0,018, ~+95 Elo)
+			- Gegen 3 BuilderAgents (125k Iterationen, gleiche Karten, Zwischenstand nach 30 min): xnebmrjf 10/16, sl159q7y 2/7
+			- Datenlimitiert, nicht kapazitätslimitiert: train loss 0.0126 gegen val loss 0.0215 (beide mit ~0.005 Label-Rauschen) => das Net lernt Trainings-States und ihr Label-Rauschen auswendig, ein größeres Net allein würde das verstärken
+			- KL auf dem Präzisions-Set steigt mit dem Spielfortschritt: 0.014 (Führender 0-4 VP) bis 0.024 (9+ VP) => Fehler sitzen im Endspiel
+		- Nächste Schritte daraus, nach erwartetem Gewinn pro Aufwand:
+			- 1. Sibling-Ranking-Loss und Aux Heads zuschalten (in train.py fertig, ~20 min Training pro Variante): Ranking trainiert direkt die Zugreihenfolge, wo v2 am meisten gewonnen hat; Aux Heads regularisieren
+			- 2. Augmentation per Spielerrotation (4 Sichten pro State: Spielerblöcke, Labels und Zuginfo zyklisch verschieben), billig und direkt gegen die Datenlimitierung
+			- 3. Brett-Symmetrien (6 Drehungen x Spiegelung = 12 Sichten, Tiles/Kreuzungen/Kanten/Häfen/Räuber über die Adjazenztabellen permutieren), zusammen mit Rotation bis 48x effektive Daten
+			- 4. Endspiel-Features: in diesem Zug erreichbare VP (Hand plus Trades), mögliche Verlängerung der längsten Straße auf freien Kanten, Ritter-Rennen um die größte Rittermacht, erwartete VP aus dem restlichen Dev-Deck
+			- 5. Größeres Net (z.B. 4096 breit, länger trainieren) erst wenn die Lücke train/val nach der Augmentation kleiner wird
+		- Beobachtungen aus Beispielpartie (xnebmrjf, 4x MCTS, 20 Runden, Sieger mit 10 VP über Längste Straße und 8x 2:1-Holz-Hafen):
+			- Das komplette Dev-Deck (25 Karten) war nach 20 Runden gekauft, zwei eingeschlossene Spieler bauten nach dem Setup keine Straße und keine Siedlung mehr (7 VP über Rittermacht, 6 VP über drei VP-Karten)
+			- Ursachen vermutlich Perfect Information (das Net sieht die genaue Deck-Zusammensetzung und versteckte VP-Karten) und die Playout-Labels (Wert von Dev-Karten für schwache Agents) => beobachten, Self-Play und Hidden Information beheben es
+			- Ein Spieler tauschte 7x 4:1 trotz eigenem 2:1-Schaf-Hafen: ohne Spielerhandel bleiben nur Bank und Häfen
 		- states.npy (~35 GB) passt in den RAM-Cache, train.py liest damit schnell genug
 		- Aux Heads und Sibling-Ranking zuschalten, Gewichte tunen, Maßstab ist die Ranking-Genauigkeit auf dem Präzisions-Set
 		- Umgewichten nach Position im Match / Matchlänge und nach Anzahl beendeter Playouts prüfen, Chance-Siblings ggf. aus dem Ranking nehmen
@@ -121,7 +134,7 @@
 	- 7. Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), erst mit GPU-Inference bezahlbar
 	- Kleinere Suchverbesserungen: Pondering während Gegnerzügen, Transpositionen über State Hashes, Aktionsabstraktion (Trade-Varianten bündeln), Roll sofort zurückgeben wenn keine Dev Card lohnt
 	- Für Menschen (übermenschlich im echten Spiel) zusätzlich: Hidden Information (Belief Tracker, Determinisierung/ISMCTS, siehe Simulator) und Spielerhandel mit Verhandlung
-	- Reihenfolge: Messen => max^n => GPU-Inference => v2-Modell und Setup => Policy Head => Self-Play => Hidden Information und Handel
+	- Reihenfolge (Stand 26.10., max^n, GPU-Inference und v2-Modell erledigt): v2-Varianten (Ranking, Aux, Augmentation, Endspiel-Features) => Messen (Leaderboard, Catanatron-Bridge) => Server-GPU und Value-Self-Play => Policy Head => Setup => Netzarchitektur v2 => Hidden Information und Handel
 - Leaderboard für Agents verschiedener Herkunft (MCTS mit verschiedenen Modellen und Zeiten, BuilderAgent, später Catanatron über eine Bridge)
 	- Batch-Fit Plackett-Luce über alle Spiele (wie BayesElo/Ordo bei Schach-Engines) statt Online-Elo/TrueSkill: reihenfolgeunabhängig und am genauesten für Agents, die sich nicht verändern
 		- Ganze Platzierung pro Spiel (Sieger, dann nach VP, Gleichstände anteilig) statt nur Sieg, umgerechnet auf Elo-Skala (400 * log10 Stärke), Konfidenzintervalle per Bootstrap
