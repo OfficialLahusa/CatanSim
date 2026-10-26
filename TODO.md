@@ -2,49 +2,24 @@
 - UI für manuelles Spielen überarbeiten
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
-- Hidden Information (Agents sehen derzeit alle Hände, VP-Karten und den Inhalt der Dev Bank, das Net ist darauf trainiert)
-	- Beobachtungsmodell
-		- Verdeckt sind nur: vom Räuber gestohlene Karten (für Unbeteiligte), gezogene Dev Cards (für alle außer Käufer), VP-Karten bis Spielende
-		- Discards, Bank/Port Trades, Builds, Monopoly, Year of Plenty, Handgrößen sind public Info => Resource Bank ist immer öffentlich bekannt
-		- Monopoly macht die Anzahl einer Ressource bei allen Spielern öffentlich
-		- Kleine Information Sets, hohe Disambiguation und Leaf Correlation => Determinisierung funktioniert gut (Long et al.)
+- Hidden Information (Agents sehen derzeit alle Hände, VP-Karten und die Dev Bank, das Net ist darauf trainiert)
+	- Verdeckt sind nur gestohlene Karten (für Unbeteiligte), gezogene Dev Cards (außer für den Käufer) und VP-Karten bis Spielende, Monopoly macht eine Ressource öffentlich => kleine Information Sets, Determinisierung funktioniert gut (Long et al.)
 	- 1. Observation Filter / StateView + Belief Tracker in Common
-		- Vor der Implementierung des Observation Filters vollständige Test-Suite dafür schreiben: jede Regel des Beobachtungsmodells pro Beobachter (Steal nur für Beteiligte sichtbar, Dev-Kauf nur für Käufer, VP-Karten bis Spielende, Monopoly öffentlich, public Actions unverändert), Randfälle (Spielende, Undo, Laden), kein Leck verdeckter Info in StateView und gefilterten Actions
-		- StateView(p): fremde Hände als bekannte Karten + Unknown x k, fremde Dev Cards als Unknown, Dev Bank als öffentlicher Rest
-		- Belief Tracker pro Beobachter, gefüttert mit observation-gefilterten Actions (gleiche Schnittstelle für Simulation Server, HandleAction und Vectorizer)
-		- Unknowns mit Herkunft tracken (aus welchem Steal, Handverteilung des Opfers zu dem Zeitpunkt)
-		- Constraint Propagation bei Ausgaben (Build mit zu wenig bekannten Karten => Unknown aufgelöst), auch rückwirkend für das Opfer
-		- Sampler für Determinisierungen unter der globalen 19-pro-Ressource-Constraint
-		- Versteckte VP als Pool: 5 VP-Karten minus eigene, hypergeometrisch über Bank und fremde Dev Cards verteilt
-		- Test: wahrer State liegt immer im Support jedes Beliefs
-		- Belief-Entropie über Random Games messen, um die Anzahl Determinisierungen festzulegen
-	- 2. Determinized MCTS (PIMC)
-		- N Determinisierungen aus dem Belief samplen, je eine Perfect-Information-MCTS (z.B. eine pro Worker), Root Visit Counts aggregieren
-		- Aktuelles Net bleibt gültig, da weiterhin auf vollständigen States ausgewertet wird
-		- Benchmark Cheating MCTS vs. Determinized MCTS vs. Random => Wert des Informationsvorteils messen
-		- Schwächen: Strategy Fusion und Non-Locality (v.a. bei Räuber- und Monopoly-Zielwahl)
-	- 3. SO-ISMCTS (Single Observer)
-		- Knoten = Information Sets aus Sicht des Root-Spielers, pro Iteration eine Determinisierung an der Root samplen
-		- Subset-armed Bandit: UCT mit Availability Counts statt Parent Visits, da legale Actions je Determinisierung variieren
-		- Output Randomness nur dort branchen, wo der Root-Spieler das Ergebnis beobachtet (kein Spoilern von Dev Bank und beraubten Händen)
-			- Würfel => branchen (bereits zu 11 Totals zusammengefasst)
-			- Eigener Dev-Kauf, eigener Steal, Steal beim Root-Spieler => pro Karte branchen
-			- Fremder Dev-Kauf, Steal zwischen Gegnern => ein einziger Knoten, Auflösung nur in der Determinisierung
-	- 4. Belief-aware StateValueNet
-		- Training auf StateView-Inputs (Unknown-Slots), lernt E[Value | Beobachtung] => keine Determinisierung an den Leaves nötig
-		- Views offline durch Replay der PlayedActions durch den Belief Tracker rekonstruieren (Histories im Datensatz sind jetzt korrekt)
-		- Sichtbarkeits-Augmentation an der echten Beobachtungsverteilung ausrichten statt zufällig zu maskieren
-		- Erwartete versteckte VP pro Gegner als Feature
-	- 5. Particle MCTS / POMCP nur bei Bedarf
-		- Bei exaktem Belief Tracker wenig Gewinn gegenüber ISMCTS
-		- Relevant, sobald Player Trades mit Angeboten/Ablehnungen dazukommen (schwer als Constraints abbildbar)
+		- Vorher vollständige Test-Suite: jede Regel pro Beobachter, Randfälle (Spielende, Undo, Laden), kein Leck verdeckter Info
+		- StateView(p): fremde Hände als bekannte Karten + Unknown x k, fremde Dev Cards als Unknown
+		- Belief Tracker pro Beobachter aus gefilterten Actions: Unknowns mit Herkunft, Constraint Propagation bei Ausgaben, Sampler unter der 19-pro-Ressource-Constraint, versteckte VP hypergeometrisch
+		- Test: wahrer State liegt immer im Support des Beliefs; Belief-Entropie bestimmt die Anzahl Determinisierungen
+	- 2. Determinized MCTS (PIMC): N Determinisierungen, Root Visits aggregieren, Net bleibt gültig; Benchmark gegen Cheating MCTS; Schwächen Strategy Fusion und Non-Locality
+	- 3. SO-ISMCTS: Knoten = Information Sets des Root-Spielers, Availability Counts statt Parent Visits, Zufall nur branchen, wo der Root-Spieler das Ergebnis sieht
+	- 4. Belief-aware StateValueNet: Training auf StateView-Inputs (Views per Replay der Histories rekonstruierbar), erwartete versteckte VP als Feature
+	- 5. Particle MCTS / POMCP erst mit Spielerhandel (Angebote schwer als Constraints)
 - Action für variable Player Trades
 - Client
-	- Edit Mode schreibt direkt ins Board: Building Stock, VPs, Longest Road und Action Stack werden nicht nachgezogen, geleerte Felder behalten einen Owner, Klicks auf ImGui-Fenster über dem Board editieren mit
-	- Font, Texture Atlas und Sounds werden relativ zum Arbeitsverzeichnis geladen (..\..\..\res\...) => AppContext.BaseDirectory nutzen und res/ ins Build-Output kopieren (das ONNX-Modell wird bereits neben der Executable gesucht)
-	- SimulateRandomRollouts: kein Rundenlimit, countdown.Signal nicht im finally (hängt bei Exceptions), Threadanzahl 0 hängt
+	- Edit Mode schreibt direkt ins Board: Building Stock, VPs, Longest Road und Action Stack werden nicht nachgezogen, geleerte Felder behalten einen Owner, Klicks auf ImGui-Fenster editieren mit
+	- Font, Texture Atlas und Sounds relativ zum Arbeitsverzeichnis geladen => AppContext.BaseDirectory, res/ ins Build-Output kopieren
+	- SimulateRandomRollouts: kein Rundenlimit, countdown.Signal nicht im finally, Threadanzahl 0 hängt
 	- Fehlendes Exception Handling beim Auflisten von Verzeichnissen und Schreiben von Saves, Redo entfernt die Action vor der Validierung
-	- Linux-Port: RenderDataImpl.dll (Saffron.Util.ImGuiSFML, nur Windows, ohne Quellcode) durch eigenen C#-Renderer ersetzen, ShowWindow (user32) nur unter Windows aufrufen, Pfade mit Path.Combine bauen
+	- Linux-Port: RenderDataImpl.dll (nur Windows, ohne Quellcode) ersetzen, ShowWindow nur unter Windows, Pfade mit Path.Combine
 
 ## Test Suite
 - Übersprungene Rulebook-Tests aktivieren, sobald die Regeln umgesetzt sind
@@ -52,93 +27,49 @@
 
 ## Agents
 - Roadmap v2
-	- Datensatz v2 (25./26.10.): 1M Matches, 9.996.128 Samples in 999.750 Gruppen, alle mit Rohergebnissen; Präzisions-Set 6000 Matches mit 2000 Playouts (7 auch in v2, bei der Auswertung ausgelassen)
-		- DatasetCollector --matches 1000000 --parts 20 --samples 5 --playouts 300 --threads 32 --seed 20261025 --name v2 (~18,5 h, ~700 GB Rohdaten auf dem Server), Präzisions-Set mit --matches 6000 --playouts 2000 --seed 777 --name v2_precision
-		- Erweitern mit gleichem Seed und --first-match, Server mit 32 Threads ~45k Playouts/s nur auf der SSD (HDD ~20k), Trainingsdaten auf C: (zufälliges Lesen)
-		- Sibling-Gruppen: Varianz der Differenz zwischen Geschwistern 2,4x kleiner als mit unabhängigen Playouts, kosten ~75% mehr Zeit pro Match
-		- Auf das 1965er Layout migriert ohne neu zu sammeln: Karten aus den Match-Seeds regeneriert (DatasetCollector --regenerate-maps, gegen die Tiles jedes Samples geprüft), migrate_states_1764_to_1965.py
-		- v2-Labels sind flacher als v1 (Uniform-KL 0,50 statt 0,77): KL zwischen v1- und v2-Modellen nicht vergleichbar, Ranking-Metriken schon
-	- Ergebnisse auf dem Präzisions-Set (evaluate_precision.py), alle 40 Epochen, Aux Heads ab A:
-		- xnebmrjf (Baseline v2): KL 0.0170, bester Zug 55,6%, Regret 0,52pp (sl159q7y: 47,9%, 0,78pp); im Duell 55:32 gegen sl159q7y (~+95 Elo)
-		- A v8u5u50a (Aux Heads) 0.0158; B 4tsf0tc9 (plus Sibling-Ranking) 0.0157 => Ranking bringt nichts über Aux hinaus, doppelte Trainingszeit
-		- C zjahe050 (Aux plus Spielerrotation, Default-Modell): 0.0126 (-26%), bester Zug 59,8%, Endspiel-KL -35%; Duell gegen xnebmrjf 50:36 (~+57 Elo, nicht signifikant)
-		- D uq5qtpk0 (C plus Zahlenchip-Paare): kein Effekt => die abgeleiteten Features rechnen schon in Pips, 6 und 8 sehen darüber schon gleich aus
-		- E1 hxp6hhgy (C plus Häfen und Endspiel-Features, 1965 Features): 0.0108 (-14%), Endspiel-KL (Führender 9+ VP) -33%, bester Zug 61,0%; Fehler steigen nicht mehr zum Spielende hin an
-		- E2 02l97say (E1 plus Brett-Symmetrien): 0.0106 (-2% gegen E1), Endspiel-KL 0.0098, bester Zug 61,3%, Regret 0,38pp => Brett-Symmetrien bringen wenig, 1M Karten decken die Brettvielfalt schon ab
-		- Gespiegeltes Duell E2 gegen C, 1. Lauf (42 Kartenpaare): 47:37 (56%, ~+42 Elo), doppelt gewonnene Paare 10:5 (p ≈ 0,15); Sitzvorteil auf diesen Karten umgekehrt (hintere Sitze 56%, C gegen xnebmrjf: vordere 62%) => kartenabhängig, die Paare heben ihn auf
-		- Lücke train/val geschlossen (xnebmrjf 0.0126/0.0215, mit Rotation train ~ val) => nicht mehr datenlimitiert
-	- Augmentation (augmentation.py, train.py --augment-rotation/-numbers/-board, je mit Paritätstest gegen transformierte Spielzustände)
-		- Spielerrotation nur zyklisch (erhält die Zugreihenfolge) und nur nach der Setup-Phase (die Schlangenreihenfolge beginnt immer bei Spieler 0); Sitzvorteil steckt nach dem Setup vollständig im State
-		- Holz/Lehm-Tausch (gleiche Baukosten) bewusst nicht: verschiebt die Verteilung (3 Wälder und 4 Hügel statt 4/3)
+	- Datensatz v2: 1M Matches, 10M Samples (Seed 20261025, 300 Playouts), Präzisions-Set 6000 Matches mit 2000 Playouts (Seed 777); erweitern mit --first-match; auf 1965 Features migriert über regenerierte Karten (--regenerate-maps)
+	- Präzisions-KL (evaluate_precision.py): xnebmrjf 0.0170 => Aux 0.0158 => Rotation (C, Default) 0.0126 => Häfen und Endspiel-Features (E1) 0.0108 => Brett-Symmetrien (E2 02l97say) 0.0106, bester Zug 55,6% => 61,3%
+		- Kein Effekt: Sibling-Ranking (doppelte Trainingszeit), Zahlenchip-Paare (abgeleitete Features rechnen schon in Pips)
+		- Endspiel-Features: Endspiel-KL -33%, Fehler steigen nicht mehr zum Spielende hin an
+		- Lücke train/val mit Rotation geschlossen => nicht mehr datenlimitiert
+		- Rotation nur zyklisch und nach dem Setup; Holz/Lehm-Tausch bewusst nicht (verschiebt die Verteilung)
+	- Gespiegeltes Duell E2 gegen C: 1. Lauf 47:37 (~+42 Elo, Paare 10:5, nicht signifikant), Lauf über Nacht offen; Sitzvorteil ist kartenabhängig (mal vorne, mal hinten)
 	- Nächste Schritte
-		- Gespiegeltes Duell E2 gegen C über Nacht abwarten, dann E2 als Default (Hugging Face Upload und Agents.csproj)
-		- Größeres Net (z.B. 4096 breit, länger trainieren), jetzt sinnvoll, da train ~ val
-		- Platzierung als Tie-Breaker: Plumbing fertig (Output "placements", MCTSAgent.PlacementWeight β), mit E2 β per gespiegeltem Duell tunen (0 / 0,03 / 0,1)
-			- Wert im MCTS = P(Sieg) + β * Platzierungs-Score (1. = 1 bis 4. = 0), hilft weit hinten (alle Optionen sonst ~0) und mit max^n dem Gegnermodell
-		- Umgewichten nach Position im Match / Matchlänge und nach Anzahl beendeter Playouts prüfen, Chance-Siblings ggf. aus dem Ranking nehmen
-		- Endspiel-Features nutzen Perfect Information (VP-Karten in Hand und Deck, Ritter auf der Hand): mit Hidden Information auf den sichtbaren Teil bzw. den Belief umstellen
-	- Beobachtungen aus Beispielpartie (xnebmrjf, 4x MCTS, 20 Runden, Sieger mit 10 VP über Längste Straße und 8x 2:1-Holz-Hafen):
-		- Das komplette Dev-Deck (25 Karten) war nach 20 Runden gekauft, zwei eingeschlossene Spieler bauten nach dem Setup keine Straße und keine Siedlung mehr (7 VP über Rittermacht, 6 VP über drei VP-Karten)
-		- Ursachen vermutlich Perfect Information (das Net sieht die genaue Deck-Zusammensetzung und versteckte VP-Karten) und die Playout-Labels (Wert von Dev-Karten für schwache Agents) => beobachten, Self-Play und Hidden Information beheben es
-		- Ein Spieler tauschte 7x 4:1 trotz eigenem 2:1-Schaf-Hafen: ohne Spielerhandel bleiben nur Bank und Häfen
-	- Phase 3: Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), Inference-Budget ~2-3x
-	- Phase 4: Policy Head => Search-distillierte Targets / Self-Play (Expert Iteration) => Belief-aware Net
-	- Nebenbei: alte State-Matrizen in Agents/Training/dataset (~60 GB) und prepared_v2/states.npy im 1764er Layout (35 GB) löschen
-- Weg zum starken Agent (über Catanatron hinaus), nach Hebel sortiert
-	- 1. Messen: Catanatron-Bridge (Python-Player, der den State an die C#-Engine gibt, gleiche Perfect-Information-Ebene, ~3-5 Tage) plus Leaderboard (siehe unten)
-	- 2. max^n in der Suche: erledigt (MaxN Default, ~+70 Elo gegen zufälliges Gegnermodell, gegen 3 BuilderAgents 20/30 statt 15/30)
-		- Nutzen pro Spieler als 4er-Vektor backpropagiert, UCT auf dem Wert des entscheidenden Spielers, eigener MinMax-Bereich pro Spieler (ohne ausstehende Visits), lock-frei
-		- Explorationskonstante c=2 und 2,8 gegen 1,414 ohne Unterschied => Suchparameter sind nicht der Hebel
-		- Offen: Paranoid gegen MaxN testen, später Gegnerzüge nach Policy-Prior gewichten
-	- 3. GPU-Inference: erledigt mit DirectML (Windows), Linux auf der CPU; CATANSIM_INFERENCE=cpu|dml erzwingt
-		- Net bei Batch 256: CPU 89k, DirectML mit fester Batchgröße 566k States/s; MCTS 66k => 181k Iterationen/s, jetzt bremst die Selektion auf der CPU
-		- Nächste Schritte: zwei Auswertungen gleichzeitig in Flug oder schnellere Selektion/Expansion; CUDA-EP (ORT 1.31) braucht CUDA 13, torch bringt nur 12.8 mit
-	- 4. Setup-Phase spezialisieren (siehe Initial-Placement-Datensatz): eigene Zeit, eigene Kandidaten mit Best-Response-Gegnern (max^n) durchsuchen, Sibling-Gruppen an Setup-Entscheidungen
-	- 5. Policy Head + PUCT (siehe PolicyNet): Suchfokus, Gegnermodell nach Policy statt max^n über alles, besserer Subtree-Reuse
-	- 6. Self-Play / Expert Iteration: Labels aus Playouts schwacher Agents binden das Net an deren Niveau
-		- Schleife: Spiele mit Net N erzeugen => Targets => N weitertrainieren => Gate (Duell N+1 gegen N, Builder-Check) => N+1, Replay-Fenster über die letzten Generationen
-		- Generator (neuer Collector-Modus): 64-256 Spiele parallel mit kleinen Batches pro Baum, ein Inference-Service bündelt alle Leaves zu 256er-Batches auf der GPU
-			- Ein max^n-Baum pro Spiel für alle 4 Sitze, Root wandert nach jedem Zug mit => kein Reuse-Problem nach Gegnerzügen
-			- Exploration: Dirichlet-Noise an der Root, Sampling nach Visits im Setup und den ersten Runden, ~400-800 Iterationen pro Zug, Playout Cap Randomization (nur volle Suchen aufzeichnen)
-			- Aufzeichnen: State, Root-Wertvektor q (4 Spieler), Visit-Verteilung, am Ende Sieger und Platzierungen
-			- Grob ~80-100k Spiele/Tag auf der RTX 5080, der Server nur auf der CPU (oder CUDA-EP)
-		- Server-GPU einbauen (GTX 1070 Ti) für Self-Play rund um die Uhr: Server generiert, Desktop trainiert
-			- Netzteil reicht (650 W, Last ~300-440 W), 8-Pin-PCIe-Kabel, oberer x16-Slot ist frei (7800X3D hat iGPU)
-			- Pascal: CUDA 12.x und Treiber-Branch 580 (CUDA 13 kann kein Pascal mehr), ONNX Runtime GPU mit CUDA 12 pinnen, PyTorch nur cu126
-			- CUDA-Provider in StateValueNet für Linux ergänzen (wie DirectML mit fester Batchgröße)
-			- Erwartung ~150-250k States/s auf der GPU, Selektion auf 8 Kernen limitiert => ~15-25k Spiele/Tag, ~3-5x gegenüber CPU-Inference
-		- Value-Target = λ·z + (1-λ)·q mit λ ~0,3-0,5: Spielergebnis z allein ist in Catan zu verrauscht, Playout-Labels sind zu stark an schwache Agents gebunden
-		- Anfangs alte Playout-Daten beimischen (50/50, dann weniger), weitertrainieren statt neu, Input-Normalisierung einfrieren
-		- Stufen: 1. Value-only Self-Play (geht jetzt, ~1-2 Wochen) => 2. Policy Head + PUCT, Visit-Verteilungen als Policy-Targets => 3. Liga aus alten Nets und Buildern, KataGo-Tricks
-		- Risiken: Perfect Information (lernt nichts über Unsicherheit), Spielerhandel im Baum, Kollaps in einen ausnutzbaren Stil (Builder-Check im Gate)
-	- 7. Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), erst mit GPU-Inference bezahlbar
-	- Kleinere Suchverbesserungen: Pondering während Gegnerzügen, Transpositionen über State Hashes, Aktionsabstraktion (Trade-Varianten bündeln)
-	- Für Menschen (übermenschlich im echten Spiel) zusätzlich: Hidden Information (Belief Tracker, Determinisierung/ISMCTS, siehe Simulator) und Spielerhandel mit Verhandlung
-	- Reihenfolge (Stand 26.10., v2-Varianten erledigt, E2 bestes Modell): größeres Net => Messen (Leaderboard, Catanatron-Bridge) => Server-GPU und Value-Self-Play => Policy Head => Setup => Netzarchitektur v2 => Hidden Information und Handel
-		- Netzarchitektur v2 ggf. vor den Policy Head ziehen: Züge sind meist pro Kreuzung oder Kante, ein Graph-Net gibt dort natürlich einen Logit pro Knoten/Kante aus, statt den Head auf dem MLP zu bauen und später neu
-		- Simulator-Server als paralleler Architektur-Strang, Leaderboard, Catanatron-Bridge und Self-Play setzen auf ihm auf
-- Leaderboard für Agents verschiedener Herkunft (MCTS mit verschiedenen Modellen und Zeiten, BuilderAgent, später Catanatron über eine Bridge)
-	- Batch-Fit Plackett-Luce über alle Spiele (wie BayesElo/Ordo bei Schach-Engines) statt Online-Elo/TrueSkill: reihenfolgeunabhängig und am genauesten für Agents, die sich nicht verändern
-		- Ganze Platzierung pro Spiel (Sieger, dann nach VP, Gleichstände anteilig) statt nur Sieg, umgerechnet auf Elo-Skala (400 * log10 Stärke), Konfidenzintervalle per Bootstrap
-		- Anker BuilderAgent = 0 (mittelstark, gut vernetzt, präzise bestimmt), damit die Skala beim Hinzufügen stabil bleibt; Ratings sind nicht nullsummig, ohne Anker driftet die Skala
-			- Nicht RandomAgent: verliert praktisch immer, "immer Letzter" bestimmt seinen Wert kaum (nur der Prior hält ihn), lange Kette bis zur Spitze; nur als Referenzpunkt anzeigen
-			- Anker als feste Version einfrieren (RandomAgent wurde schon mehrfach geändert)
-		- Etablierte Ratings bleiben stabil: Updates skalieren mit σ², neue Agents (großes σ) nehmen die Änderungen auf; Nicht-Transitivität (Agent nutzt gezielt eine Schwäche) bildet eine Zahl nicht ab
-		- Jedes Spiel speichern (Agents pro Sitz, VP, Sieger, Karten-Seed), damit jederzeit neu gefittet werden kann (auf dem Simulator-Server)
-	- Turnier-Runner (ModelMatch verallgemeinern): zufällige 4er-Besetzungen aus dem Pool, Sitze ausbalanciert rotieren oder Sitzeffekt im Modell, eine CSV-Zeile pro Spiel (Agents pro Sitz, VP, Sieger, Runden)
-	- Feste Denkzeit pro Entscheidung, MCTS 0,5 s und MCTS 5 s sind getrennte Einträge
-	- Für schnelle A/B-Entscheidungen (ist das neue Modell besser?) gespiegelte 2-gegen-2-Duelle, dazu SPRT als Abbruchkriterium
-		- Nur doppelt gewonnene Paare messen die Stärke (Vorzeichentest), Splits entscheidet der Sitz; Konfidenzintervall pro Paar (1, 1/2, 0) ist enger als pro Spiel, da der Sitzeffekt aus der Varianz fällt
-	- Online-Ratings für die Live-Anzeige: OpenSkill Plackett-Luce (Weng-Lin), wie Beyond All Reason (Teiserver: Plackett-Luce, tau, prevent_sigma_increase, Anzeige max(μ - σ, 0))
-		- C#: OpenSkillSharp (NuGet, MIT, Port von openskill.py mit dessen Testdaten), model.Rate(Teams, scores: VP), ein Team pro Spieler, Gleichstände über gleiche VP
-		- Für Bots tau = 0 (Stärke ändert sich nicht, sonst wachsen die σ und die Ratings zittern), LimitSigma = true
-		- Zwei Sitze desselben Agents in einem Spiel nicht als zwei Spieler werten (zählt doppelt, σ schrumpft zu schnell): ein Team mit beiden Sitzen oder nur Spiele mit einem Sitz pro Agent
-		- Online-Updates hängen von der Spielreihenfolge ab => für die maßgebliche Rangliste regelmäßig Batch-Fit über alle Spiele
-	- Plackett-Luce misst die Unsicherheit über den Spielausgang (Verteilung über Platzierungen), nicht wie sicher sich das Value Net ist; dafür Ensemble, MC Dropout oder Varianz-Head (z.B. für Exploration in MCTS)
-		- Platzierungs-Head als Plackett-Luce (4 Stärken statt 16 Logits) wäre konsistent: heute kann "A mit 60% Erster" und "B mit 60% Erster" gleichzeitig herauskommen
-- Agents/env: OpenMP-Konflikt (libiomp5md.dll von conda-MKL und torch), torch läuft nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren oder Duplikat entfernen
+		- Nach dem Duell E2 als Default (Hugging Face und Agents.csproj)
+		- Größeres Net (z.B. 4096 breit, länger trainieren)
+		- Platzierung als Tie-Breaker: β per gespiegeltem Duell tunen (0 / 0,03 / 0,1), Plumbing fertig
+		- Umgewichten nach Position im Match und beendeten Playouts, Chance-Siblings ggf. aus dem Ranking
+		- Endspiel-Features nutzen Perfect Information: mit Hidden Information auf den sichtbaren Teil umstellen
+	- Beispielpartie (xnebmrjf): ganzes Dev-Deck nach 20 Runden gekauft, eingeschlossene Spieler bauten nichts mehr, 7x 4:1 trotz 2:1-Hafen => vermutlich Perfect Information und schwache Playout-Labels, mit Self-Play beobachten
+	- Phase 3: Netzarchitektur v2, Phase 4: Policy Head => Self-Play (Expert Iteration) => Belief-aware Net
+	- Nebenbei: alte State-Matrizen löschen (Agents/Training/dataset ~60 GB, prepared_v2/states.npy im 1764er Layout 35 GB)
+- Weg zum starken Agent, nach Hebel sortiert
+	- 1. Messen: Catanatron-Bridge (~3-5 Tage) plus Leaderboard
+	- 2. max^n: erledigt (~+70 Elo), Explorationskonstante egal; offen: Paranoid testen, Gegnerzüge nach Policy-Prior
+	- 3. GPU-Inference: erledigt (DirectML 566k States/s, MCTS 181k Iterationen/s), jetzt bremst die Selektion; CUDA-EP braucht CUDA 13
+	- 4. Setup-Phase spezialisieren: eigene Zeit, Best-Response-Gegner, Sibling-Gruppen an Setup-Entscheidungen
+	- 5. Policy Head + PUCT: Suchfokus, Gegnermodell nach Policy, besserer Subtree-Reuse
+	- 6. Self-Play: Labels schwacher Agents binden das Net an deren Niveau
+		- Generator: viele Spiele parallel, ~400-1000 Iterationen pro Zug, Playout Cap Randomization, Dirichlet-Noise; aufzeichnen State, Root-q, Visits, Ergebnis (~40-100k Spiele/Tag auf der 5080)
+		- Target λ·z + (1-λ)·q, von E2 weitertrainieren, v2-Daten anfangs beimischen, Gate per gespiegeltem Duell
+		- Server-GPU (GTX 1070 Ti): Netzteil reicht, CUDA 12.x und Treiber 580, CUDA-Provider für Linux, ~15-25k Spiele/Tag
+		- Risiken: Bootstrapping (q vom eigenen Net), Kollaps in einen ausnutzbaren Stil
+	- 7. Netzarchitektur v2 (siehe Graph Transformer)
+	- Kleinere Suchverbesserungen: Pondering, Transpositionen über State Hashes, Trade-Varianten bündeln
+	- Für Menschen: Hidden Information und Spielerhandel mit Verhandlung
+	- Reihenfolge: größeres Net => Messen => Server-GPU und Self-Play => Policy Head => Setup => Netzarchitektur => Hidden Information und Handel; Simulator-Server parallel
+		- Netzarchitektur ggf. vor den Policy Head ziehen (Policy-Logits pro Knoten/Kante statt Head auf dem MLP)
+- Leaderboard (MCTS mit verschiedenen Nets und Zeiten, BuilderAgent, später Catanatron)
+	- Maßgeblich: Batch-Fit Plackett-Luce über alle Spiele (reihenfolgeunabhängig), ganze Platzierung statt nur Sieg, Intervalle per Bootstrap
+	- Live: OpenSkill Plackett-Luce wie Beyond All Reason, in C# OpenSkillSharp; für Bots tau = 0, LimitSigma, Anzeige μ - σ
+	- Anker BuilderAgent = 0 als feste Version (nicht RandomAgent: verliert immer, schlecht bestimmt), RandomAgent nur als Referenz
+	- Zwei Sitze desselben Agents zählen als ein Team, jedes Spiel speichern (Agents, VP, Karten-Seed)
+	- Turnier-Runner: zufällige 4er-Besetzungen, Sitze rotieren, feste Denkzeit pro Eintrag
+	- A/B-Tests per gespiegeltem Duell: nur doppelt gewonnene Paare zählen, Intervall pro Paar, SPRT als Abbruch
+	- Plackett-Luce misst die Unsicherheit des Spielausgangs, nicht die des Nets (dafür Ensemble oder Varianz-Head); Platzierungs-Head als Plackett-Luce wäre konsistent
+- Agents/env: OpenMP-Konflikt (conda-MKL und torch), torch nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren
 - Spezialisierten Datensatz für Initial Placements anlegen
-	- Größter Hebel: im Setup reicht die Suche nicht über den eigenen Zug hinaus (PV = Settlement + Road), die Entscheidung ist praktisch eine 1-Ply-Bewertung des Nets
+	- Größter Hebel: im Setup reicht die Suche nicht über den eigenen Zug hinaus, praktisch eine 1-Ply-Bewertung des Nets
 	- Mehr Playouts
 	- Nach jedem einzelnen Move speichern um Impact gut lernbar zu machen
 	- Komplett Random ohne Heuristik um unvorteilhafte Positionen nicht unterzurepräsentieren
@@ -151,67 +82,33 @@
 - StateValueNetv2
 	- v2 erstmal auf v1 basiert mit Player/Tile Encoderblöcken, Embeddings statt OneHot, GraphConv auf v3 schieben
 	- State Vectorizer über push/pop Architektur eine Index-Aufschlüsselung generieren lassen
-	- Abgeleitete Features (156, Produktion, Tauschkurse, Bezahlbarkeit, Rennabstände) und Input-Normalisierung im Modell (--normalize-inputs): val KL 0.0867 => 0.0320 auf dem 3M-Datensatz, im MCTS 36:4 (sl159q7y)
-		- Nur skalieren (/10 bis /19) statt standardisieren hat das MLP verschlechtert, die Vektorizer bleiben unskaliert
-		- Noch offen: Expansionspotenzial mit den Pips der erreichbaren Bauplätze (die Endspiel-Features zählen nur die Bauplätze)
-	- Weit zurückliegende Spieler: ab 5 VP Rückstand sind viele Winrates exakt 0 (Playouts lösen < 0.3% nicht auf), das Net ist dort kalibriert, kann sie aber nicht ordnen; der Platzierungs-Head (Aux) liefert dafür ein Signal, siehe Tie-Breaker in der Roadmap
+	- Expansionspotenzial mit den Pips der erreichbaren Bauplätze (die Endspiel-Features zählen nur die Bauplätze)
+	- Weit zurückliegende Spieler: Winrates oft exakt 0, der Platzierungs-Head liefert dort das Signal
 	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
-- Graph Transformer als Alternative in Betracht ziehen
-	- Ein Token pro Tile, Intersection, Edge und Spieler plus globaler Token (~150), gelernte Positions-Embeddings pro Slot, Attention Bias nach Graph-Distanz
-	- d=128 mit 4 Layern kostet etwa 1-3x das jetzige MLP
-	- Spieler-symmetrisch: geteilter Player Encoder, Attention zwischen Spielern, Value Head pro Spieler => Spielerrotation eingebaut statt Augmentation
-	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
-	- Data Augmentation über Reduktion der Sichtbarkeit (alle Karten außer die eines Spielers unknown machen, zufällig Karten unknown machen), sobald Hidden Information kommt
-	- Evaluation über val KL hinaus: Kalibrierung pro VP-Rückstand, Ranking von Geschwister-States gegen lange Playouts, Quality Bench gegen tiefe Suche, Self-Play bei gleicher Zeit
-	- Inference-Budget: das Net darf ~2-3x teurer werden (kostet laut Quality Bench ~4 Punkte Übereinstimmung), alternativ kleines Net für Leaves und großes für Root/Policy
-	- Reihenfolge siehe Roadmap v2
-	- Schätzung: 25-45% weniger KL bei gleichen Daten (Symmetrie und Weight Sharing wirken wie 4-10x mehr Daten), netto ~+50 bis +180 Elo nach Abzug der langsameren Inference, also weniger als der Sprung durch die abgeleiteten Features (+380)
-	- Vorher günstig messen, in Stufen:
-		1. Augmentation am jetzigen MLP: erledigt, Spielerrotation -26% KL, Brett-Symmetrien -2% => einen Großteil des Symmetrie-Gewinns hat das MLP schon
-		2. Spieler-symmetrisches MLP (geteilter Encoder pro Spielerblock, DeepSets-artig): halber Weg zum Transformer
-		3. Erst dann der Transformer, Vergleich bei gleichen Daten, gleicher Denkzeit und im gespiegelten Duell
+- Graph Transformer als Alternative
+	- Ein Token pro Tile, Intersection, Edge und Spieler plus globaler Token, Attention Bias nach Graph-Distanz, d=128 mit 4 Layern ~1-3x das MLP
+	- Spieler-symmetrisch (geteilter Player Encoder, Value Head pro Spieler) => Rotation eingebaut statt Augmentation
+	- Sichtbarkeits-Augmentation (Karten zufällig unknown), sobald Hidden Information kommt
+	- Erwartung ~+50 bis +180 Elo nach langsamerer Inference; Augmentation am MLP hat einen Teil schon geholt (Rotation -26%, Brett -2%)
+	- Stufen: spieler-symmetrisches MLP (DeepSets-artig) => Transformer, Vergleich bei gleichen Daten und gleicher Denkzeit
 - PolicyNet
-	- Wahrscheinlichkeitsverteilung darüber welche Moves aus einem State wie erkundenswert sind
-	- Action Space explodiert kombinatorisch, deshalb nicht über ein finite fixed-size Action Space die Verteilung berechnen
-	- Stattdessen ein NN was State und eine Action paarweise als Input bekommt und einen Score ausgibt
-	- Dann über alle Legal Moves aus dem State batched berechnen und Softmax über die Scores berechnen um eine Verteilung zu erhalten
-	- Output dann über PUCT (Predictor UCT) für Exploration benutzen
-	- Auch als Gegnermodell: Gegnerzüge im Tree nach Policy statt gleichverteilt samplen => Setup-PV bekommt echte Tiefe, besserer Subtree-Reuse
-	- Action Encoding
-		- Categorical Embedding für Type der Action
-		- Dann geteilte bedeutungsgleiche Dimensionen für die Parameter, damit jede Dimension immer das gleiche Konzept abbildet
-		- Alle Parameter in dieses geteilte Space abbilden
-		- Beispiel: "Intersection Index" für SettlementAction, CityAction, FirstInitialSettlementAction, SecondInitialSettlementAction teilen
-		- Roll Result Parameter ignorieren und Output Randomness generell als eine Candidate Action zusammenfassen (wie es im MCTS Tree schon implementiert ist)
-	- State Encoding
-		- Evtl den Rumpf des StateValueNets übernehmen und dann nur einmal für den State berechnen und für alle Candidate Actions wiederverwenden
-		- Mit Transformer-Trunk: Action Tokens per Cross-Attention auf die State Tokens
-	- StateValueNet und PolicyNet in einem Modell kombinieren, welches den Trunk und einen Value- sowie Policy-Head enthält
-		- Für ONNX dynamic_axis nutzen, damit mehrere Actions gleichzeitig gebatched verarbeitet werden können
-		- Man kann auswählen welche der Outputs man berechnen möchte und der jeweils andere wird dann gar nicht berechnet
-	- Training
-		- Joint Training oder Finetuning zusammen mit StateValueNet über gemeinsamen Trunk möglich => Regularisierung und reicherer Trunk, aber komplex
-		- Supervised Target: Distribution der Visit Counts der aktuellen MCTS-Variante
-		- Dann neue MCTS-Variante mit dem verfeinerten Policy Network erhalten und wiederholen um iterativ besser zu werden
+	- NN bewertet State und Action paarweise, Softmax über alle Legal Moves, Output für PUCT und als Gegnermodell
+	- Action Encoding: Embedding für den Action-Typ, geteilte Dimensionen für gleichbedeutende Parameter (z.B. Intersection Index), Zufall als eine Candidate Action
+	- State Encoding: Trunk des StateValueNets einmal pro State, mit Transformer Action Tokens per Cross-Attention
+	- Value- und Policy-Head in einem Modell, Outputs einzeln abrufbar (ONNX dynamic_axis)
+	- Target: Visit-Verteilung der MCTS, iterativ (Expert Iteration)
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
-	- Subtree-Reuse nach Gegnerzügen verbessern
-		- HandleAction/ResetToState sind implementiert: nach eigenen Zügen wird der Baum immer weiterverwendet, nach Gegnerzügen nur in ~13% der Fälle
-		- Ursache: Gegnerzüge werden in der Selektion zufällig gewählt, ihre Nodes sind daher selten expandiert
-		- Ansätze: Gegnerzüge der Root vorab expandieren, Pondering während der Gegnerzüge, Opponent Modeling statt Zufallswahl
-	- Wenn gerolled werden muss, direkt die Roll Action zurückgeben und nicht weiterrechnen, um Rechenzeit danach auf weniger Branches zu verteilen
-		- Achtung wegen Dev Cards, die können vor dem Roll gespielt werden
+	- Subtree-Reuse nach Gegnerzügen nur ~13% (Gegnerzüge selten expandiert) => Root vorab expandieren, Pondering, Gegnermodell
+	- Bei Pflicht-Roll direkt würfeln statt weiterrechnen (Achtung: Dev Cards vor dem Roll)
 	- Compute Budget
 		- Zeitlimit pro Turn
 		- Discards kriegen eigene Extrazeit
 		- Initial Placements kriegen eigene Extrazeit
 		- Dann immer das ganze Budget nutzen um seinen Initiativabschnitt fertigzurechnen und dann diesen Pfad auch instantly fertig spielen
-	- Durchsatz
-		- Quality Bench (30 Positionen, Übereinstimmung mit 20s-Referenz): 2,2s 89% => 5s 93%, Gewinn nur im Setup (87% => 100%) => Suche ist für das Net fast konvergiert, Stärke begrenzt das Net
-		- Quantisierung (fp16/int8) nur mit Abgleich der Outputs
-		- Expansion kostete unter Last (32 Threads, Workstation GC) ~47 us für GetValidActions und ~43 us für Outcome Variants (Roll, Robber, Dev-Kauf), relevant sobald die Inference schneller ist
-		- Spielstärke nach dem Pipelining prüfen (Selektion arbeitet eine Batch hinter den Ergebnissen), z.B. MCTS vor/nach gegeneinander bei gleicher Zeit
+	- Quality Bench: Suche für das Net fast konvergiert (2,2s 89% => 5s 93%, Gewinn nur im Setup)
+	- Expansion ~47 us GetValidActions, ~43 us Outcome Variants, relevant sobald die Inference schneller ist; Quantisierung nur mit Abgleich
 	- State Value Netzwerkarchitekturen aus Initial Placement Paper prüfen
 	- State Hashes zusätzlich für Validation und Caching?
 - GreedyAgent
@@ -242,45 +139,14 @@
 	- Besseres Interface für Bank/Port Trades implementieren (Dropdown für Zielressource)
 
 ## Future Enhancements
-- Simulation Server: die gesamte Spiel- und Simulationslogik liegt im Server, auch headless als Simulator nutzbar
-	- Client nur noch Darstellung und Eingabe: Spielzustand, Agents, Undo/Redo, Speichern/Laden laufen im Server
-	- Client startet entweder einen eigenen internen Server (im selben Prozess) oder verbindet sich übers Netzwerk mit einem laufenden Simulator-Server
-	- Headless: Matches, Duelle, Builder-Checks, Benchmarks und Datensammlung ohne Client (Kommandozeile/Konfiguration), auf dem Desktop und dem Linux-Server
-	- Bench übernehmen (liegt bisher nur in einem Scratch-Ordner außerhalb des Repos):
-		- Duell mit Herausforderern gegen eine Baseline (2 gegen 2, Sitze abwechselnd), Builder-Check (1 MCTS gegen 3 BuilderAgents, gleiche Karten pro Net)
-		- Gespiegelte Paare: jede Karte zweimal mit getauschten Seiten, Karte und Sitzvorteil heben sich im Paar auf => deutlich mehr Aussagekraft pro Spiel bei knappen Unterschieden; Start-Offset für neue Karten in Folgeläufen
-		- Parallele Spiele mit Iterationsbudget (Suchqualität unabhängig von der Last), Durchsatz-Messungen (MCTS, parallele Suchen, Inference)
-		- Ergebnisse pro Spiel als Log, laufender Stand, Statistik (Anteil, Konfidenzintervall, p-Wert, Elo-Äquivalent, Aufteilung nach Sitzen)
-	- Grundlage für Leaderboard, Catanatron-/JSettlers-Bridge und den Self-Play-Generator
-	- Architektur in Schichten (nicht in Common: die Simulation braucht Agents, Agents brauchen Common => Zyklus, Common bleibt schlanker Kern)
-		- Common: nur Engine (State, Regeln, Actions, Serialisierung); Agents: Agents, MCTS, Inference
-		- Neue Bibliothek Simulation (ohne Netzwerk und UI): Match/Session mit autoritativem State, Actions, History, Undo/Redo, Speichern/Laden, Sitze mit Agents, Zeit-/Iterationsbudget, Hintergrund-Runner mit Abbruch, Event-Stream, später Observation-Filter; Headless-Runner (Duelle, gespiegelte Paare, Builder-Checks, parallele Spiele, Statistik), später Self-Play-Generator und Leaderboard
-		- Schnittstelle ISimulation (Kommandos und Events), gegen die der Client programmiert: LocalSimulation (im Prozess, direkt auf dem Kern) und RemoteSimulation (Proxy über das Protokoll)
-		- Protocol: Nachrichtentypen und Serialisierung, von Client und Server geteilt
-		- Server (exe): hostet den Kern, Netzwerk-Endpunkt plus Headless-Kommandos (Bench, Datensammlung, Turniere), DatasetCollector wird mit der Zeit ein Kommando davon
-		- Client (exe): nur Darstellung und Eingabe, lokal mit LocalSimulation, im Netzwerk mit RemoteSimulation
-		- Server autoritativ, Client hält eine Kopie: Server schickt angewandte Actions mit aufgelöstem Zufall (History), der Client spielt sie nach (wie bei Spielständen und Undo); Hidden Information später als Observation-Filter pro Client
-		- Headless-Läufe immer im Server-Prozess, Netzwerk nur für interaktive Clients und Bridges
-	- Protokoll: WebSocket + JSON
-		- WebSocket bringt Nachrichtenrahmen, Handshake, Ping/Pong, sauberes Schließen und TLS (wss) mit; rohes TCP müsste das alles selbst bauen (der alte Server/Packet.cs scheiterte genau daran)
-		- Sprachneutral (Python-Bridge, später Web-UI möglich), JSON lesbar und erweiterbar, schnell genug für interaktive Nachrichten
-		- .NET: ClientWebSocket im Client, ASP.NET Core (Kestrel) oder HttpListener im Server; Common/Net/Packet.cs und der alte Server-Code werden ersetzt
-		- gRPC wäre die Alternative mit striktem Schema, aber mehr Tooling und ohne Browser-Support
-	- Rollen und Authentifizierung
-		- Admin: volle Sicht und alle Rechte (Edit-Modus, Undo/Redo, Laden/Speichern, Matches anlegen, Agents/Budgets ändern, Bench-/Headless-Läufe starten)
-		- Spectator: volle Sicht (alle Hände, VP-Karten, Dev-Deck), nur lesend
-		- Player: an einen Sitz gebunden, darf nur für diesen Sitz handeln, sieht nur seine Perspektive (Observation-Filter, sobald Hidden Information umgesetzt ist)
-		- Agent/Bridge: wie Player, für externe Bots (Catanatron, JSettlers), Rechte pro Match vergeben
-		- Lokaler Modus (Server im Client-Prozess): automatisch Admin, keine Anmeldung
-		- Netzwerk: Token-basiert, zufällig erzeugte Tokens pro Rolle in der Server-Konfiguration (nur als Hash gespeichert), mitgeschickt im hello oder als Authorization-Header beim Handshake (ClientWebSocket kann Header setzen, Browser nicht => beides unterstützen)
-		- Außerhalb des lokalen Netzes nur über wss (TLS), sonst gehen die Tokens im Klartext übers Netz
-		- Prüfung im Server bei jedem Kommando (nie dem Client vertrauen), Rolle hängt an der Session und bleibt über Reconnects erhalten; Spectator-Zugang optional ohne Token konfigurierbar
-		- Event-Stream pro Session gefiltert: volle Sicht für Admin/Spectator, gefilterte Actions (z.B. gezogene Karte verdeckt) für Player
-	- Migration schrittweise, der Client funktioniert dabei durchgehend:
-		- 1. Simulation als Bibliothek herauslösen (Spiel-, Agent- und Runner-Logik aus GameScreen in eine Match-Klasse), Client nutzt sie direkt
-		- 2. ISimulation und LocalSimulation einführen, Client vollständig umstellen
-		- 3. Bench als Headless-Kommandos in den Server (inkl. gespiegelter Paare)
-		- 4. Protocol, RemoteSimulation und Netzwerk-Endpunkt im Server, Client bekommt "Mit Server verbinden"
+- Simulation Server: gesamte Spiel- und Simulationslogik im Server, Client nur Darstellung und Eingabe, auch headless (Duelle, Benchmarks, Datensammlung, Self-Play)
+	- Client startet einen internen Server oder verbindet sich übers Netzwerk
+	- Bench aus dem Scratch-Ordner übernehmen: Duelle, gespiegelte Paare (mit Start-Offset), Builder-Checks, parallele Spiele mit Iterationsbudget, Statistik
+	- Schichten: Common (Engine) => Agents => neue Bibliothek Simulation (Match, History, Undo, Runner, Event-Stream); ISimulation mit LocalSimulation und RemoteSimulation; Protocol; Server- und Client-exe
+	- Server autoritativ, schickt angewandte Actions mit aufgelöstem Zufall, Client spielt sie nach; Hidden Information später als Observation-Filter
+	- Protokoll WebSocket + JSON (Framing, Ping, TLS gratis, sprachneutral für Bridges), ersetzt Common/Net/Packet.cs
+	- Rollen Admin, Spectator, Player, Agent/Bridge; Tokens als Hash in der Konfiguration, außerhalb des LAN nur wss, Prüfung bei jedem Kommando, Events pro Session gefiltert
+	- Migration: 1. Simulation aus GameScreen herauslösen, 2. ISimulation/LocalSimulation, 3. Bench als Headless-Kommandos, 4. Netzwerk und "Mit Server verbinden"
 - Interface für JSettlers Agents/Server
 - Tabletalking über LLMs
 	- Zusätzlich zu Value Functions von einem Basisbot
