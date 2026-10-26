@@ -28,14 +28,13 @@
 ## Agents
 - Roadmap v2
 	- Datensatz v2: 1M Matches, 10M Samples (Seed 20261025, 300 Playouts), Präzisions-Set 6000 Matches mit 2000 Playouts (Seed 777); erweitern mit --first-match; auf 1965 Features migriert über regenerierte Karten (--regenerate-maps)
-	- Präzisions-KL (evaluate_precision.py): xnebmrjf 0.0170 => Aux 0.0158 => Rotation (C, Default) 0.0126 => Häfen und Endspiel-Features (E1) 0.0108 => Brett-Symmetrien (E2 02l97say) 0.0106, bester Zug 55,6% => 61,3%
+	- Präzisions-KL (evaluate_precision.py): xnebmrjf 0.0170 => Aux 0.0158 => Rotation (C) 0.0126 => Häfen und Endspiel-Features (E1) 0.0108 => Brett-Symmetrien (E2 02l97say, Default) 0.0106, bester Zug 55,6% => 61,3%
 		- Kein Effekt: Sibling-Ranking (doppelte Trainingszeit), Zahlenchip-Paare (abgeleitete Features rechnen schon in Pips)
 		- Endspiel-Features: Endspiel-KL -33%, Fehler steigen nicht mehr zum Spielende hin an
 		- Lücke train/val mit Rotation geschlossen => nicht mehr datenlimitiert
 		- Rotation nur zyklisch und nach dem Setup; Holz/Lehm-Tausch bewusst nicht (verschiebt die Verteilung)
-	- Gespiegeltes Duell E2 gegen C: 1. Lauf 47:37 (~+42 Elo, Paare 10:5, nicht signifikant), Lauf über Nacht offen; Sitzvorteil ist kartenabhängig (mal vorne, mal hinten)
+	- Gespiegeltes Duell E2 gegen C (137 Karten): 154:120, +43 Elo (95%-KI +8 bis +80), doppelt gewonnene Paare 35:18 (p ≈ 0,014); Sitzvorteil ist kartenabhängig
 	- Nächste Schritte
-		- Nach dem Duell E2 als Default (Hugging Face und Agents.csproj)
 		- Größeres Net (z.B. 4096 breit, länger trainieren)
 		- Platzierung als Tie-Breaker: β per gespiegeltem Duell tunen (0 / 0,03 / 0,1), Plumbing fertig
 		- Umgewichten nach Position im Match und beendeten Playouts, Chance-Siblings ggf. aus dem Ranking
