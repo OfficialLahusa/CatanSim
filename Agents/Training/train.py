@@ -7,15 +7,18 @@ import torch.nn.functional as F
 import lightning as L
 from torch.utils.data import Dataset, DataLoader, Sampler
 from state_value_net import StateValueModule, PLAYER_COUNT
+from augmentation import is_rotatable, rotate_features, rotate_player_index, rotate_players
 
 # Zusätzliche Label-Arrays aus DatasetProcessing/playout_results.py (gleiche Zeilenreihenfolge wie die States), alle optional
 AUX_ARRAYS = ("placements", "vp_shares", "rounds_left", "sibling_groups", "actors")
 
 
 class StateDataset(Dataset):
-    def __init__(self, states_path, labels_path, aux_dir=None):
+    def __init__(self, states_path, labels_path, aux_dir=None, augment_rotation=False):
         self.states_path = states_path
         self.labels_path = labels_path
+        # Spieler zufällig zyklisch umbenennen (nur nach der Setup-Phase, siehe augmentation.py), für die Trainingsdaten
+        self.augment_rotation = augment_rotation
         # Nur die Aux-Arrays, deren Datei existiert
         self.aux_paths = {}
         if aux_dir is not None:
@@ -49,21 +52,35 @@ class StateDataset(Dataset):
         return len(self.states)
 
     def __getitem__(self, idx):
-        # from_numpy kopiert nicht, sondern teilt zugrundeliegenden Speicher
-        item = {
-            "x": torch.from_numpy(self.states[idx].astype(np.float32)),
-            "y": torch.from_numpy(self.labels[idx].astype(np.float32)),
-        }
+        x = self.states[idx].astype(np.float32)
+        y = np.asarray(self.labels[idx], dtype=np.float32)
         # Fehlende Labels als NaN bzw. -1, die Losses lassen solche Samples aus
         aux = self.aux
-        item["placements"] = torch.from_numpy(np.asarray(aux["placements"][idx], dtype=np.float32)) if "placements" in aux \
-            else torch.full((PLAYER_COUNT, PLAYER_COUNT), float("nan"))
-        item["vp_shares"] = torch.from_numpy(np.asarray(aux["vp_shares"][idx], dtype=np.float32)) if "vp_shares" in aux \
-            else torch.full((PLAYER_COUNT,), float("nan"))
-        item["rounds_left"] = torch.tensor(float(aux["rounds_left"][idx]) if "rounds_left" in aux else float("nan"))
-        item["sibling_groups"] = torch.tensor(int(aux["sibling_groups"][idx]) if "sibling_groups" in aux else -1)
-        item["actors"] = torch.tensor(max(int(aux["actors"][idx]), 0) if "actors" in aux else 0)
-        return item
+        placements = np.asarray(aux["placements"][idx], dtype=np.float32) if "placements" in aux \
+            else np.full((PLAYER_COUNT, PLAYER_COUNT), np.nan, dtype=np.float32)
+        vp_shares = np.asarray(aux["vp_shares"][idx], dtype=np.float32) if "vp_shares" in aux \
+            else np.full((PLAYER_COUNT,), np.nan, dtype=np.float32)
+        actor = int(aux["actors"][idx]) if "actors" in aux else -1
+
+        # Die Labels pro Spieler wandern mit ihrem Spieler (torch.randint, damit jeder Worker eigene Zufallszahlen hat)
+        if self.augment_rotation and is_rotatable(x):
+            k = int(torch.randint(PLAYER_COUNT, (1,)))
+            if k:
+                x = rotate_features(x, k)
+                y = rotate_players(y, k)
+                placements = rotate_players(placements, k, axis=0)
+                vp_shares = rotate_players(vp_shares, k)
+                actor = rotate_player_index(actor, k)
+
+        return {
+            "x": torch.from_numpy(np.ascontiguousarray(x)),
+            "y": torch.from_numpy(np.ascontiguousarray(y)),
+            "placements": torch.from_numpy(np.ascontiguousarray(placements)),
+            "vp_shares": torch.from_numpy(np.ascontiguousarray(vp_shares)),
+            "rounds_left": torch.tensor(float(aux["rounds_left"][idx]) if "rounds_left" in aux else float("nan")),
+            "sibling_groups": torch.tensor(int(aux["sibling_groups"][idx]) if "sibling_groups" in aux else -1),
+            "actors": torch.tensor(max(actor, 0)),
+        }
 
 
 class GroupBatchSampler(Sampler):
@@ -126,6 +143,8 @@ def main():
     parser.add_argument("--ranking-placement-weight", type=float, default=0.0)
     # Inputs im Modell standardisieren (Statistik aus bis zu 200k Trainings-States)
     parser.add_argument("--normalize-inputs", action="store_true")
+    # Trainingsdaten per zufälliger zyklischer Spielerrotation vervielfachen (siehe augmentation.py), Validation bleibt unverändert
+    parser.add_argument("--augment-rotation", action="store_true")
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--max-epochs", type=int, default=60)
@@ -147,14 +166,15 @@ def main():
     print(f"Aux labels: {', '.join(full_ds.aux_paths) or 'none'}")
 
     train_idx, val_idx = np.load(args.train_idx), np.load(args.val_idx)
+    train_ds = StateDataset(args.states, args.labels, args.aux_dir, augment_rotation=True) if args.augment_rotation else full_ds
     loader_args = dict(num_workers=args.num_workers, pin_memory=True, persistent_workers=True)
     if args.ranking_weight > 0:
         # Sibling-Gruppen zusammenhalten, auch in der Validation (für die Ranking-Metriken)
         groups = full_ds.aux["sibling_groups"]
-        train_loader = DataLoader(full_ds, batch_sampler=GroupBatchSampler(train_idx, groups, args.batch_size, shuffle=True), **loader_args)
+        train_loader = DataLoader(train_ds, batch_sampler=GroupBatchSampler(train_idx, groups, args.batch_size, shuffle=True), **loader_args)
         val_loader = DataLoader(full_ds, batch_sampler=GroupBatchSampler(val_idx, groups, args.batch_size, shuffle=False), **loader_args)
     else:
-        train_loader = DataLoader(torch.utils.data.Subset(full_ds, train_idx), batch_size=args.batch_size, shuffle=True, **loader_args)
+        train_loader = DataLoader(torch.utils.data.Subset(train_ds, train_idx), batch_size=args.batch_size, shuffle=True, **loader_args)
         val_loader = DataLoader(torch.utils.data.Subset(full_ds, val_idx), batch_size=args.batch_size, shuffle=False, **loader_args)
 
     in_dim = full_ds.states.shape[1]
@@ -163,7 +183,13 @@ def main():
                              ranking_placement_weight=args.ranking_placement_weight)
     if args.normalize_inputs:
         sample = np.sort(np.random.default_rng(0).choice(train_idx, min(len(train_idx), 200_000), replace=False))
-        scaled = model.set_input_normalization(full_ds.states[sample])
+        states = np.asarray(full_ds.states[sample], dtype=np.float32)
+        if args.augment_rotation:
+            # Statistik über die Sichten, die das Training sieht: jede rotierbare Zeile um ein zufälliges k gedreht
+            rng = np.random.default_rng(1)
+            for row in np.flatnonzero(is_rotatable(states)):
+                states[row] = rotate_features(states[row], int(rng.integers(PLAYER_COUNT)))
+        scaled = model.set_input_normalization(states)
         print(f"Input normalization: {scaled} of {in_dim} features standardized, the binary ones unchanged")
 
     logger = L.pytorch.loggers.WandbLogger(project="colonysim")
