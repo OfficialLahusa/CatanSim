@@ -199,7 +199,7 @@ def evaluate(data: Dict[str, np.ndarray], models: List[Tuple[str, np.ndarray]]) 
     reference_name, _ = models[0]
     for name, _ in models[1:]:
         mean, half = paired_difference(kls[name], kls[reference_name], data["seeds"])
-        print(f"{name} - {reference_name}: KL {mean:+.5f} ± {half:.5f} (95%, by match), "
+        print(f"{name} - {reference_name}: KL {mean:+.5f} +/- {half:.5f} (95%, by match), "
               f"pair accuracy {rankings[name]['pair_accuracy_0'] - rankings[reference_name]['pair_accuracy_0']:+.3f}, "
               f"best move {rankings[name]['best_move'] - rankings[reference_name]['best_move']:+.3f}, "
               f"regret {rankings[name]['regret_pp'] - rankings[reference_name]['regret_pp']:+.2f}pp")
