@@ -270,7 +270,16 @@
 	- Besseres Interface für Bank/Port Trades implementieren (Dropdown für Zielressource)
 
 ## Future Enhancements
-- Simulation Server
+- Simulation Server: die gesamte Spiel- und Simulationslogik liegt im Server, auch headless als Simulator nutzbar
+	- Client nur noch Darstellung und Eingabe: Spielzustand, Agents, Undo/Redo, Speichern/Laden laufen im Server
+	- Client startet entweder einen eigenen internen Server (im selben Prozess) oder verbindet sich übers Netzwerk mit einem laufenden Simulator-Server
+	- Headless: Matches, Duelle, Builder-Checks, Benchmarks und Datensammlung ohne Client (Kommandozeile/Konfiguration), auf dem Desktop und dem Linux-Server
+	- Bench übernehmen (liegt bisher nur in einem Scratch-Ordner außerhalb des Repos):
+		- Duell mit Herausforderern gegen eine Baseline (2 gegen 2, Sitze abwechselnd), Builder-Check (1 MCTS gegen 3 BuilderAgents, gleiche Karten pro Net)
+		- Gespiegelte Paare: jede Karte zweimal mit getauschten Seiten, Karte und Sitzvorteil heben sich im Paar auf => deutlich mehr Aussagekraft pro Spiel bei knappen Unterschieden (für den nächsten Modellvergleich vorgesehen)
+		- Parallele Spiele mit Iterationsbudget (Suchqualität unabhängig von der Last), Durchsatz-Messungen (MCTS, parallele Suchen, Inference)
+		- Ergebnisse pro Spiel als Log, laufender Stand, Statistik (Anteil, Konfidenzintervall, p-Wert, Elo-Äquivalent, Aufteilung nach Sitzen)
+	- Grundlage für Leaderboard, Catanatron-/JSettlers-Bridge und den Self-Play-Generator
 	- Zeitlimit für Agents
 	- Client schlägt Action vor, Server returned tatsächliches Ergebnis (Action mit History und Observation Filter)
 - Interface für JSettlers Agents/Server
