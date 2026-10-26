@@ -280,6 +280,25 @@
 		- Parallele Spiele mit Iterationsbudget (Suchqualität unabhängig von der Last), Durchsatz-Messungen (MCTS, parallele Suchen, Inference)
 		- Ergebnisse pro Spiel als Log, laufender Stand, Statistik (Anteil, Konfidenzintervall, p-Wert, Elo-Äquivalent, Aufteilung nach Sitzen)
 	- Grundlage für Leaderboard, Catanatron-/JSettlers-Bridge und den Self-Play-Generator
+	- Architektur in Schichten (nicht in Common: die Simulation braucht Agents, Agents brauchen Common => Zyklus, Common bleibt schlanker Kern)
+		- Common: nur Engine (State, Regeln, Actions, Serialisierung); Agents: Agents, MCTS, Inference
+		- Neue Bibliothek Simulation (ohne Netzwerk und UI): Match/Session mit autoritativem State, Actions, History, Undo/Redo, Speichern/Laden, Sitze mit Agents, Zeit-/Iterationsbudget, Hintergrund-Runner mit Abbruch, Event-Stream, später Observation-Filter; Headless-Runner (Duelle, gespiegelte Paare, Builder-Checks, parallele Spiele, Statistik), später Self-Play-Generator und Leaderboard
+		- Schnittstelle ISimulation (Kommandos und Events), gegen die der Client programmiert: LocalSimulation (im Prozess, direkt auf dem Kern) und RemoteSimulation (Proxy über das Protokoll)
+		- Protocol: Nachrichtentypen und Serialisierung, von Client und Server geteilt
+		- Server (exe): hostet den Kern, Netzwerk-Endpunkt plus Headless-Kommandos (Bench, Datensammlung, Turniere), DatasetCollector wird mit der Zeit ein Kommando davon
+		- Client (exe): nur Darstellung und Eingabe, lokal mit LocalSimulation, im Netzwerk mit RemoteSimulation
+		- Server autoritativ, Client hält eine Kopie: Server schickt angewandte Actions mit aufgelöstem Zufall (History), der Client spielt sie nach (wie bei Spielständen und Undo); Hidden Information später als Observation-Filter pro Client
+		- Headless-Läufe immer im Server-Prozess, Netzwerk nur für interaktive Clients und Bridges
+	- Protokoll: WebSocket + JSON
+		- WebSocket bringt Nachrichtenrahmen, Handshake, Ping/Pong, sauberes Schließen und TLS (wss) mit; rohes TCP müsste das alles selbst bauen (der alte Server/Packet.cs scheiterte genau daran)
+		- Sprachneutral (Python-Bridge, später Web-UI möglich), JSON lesbar und erweiterbar, schnell genug für interaktive Nachrichten
+		- .NET: ClientWebSocket im Client, ASP.NET Core (Kestrel) oder HttpListener im Server; Common/Net/Packet.cs und der alte Server-Code werden ersetzt
+		- gRPC wäre die Alternative mit striktem Schema, aber mehr Tooling und ohne Browser-Support
+	- Migration schrittweise, der Client funktioniert dabei durchgehend:
+		- 1. Simulation als Bibliothek herauslösen (Spiel-, Agent- und Runner-Logik aus GameScreen in eine Match-Klasse), Client nutzt sie direkt
+		- 2. ISimulation und LocalSimulation einführen, Client vollständig umstellen
+		- 3. Bench als Headless-Kommandos in den Server (inkl. gespiegelter Paare)
+		- 4. Protocol, RemoteSimulation und Netzwerk-Endpunkt im Server, Client bekommt "Mit Server verbinden"
 	- Zeitlimit für Agents
 	- Client schlägt Action vor, Server returned tatsächliches Ergebnis (Action mit History und Observation Filter)
 - Interface für JSettlers Agents/Server
