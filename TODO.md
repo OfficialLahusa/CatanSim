@@ -35,7 +35,6 @@
 		- Views offline durch Replay der PlayedActions durch den Belief Tracker rekonstruieren (Histories im Datensatz sind jetzt korrekt)
 		- Sichtbarkeits-Augmentation an der echten Beobachtungsverteilung ausrichten statt zufällig zu maskieren
 		- Erwartete versteckte VP pro Gegner als Feature
-		- Zusammen mit dem nächsten Datensatz (Placement-Labels) erzeugen
 	- 5. Particle MCTS / POMCP nur bei Bedarf
 		- Bei exaktem Belief Tracker wenig Gewinn gegenüber ISMCTS
 		- Relevant, sobald Player Trades mit Angeboten/Ablehnungen dazukommen (schwer als Constraints abbildbar)
@@ -43,104 +42,56 @@
 - Client
 	- Edit Mode schreibt direkt ins Board: Building Stock, VPs, Longest Road und Action Stack werden nicht nachgezogen, geleerte Felder behalten einen Owner, Klicks auf ImGui-Fenster über dem Board editieren mit
 	- Font, Texture Atlas und Sounds werden relativ zum Arbeitsverzeichnis geladen (..\..\..\res\...) => AppContext.BaseDirectory nutzen und res/ ins Build-Output kopieren (das ONNX-Modell wird bereits neben der Executable gesucht)
-	- SimulateRandomRollouts: kein Rundenlimit, countdown.Signal nicht im finally (hängt bei Exceptions), Threadanzahl 0 hängt, State-Kopien laufen auf Worker-Threads während die UI den State ändert
+	- SimulateRandomRollouts: kein Rundenlimit, countdown.Signal nicht im finally (hängt bei Exceptions), Threadanzahl 0 hängt
 	- Fehlendes Exception Handling beim Auflisten von Verzeichnissen und Schreiben von Saves, Redo entfernt die Action vor der Validierung
 	- Linux-Port: RenderDataImpl.dll (Saffron.Util.ImGuiSFML, nur Windows, ohne Quellcode) durch eigenen C#-Renderer ersetzen, ShowWindow (user32) nur unter Windows aufrufen, Pfade mit Path.Combine bauen
 
 ## Test Suite
-- Belief Tracker (sobald implementiert): wahrer State liegt immer im Support jedes Beliefs
 - Übersprungene Rulebook-Tests aktivieren, sobald die Regeln umgesetzt sind
 	- PlayersMayTradeResourcesWithEachOtherOnTheirTurn (Player Trades)
 
 ## Agents
 - Roadmap v2
-	- Stand: Collector (gemischte Agents, Sibling-Gruppen, Rohergebnisse, Match-Seeds), Labels (playout_results.py), train.py (Aux Heads, Sibling-Ranking, Input-Normalisierung) und abgeleitete Features (sl159q7y) sind fertig
-		- Sibling-Gruppen: Varianz der Differenz zwischen Geschwistern 2,4x kleiner als mit unabhängigen Playouts (Sieg), 3,2x (VP-Anteil), kosten ~75% mehr Zeit pro Match
-	- Phase 0: erledigt
-		- Pipeline ohne Rückfragen (prepare_dataset.py), Teilläufe im Collector (--parts, fortsetzbar, --first-match), .NET 10, Pilot lokal und auf dem Server (0 Fehler, 0 übersprungene Samples)
-		- Server: 32 Threads am schnellsten, ~45k Playouts/s auf der SSD, auf der HDD nur ~20k => Rohdaten auf die SSD
-		- Pro Match ~10 Samples (5 + ~5 Siblings), ~2980 Playouts, 0,70 MB, ~20 Dateien
-		- Weitere abgeleitete Features (z.B. Expansionspotenzial) blockieren nicht: sie werden aus dem Basisvektor berechnet, gespeicherte Datensätze lassen sich migrieren
-	- Phase 1: Server-Run v2 erledigt (25./26.10.): 1M Matches, 9.996.128 Samples in 999.750 Gruppen (250 Zwillings-Matches zusammengelegt), alle mit Rohergebnissen; Präzisions-Set 6000 Matches (7 auch in v2, werden bei der Auswertung ausgelassen)
-		- Hauptlauf: DatasetCollector --matches 1000000 --parts 20 --samples 5 --playouts 300 --threads 32 --seed 20261025 --name v2, ~3 Mrd. Playouts, ~18,5 h, ~700 GB, ~20M Dateien
-		- Jederzeit abbrechbar (fertige Teile sind nutzbar), Fortsetzen mit demselben Befehl, Erweitern mit gleichem Seed und --first-match
-		- Lernkurve auf dem v1-Datensatz (sl159q7y-Setup, 6,25% bis 100% der 420k Trainings-Matches): val KL 0.0683 / 0.0555 / 0.0454 / 0.0379 / 0.0318
-			- ~17% weniger KL pro Verdopplung (18,7% => 16,1%, flacht leicht ab, kein Plateau), Potenzgesetz mit Exponent -0,28 => das MLP ist datenlimitiert
-			- Hochrechnung: 1M Matches (~700k Training) ~0.027 (-14%), 2M Matches ~0.0225 (-29%) => 1M voll laufen lassen, Erweiterung auf 2M lohnt sich vermutlich
-			- Datensatz zum Training auf eine SSD legen: auf der HDD (D:) wird zufällig gelesen, sobald states.npy nicht mehr im RAM-Cache liegt, dann steht die GPU (2% Auslastung)
-		- Danach Präzisions-Set als eigener Lauf, nie im Trainings-Split: DatasetCollector --matches 6000 --samples 5 --playouts 2000 --threads 32 --seed 777 --name v2_precision (~50 min)
-		- Dann python prepare_dataset.py für v2 und das Präzisions-Set getrennt, die vorbereiteten Arrays (~35 GB) auf die SSD
-		- Bisherige Datensätze folgen der alten Road-Building-Regel, der neue Run nutzt die korrigierte
-	- Phase 2: Training auf v2
-		- Baseline xnebmrjf erledigt (sl159q7y-Setup, 40 Epochen à ~30 s, Daten auf C:): val KL 0.0215, bis 26.10. Default-Modell
-			- v2-Labels sind deutlich flacher als v1 (Uniform-KL 0,50 statt 0,77, gemischte Agents mit 30% Random): KL zwischen v1- und v2-Modellen nicht vergleichbar
-			- Präzisions-Set (evaluate_precision.py): Paar-Genauigkeit 73,2% statt 67,7%, bester Zug 55,6% statt 47,9%, Regret 0,52 statt 0,78pp, kalibriert auch weit hinten
-			- Duell gegen sl159q7y (MaxN, 60k Iterationen, 12 parallel): 55:32 (63%, p ≈ 0,018, ~+95 Elo)
-			- Gegen 3 BuilderAgents (125k Iterationen, gleiche Karten, Zwischenstand nach 30 min): xnebmrjf 10/16, sl159q7y 2/7
-			- Datenlimitiert, nicht kapazitätslimitiert: train loss 0.0126 gegen val loss 0.0215 (beide mit ~0.005 Label-Rauschen) => das Net lernt Trainings-States und ihr Label-Rauschen auswendig, ein größeres Net allein würde das verstärken
-			- KL auf dem Präzisions-Set steigt mit dem Spielfortschritt: 0.014 (Führender 0-4 VP) bis 0.024 (9+ VP) => Fehler sitzen im Endspiel
-		- Varianten erledigt (26.10., gleiches Setup wie xnebmrjf, Präzisions-Set ohne die 7 überlappenden Matches):
-			- A v8u5u50a (Aux Heads): val KL 0.0202, Präzisions-KL 0.0158, bester Zug 57,0%, Regret 0,49pp
-			- B 4tsf0tc9 (Aux plus Sibling-Ranking): val KL 0.0201, Präzisions-KL 0.0157, bester Zug 57,0%, Regret 0,49pp => Ranking bringt nichts über Aux hinaus, doppelte Trainingszeit
-			- C zjahe050 (Aux plus Spielerrotation): val KL 0.0170, Präzisions-KL 0.0126 (-26% gegen xnebmrjf 0.0170), bester Zug 59,8%, Regret 0,41pp, Endspiel-KL -35% (0.0243 => 0.0157)
-			- Duell C gegen xnebmrjf (MaxN, 60k Iterationen, 12 parallel, 1,5 h): 50:36 (58%, ~+57 Elo, 95%-KI -16 bis +135, p ≈ 0,08 einseitig) => Tendenz klar, aber nicht signifikant
-				- Sitzvorteil dominiert: C auf Plätzen 0+2 30/43, auf 1+3 20/43 => vordere Seite gewinnt 62% => nächster Modellvergleich mit gespiegelten Paaren
-			- C ist jetzt Default-Modell (Hugging Face und Agents.csproj)
-		- Varianten auf dem neuen Layout erledigt (26.10., Training dank schnellerem Laden 25 statt 42 min):
-			- D uq5qtpk0 (C plus Zahlenchip-Paare): kein Effekt (Präzisions-KL +0.00003 +/- 0.00016) => die abgeleiteten Features rechnen schon in Pips, 6 und 8 sehen darüber schon gleich aus
-			- E1 hxp6hhgy (C plus Häfen und Endspiel-Features, 1965 Features): val KL 0.0149, Präzisions-KL 0.0108 (-14%), Endspiel-KL (Führender 9+ VP) -33% (0.0157 => 0.0106), bester Zug 61,0%, Regret 0,39pp
-				- Fehler steigen nicht mehr zum Spielende hin an (0.010-0.011 in allen Phasen)
-			- E2 02l97say (E1 plus Brett-Symmetrien): val KL 0.0147, Präzisions-KL 0.0106 (-2% gegen E1, signifikant), Endspiel-KL 0.0098, bester Zug 61,3%, Regret 0,38pp
-				- Brett-Symmetrien bringen wenig (anders als Rotation -26%): 1M Karten decken die Brettvielfalt schon ab
-			- Lücke train/val geschlossen: xnebmrjf 0.0126/0.0215, mit Rotation train ~ val (C 0.0175/0.0170, E2 0.0165/0.0147, train mit Dropout und Augmentation) => größeres Net (Schritt 7) jetzt sinnvoll
-			- Gespiegeltes Duell E2 gegen C (MaxN, 60k Iterationen, 12 parallel, 1,5 h, 42 Kartenpaare): 47:37 (56%, ~+42 Elo, 95%-KI -33 bis +120)
-				- Doppelt gewonnene Paare E2 10, C 5 (p ≈ 0,15 einseitig), 27 Paare vom Sitz entschieden => Tendenz klar, aber nicht signifikant
-				- Sitzvorteil auf diesen Karten umgekehrt: hintere Sitze gewannen 56% (C gegen xnebmrjf: vordere 62%) => von den Karten abhängig, die Paare heben ihn auf
-				- Für ein klares Urteil ~2-3 h mehr oder über Nacht; Leaderboard mit OpenSkill Plackett-Luce (wie Beyond All Reason, Anzeige μ - σ) nutzt alle Plätze statt nur des Siegers
-		- Nächste Schritte daraus, nach erwartetem Gewinn pro Aufwand:
-			- 1. (erledigt, Aux ja, Ranking nein) Sibling-Ranking-Loss und Aux Heads zuschalten (in train.py fertig, ~20 min Training pro Variante): Ranking trainiert direkt die Zugreihenfolge, wo v2 am meisten gewonnen hat; Aux Heads regularisieren
-			- 2. (erledigt, -26% KL) Augmentation per Spielerrotation: in train.py (--augment-rotation, augmentation.py), Paritätstest gegen echte rotierte Spielzustände
-				- Nur zyklische Rotationen (Spieler p => p + k) erhalten die Zugreihenfolge, nur nach der Setup-Phase (die Schlangenreihenfolge beginnt immer bei Spieler 0)
-				- Sitzvorteil kein Problem: er steckt nach dem Setup vollständig im State (Plätze, Zug, Karten), Playout-Limit (50.000 Runden) irrelevant
-			- 3. (erledigt, kein Effekt) Augmentation per Zahlenchip-Paaren: 2/12, 3/11, 4/10, 5/9, 6/8 haben dieselbe Würfelwahrscheinlichkeit, jedes Paar unabhängig tauschbar => 32 regelgetreue Sichten, mit Rotation bis 128x
-				- Nur Wertumbelegung (Zahlen der Tiles, letzter Wurf), die 7 bleibt; abgeleitete Features (Pips, Produktion) bleiben gleich => kein neues Layout nötig
-				- Paritätstest wie bei der Rotation: Zahlen im echten Spielzustand tauschen, vektorisieren, mit dem umbelegten Vektor vergleichen
-				- Holz/Lehm-Tausch (gleiche Baukosten) bewusst nicht: verschiebt die Verteilung (3 Wälder und 4 Hügel statt 4/3)
-			- 4. (erledigt) Häfen als Features, Voraussetzung für Brett-Symmetrien
-				- Bisher sieht das Net Häfen nur als Privilegien ihrer Besitzer: nicht, wo ein freier Hafen liegt und welchen Typ er hat (Positionen fest, Typen zufällig) => es kann "zum passenden 2:1-Hafen bauen" nicht bewerten
-				- Pro Küsten-Kreuzung (30 von 54) der Hafentyp (3:1 plus 5x 2:1, kein Hafen = alles 0): 180 Features, regelgetreu (ein Hafen markiert 2 Küsten-Kreuzungen) und unabhängig von festen Slots
-				- Neues Layout: beide Vektorizer, Paritäts-Fixtures, neu vektorisieren (Rohdaten liegen auf dem Server)
-			- 5. (erledigt, -2% KL) Brett-Symmetrien (6 Drehungen x Spiegelung = 12 Sichten, Tiles/Kreuzungen/Kanten/Häfen/Räuber über die Adjazenztabellen permutieren) erst mit den Hafen-Features: ohne sie verwischen Drehungen das implizite Wissen über die festen Hafen-Positionen; zusammen mit Rotation bis 48x effektive Daten
-			- 6. (erledigt, -14% KL, Endspiel -33%) Endspiel-Features: in diesem Zug erreichbare VP (Hand plus Trades), mögliche Verlängerung der längsten Straße auf freien Kanten, Ritter-Rennen um die größte Rittermacht, erwartete VP aus dem restlichen Dev-Deck
-			- 7. (als nächstes, Lücke ist geschlossen) Größeres Net (z.B. 4096 breit, länger trainieren) erst wenn die Lücke train/val nach der Augmentation kleiner wird
-		- Beobachtungen aus Beispielpartie (xnebmrjf, 4x MCTS, 20 Runden, Sieger mit 10 VP über Längste Straße und 8x 2:1-Holz-Hafen):
-			- Das komplette Dev-Deck (25 Karten) war nach 20 Runden gekauft, zwei eingeschlossene Spieler bauten nach dem Setup keine Straße und keine Siedlung mehr (7 VP über Rittermacht, 6 VP über drei VP-Karten)
-			- Ursachen vermutlich Perfect Information (das Net sieht die genaue Deck-Zusammensetzung und versteckte VP-Karten) und die Playout-Labels (Wert von Dev-Karten für schwache Agents) => beobachten, Self-Play und Hidden Information beheben es
-			- Ein Spieler tauschte 7x 4:1 trotz eigenem 2:1-Schaf-Hafen: ohne Spielerhandel bleiben nur Bank und Häfen
-		- states.npy (~35 GB) passt in den RAM-Cache, train.py liest damit schnell genug
-		- Aux Heads und Sibling-Ranking zuschalten, Gewichte tunen, Maßstab ist die Ranking-Genauigkeit auf dem Präzisions-Set
+	- Datensatz v2 (25./26.10.): 1M Matches, 9.996.128 Samples in 999.750 Gruppen, alle mit Rohergebnissen; Präzisions-Set 6000 Matches mit 2000 Playouts (7 auch in v2, bei der Auswertung ausgelassen)
+		- DatasetCollector --matches 1000000 --parts 20 --samples 5 --playouts 300 --threads 32 --seed 20261025 --name v2 (~18,5 h, ~700 GB Rohdaten auf dem Server), Präzisions-Set mit --matches 6000 --playouts 2000 --seed 777 --name v2_precision
+		- Erweitern mit gleichem Seed und --first-match, Server mit 32 Threads ~45k Playouts/s nur auf der SSD (HDD ~20k), Trainingsdaten auf C: (zufälliges Lesen)
+		- Sibling-Gruppen: Varianz der Differenz zwischen Geschwistern 2,4x kleiner als mit unabhängigen Playouts, kosten ~75% mehr Zeit pro Match
+		- Auf das 1965er Layout migriert ohne neu zu sammeln: Karten aus den Match-Seeds regeneriert (DatasetCollector --regenerate-maps, gegen die Tiles jedes Samples geprüft), migrate_states_1764_to_1965.py
+		- v2-Labels sind flacher als v1 (Uniform-KL 0,50 statt 0,77): KL zwischen v1- und v2-Modellen nicht vergleichbar, Ranking-Metriken schon
+	- Ergebnisse auf dem Präzisions-Set (evaluate_precision.py), alle 40 Epochen, Aux Heads ab A:
+		- xnebmrjf (Baseline v2): KL 0.0170, bester Zug 55,6%, Regret 0,52pp (sl159q7y: 47,9%, 0,78pp); im Duell 55:32 gegen sl159q7y (~+95 Elo)
+		- A v8u5u50a (Aux Heads) 0.0158; B 4tsf0tc9 (plus Sibling-Ranking) 0.0157 => Ranking bringt nichts über Aux hinaus, doppelte Trainingszeit
+		- C zjahe050 (Aux plus Spielerrotation, Default-Modell): 0.0126 (-26%), bester Zug 59,8%, Endspiel-KL -35%; Duell gegen xnebmrjf 50:36 (~+57 Elo, nicht signifikant)
+		- D uq5qtpk0 (C plus Zahlenchip-Paare): kein Effekt => die abgeleiteten Features rechnen schon in Pips, 6 und 8 sehen darüber schon gleich aus
+		- E1 hxp6hhgy (C plus Häfen und Endspiel-Features, 1965 Features): 0.0108 (-14%), Endspiel-KL (Führender 9+ VP) -33%, bester Zug 61,0%; Fehler steigen nicht mehr zum Spielende hin an
+		- E2 02l97say (E1 plus Brett-Symmetrien): 0.0106 (-2% gegen E1), Endspiel-KL 0.0098, bester Zug 61,3%, Regret 0,38pp => Brett-Symmetrien bringen wenig, 1M Karten decken die Brettvielfalt schon ab
+		- Gespiegeltes Duell E2 gegen C, 1. Lauf (42 Kartenpaare): 47:37 (56%, ~+42 Elo), doppelt gewonnene Paare 10:5 (p ≈ 0,15); Sitzvorteil auf diesen Karten umgekehrt (hintere Sitze 56%, C gegen xnebmrjf: vordere 62%) => kartenabhängig, die Paare heben ihn auf
+		- Lücke train/val geschlossen (xnebmrjf 0.0126/0.0215, mit Rotation train ~ val) => nicht mehr datenlimitiert
+	- Augmentation (augmentation.py, train.py --augment-rotation/-numbers/-board, je mit Paritätstest gegen transformierte Spielzustände)
+		- Spielerrotation nur zyklisch (erhält die Zugreihenfolge) und nur nach der Setup-Phase (die Schlangenreihenfolge beginnt immer bei Spieler 0); Sitzvorteil steckt nach dem Setup vollständig im State
+		- Holz/Lehm-Tausch (gleiche Baukosten) bewusst nicht: verschiebt die Verteilung (3 Wälder und 4 Hügel statt 4/3)
+	- Nächste Schritte
+		- Gespiegeltes Duell E2 gegen C über Nacht abwarten, dann E2 als Default (Hugging Face Upload und Agents.csproj)
+		- Größeres Net (z.B. 4096 breit, länger trainieren), jetzt sinnvoll, da train ~ val
+		- Platzierung als Tie-Breaker: Plumbing fertig (Output "placements", MCTSAgent.PlacementWeight β), mit E2 β per gespiegeltem Duell tunen (0 / 0,03 / 0,1)
+			- Wert im MCTS = P(Sieg) + β * Platzierungs-Score (1. = 1 bis 4. = 0), hilft weit hinten (alle Optionen sonst ~0) und mit max^n dem Gegnermodell
 		- Umgewichten nach Position im Match / Matchlänge und nach Anzahl beendeter Playouts prüfen, Chance-Siblings ggf. aus dem Ranking nehmen
-		- Bewertung der Varianten: Präzisions-Set (Ranking, Kalibrierung), Duell gegen xnebmrjf, gegen 3 BuilderAgents
-		- Platzierung als Tie-Breaker: Plumbing fertig (zweiter ONNX-Output "placements", MCTSAgent.PlacementWeight β, train.py --ranking-placement-weight), mit dem ersten v2-Modell β per Duell tunen (0 / 0,03 / 0,1)
-			- Wert im MCTS = P(Sieg) + β * Platzierungs-Score (1. = 1 bis 4. = 0), Terminal-States ebenso aus der tatsächlichen Platzierung
-			- Hilft dem eigenen Spiel weit hinten (alle Optionen sonst ~0) und mit max^n auch dem Gegnermodell (Nutzen pro Spieler mit eigenem Platzierungs-Score)
-	- Phase 3: Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), Augmentation (Spielerrotation, 12 Brett-Symmetrien), Expansionspotenzial, Inference-Budget ~2-3x
+		- Endspiel-Features nutzen Perfect Information (VP-Karten in Hand und Deck, Ritter auf der Hand): mit Hidden Information auf den sichtbaren Teil bzw. den Belief umstellen
+	- Beobachtungen aus Beispielpartie (xnebmrjf, 4x MCTS, 20 Runden, Sieger mit 10 VP über Längste Straße und 8x 2:1-Holz-Hafen):
+		- Das komplette Dev-Deck (25 Karten) war nach 20 Runden gekauft, zwei eingeschlossene Spieler bauten nach dem Setup keine Straße und keine Siedlung mehr (7 VP über Rittermacht, 6 VP über drei VP-Karten)
+		- Ursachen vermutlich Perfect Information (das Net sieht die genaue Deck-Zusammensetzung und versteckte VP-Karten) und die Playout-Labels (Wert von Dev-Karten für schwache Agents) => beobachten, Self-Play und Hidden Information beheben es
+		- Ein Spieler tauschte 7x 4:1 trotz eigenem 2:1-Schaf-Hafen: ohne Spielerhandel bleiben nur Bank und Häfen
+	- Phase 3: Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), Inference-Budget ~2-3x
 	- Phase 4: Policy Head => Search-distillierte Targets / Self-Play (Expert Iteration) => Belief-aware Net
-	- Nebenbei: alte State-Matrizen in Agents/Training/dataset löschen (~60 GB)
+	- Nebenbei: alte State-Matrizen in Agents/Training/dataset (~60 GB) und prepared_v2/states.npy im 1764er Layout (35 GB) löschen
 - Weg zum starken Agent (über Catanatron hinaus), nach Hebel sortiert
 	- 1. Messen: Catanatron-Bridge (Python-Player, der den State an die C#-Engine gibt, gleiche Perfect-Information-Ebene, ~3-5 Tage) plus Leaderboard (siehe unten)
-	- 2. max^n in der Suche: erledigt, OpponentModel {Random, MaxN, Paranoid}, MaxN ist Default im MCTSAgent
-		- Nutzen pro Spieler (P(Sieg) + β * Platzierungs-Score) wird als 4er-Vektor backpropagiert, jeder Knoten wählt per UCT auf dem Wert des Spielers, der entscheidet (bei Discards der Abwerfende), mit eigenem MinMax-Bereich pro Spieler
-		- MinMaxStats lock-frei: Random 186k => 253k, MaxN 148k => 256k Iterationen/s, max^n kostet damit nichts mehr
-		- Duelle gleiches Net (sl159q7y): 0,25s 8:4, 0,5s 59:41 gegen Random (59%, zusammen 67:45 = 60%, p ≈ 0,05)
-		- Gegen 3 BuilderAgents (0,5s, 30 gleiche Karten): MaxN 20/30, Random 15/30 (25% = gleich stark), gepaart 5:0 für MaxN, nie schlechter
-		- MinMax-Bereich ohne ausstehende Visits (korrekt): im Duell neu gegen alt 45:55 (p ≈ 0,35), kein Gewinn; der alte Fehler zog das Minimum gegen 0 und explorierte dadurch stärker
-			- Explorationskonstante neu getestet (MaxN, 0,25s bzw. 60k Iterationen, 91 Spiele): c=2 gegen 1,414 25:21, c=2,8 gegen 1,414 21:24 => kein Unterschied, 1,414 bleibt
-			- Suchparameter sind damit nicht der Hebel, die nächsten Sprünge kommen vom v2-Net und Self-Play
-		- Offen: Paranoid gegen MaxN testen (Virtual-Loss-Fehler bei invertiertem Wert behoben), Subtree-Reuse nach Gegnerzügen neu messen (war ~13%), später Gegnerzüge nach Policy-Prior gewichten
-	- 3. GPU-Inference: erledigt mit DirectML (Windows, kein Installieren nötig), Linux bleibt auf der CPU; Auswahl automatisch, CATANSIM_INFERENCE=cpu|dml erzwingt
-		- Net allein bei Batch 256: CPU 89k States/s, DirectML mit fester Batchgröße 566k (6,4x), mit dynamischer nur 136k
-		- MCTS: 66k => 181k Iterationen/s (2,7x), jetzt bremst die Selektion auf der CPU (44% der Zeit, die GPU wartet die Hälfte)
+	- 2. max^n in der Suche: erledigt (MaxN Default, ~+70 Elo gegen zufälliges Gegnermodell, gegen 3 BuilderAgents 20/30 statt 15/30)
+		- Nutzen pro Spieler als 4er-Vektor backpropagiert, UCT auf dem Wert des entscheidenden Spielers, eigener MinMax-Bereich pro Spieler (ohne ausstehende Visits), lock-frei
+		- Explorationskonstante c=2 und 2,8 gegen 1,414 ohne Unterschied => Suchparameter sind nicht der Hebel
+		- Offen: Paranoid gegen MaxN testen, später Gegnerzüge nach Policy-Prior gewichten
+	- 3. GPU-Inference: erledigt mit DirectML (Windows), Linux auf der CPU; CATANSIM_INFERENCE=cpu|dml erzwingt
+		- Net bei Batch 256: CPU 89k, DirectML mit fester Batchgröße 566k States/s; MCTS 66k => 181k Iterationen/s, jetzt bremst die Selektion auf der CPU
 		- Nächste Schritte: zwei Auswertungen gleichzeitig in Flug oder schnellere Selektion/Expansion; CUDA-EP (ORT 1.31) braucht CUDA 13, torch bringt nur 12.8 mit
 	- 4. Setup-Phase spezialisieren (siehe Initial-Placement-Datensatz): eigene Zeit, eigene Kandidaten mit Best-Response-Gegnern (max^n) durchsuchen, Sibling-Gruppen an Setup-Entscheidungen
 	- 5. Policy Head + PUCT (siehe PolicyNet): Suchfokus, Gegnermodell nach Policy statt max^n über alles, besserer Subtree-Reuse
@@ -161,9 +112,11 @@
 		- Stufen: 1. Value-only Self-Play (geht jetzt, ~1-2 Wochen) => 2. Policy Head + PUCT, Visit-Verteilungen als Policy-Targets => 3. Liga aus alten Nets und Buildern, KataGo-Tricks
 		- Risiken: Perfect Information (lernt nichts über Unsicherheit), Spielerhandel im Baum, Kollaps in einen ausnutzbaren Stil (Builder-Check im Gate)
 	- 7. Netzarchitektur v2 (siehe StateValueNetv2 und Graph Transformer), erst mit GPU-Inference bezahlbar
-	- Kleinere Suchverbesserungen: Pondering während Gegnerzügen, Transpositionen über State Hashes, Aktionsabstraktion (Trade-Varianten bündeln), Roll sofort zurückgeben wenn keine Dev Card lohnt
+	- Kleinere Suchverbesserungen: Pondering während Gegnerzügen, Transpositionen über State Hashes, Aktionsabstraktion (Trade-Varianten bündeln)
 	- Für Menschen (übermenschlich im echten Spiel) zusätzlich: Hidden Information (Belief Tracker, Determinisierung/ISMCTS, siehe Simulator) und Spielerhandel mit Verhandlung
-	- Reihenfolge (Stand 26.10., max^n, GPU-Inference und v2-Modell erledigt): v2-Varianten (Ranking, Aux, Augmentation, Endspiel-Features) => Messen (Leaderboard, Catanatron-Bridge) => Server-GPU und Value-Self-Play => Policy Head => Setup => Netzarchitektur v2 => Hidden Information und Handel
+	- Reihenfolge (Stand 26.10., v2-Varianten erledigt, E2 bestes Modell): größeres Net => Messen (Leaderboard, Catanatron-Bridge) => Server-GPU und Value-Self-Play => Policy Head => Setup => Netzarchitektur v2 => Hidden Information und Handel
+		- Netzarchitektur v2 ggf. vor den Policy Head ziehen: Züge sind meist pro Kreuzung oder Kante, ein Graph-Net gibt dort natürlich einen Logit pro Knoten/Kante aus, statt den Head auf dem MLP zu bauen und später neu
+		- Simulator-Server als paralleler Architektur-Strang, Leaderboard, Catanatron-Bridge und Self-Play setzen auf ihm auf
 - Leaderboard für Agents verschiedener Herkunft (MCTS mit verschiedenen Modellen und Zeiten, BuilderAgent, später Catanatron über eine Bridge)
 	- Batch-Fit Plackett-Luce über alle Spiele (wie BayesElo/Ordo bei Schach-Engines) statt Online-Elo/TrueSkill: reihenfolgeunabhängig und am genauesten für Agents, die sich nicht verändern
 		- Ganze Platzierung pro Spiel (Sieger, dann nach VP, Gleichstände anteilig) statt nur Sieg, umgerechnet auf Elo-Skala (400 * log10 Stärke), Konfidenzintervalle per Bootstrap
@@ -198,38 +151,25 @@
 - StateValueNetv2
 	- v2 erstmal auf v1 basiert mit Player/Tile Encoderblöcken, Embeddings statt OneHot, GraphConv auf v3 schieben
 	- State Vectorizer über push/pop Architektur eine Index-Aufschlüsselung generieren lassen
-	- Abgeleitete Features: Produktion pro Spieler und Ressource (Pips, Räuber), Hafenzugang, "kann X bauen"-Flags
-		- Offline-Ablation auf dem 3M-Datensatz (156 Features: Produktion und blockierte Produktion, Tauschkurse, Bezahlbarkeit pro Bauwerk, Rennabstände): val KL 0.0867 => 0.0355, mit Input-Normalisierung 0.0320 (Favorit 87,5% => 94,0%, Fehler pro VP-Rückstand ~45% kleiner)
-		- Nur die 156 Features ohne Brett schon 0.0494, Normalisierung allein ohne die Features bringt nichts (0.0871)
-		- Läufe waren nach 60 Epochen noch nicht konvergiert
-		- In beiden Vektorizern (1764 Features), Modell sl159q7y mit Input-Normalisierung: val KL 0.0318, im MCTS 36:4 gegen j1fvwmta (2 gegen 2), gegen 3 BuilderAgents 17/30 statt 8/30
-		- Noch offen: Expansionspotenzial (erreichbare Bauplätze pro Spieler mit ihren Pips)
-	- Input-Normalisierung ist im Modell (--normalize-inputs, Standardisierung der nicht-binären Features), die Vektorizer bleiben unskaliert
-		- Nur skalieren (/10 bis /19) hat das jetzige MLP klar verschlechtert: val KL 0.087 => 0.094, im MCTS 13:17 gegen das alte Net
-	- Aux Heads für Platzierung, VP-Anteil und Runden bis Spielende sind in train.py, auf v2 testen (Roadmap Phase 2)
-	- Unzuverlässige Outputs für sehr weit zurückliegende Spieler addressieren
-		- Ursache sind die Labels: ab 5 VP Rückstand sind 65-87% der Winrates exakt 0 (1000 Playouts lösen < 0.1% nicht auf), das Net ist dort kalibriert, hat aber nichts zu lernen
-		- Paarweiser Hinge/Logistic Loss auf die Reihenfolge der Winrates reicht deshalb nicht (bei Labels = 0 gibt es keine Reihenfolge)
-		- Stattdessen Platzierungsverteilung P(1. bis 4.) pro Spieler als Target oder Auxiliary Head (aus denselben Playouts)
-		- Alternativ/zusätzlich finaler VP-Anteil als Auxiliary Head
-		- Selektionsseite in MCTS bereits über Min-Max-Normalisierung der Q-Werte gelöst
+	- Abgeleitete Features (156, Produktion, Tauschkurse, Bezahlbarkeit, Rennabstände) und Input-Normalisierung im Modell (--normalize-inputs): val KL 0.0867 => 0.0320 auf dem 3M-Datensatz, im MCTS 36:4 (sl159q7y)
+		- Nur skalieren (/10 bis /19) statt standardisieren hat das MLP verschlechtert, die Vektorizer bleiben unskaliert
+		- Noch offen: Expansionspotenzial mit den Pips der erreichbaren Bauplätze (die Endspiel-Features zählen nur die Bauplätze)
+	- Weit zurückliegende Spieler: ab 5 VP Rückstand sind viele Winrates exakt 0 (Playouts lösen < 0.3% nicht auf), das Net ist dort kalibriert, kann sie aber nicht ordnen; der Platzierungs-Head (Aux) liefert dafür ein Signal, siehe Tie-Breaker in der Roadmap
 	- nn.Embedding für kategorische Inputs (jeweils eins pro Art)
- - Graph Transformer als Alternative in Betracht ziehen
+- Graph Transformer als Alternative in Betracht ziehen
 	- Ein Token pro Tile, Intersection, Edge und Spieler plus globaler Token (~150), gelernte Positions-Embeddings pro Slot, Attention Bias nach Graph-Distanz
 	- d=128 mit 4 Layern kostet etwa 1-3x das jetzige MLP
 	- Spieler-symmetrisch: geteilter Player Encoder, Attention zwischen Spielern, Value Head pro Spieler => Spielerrotation eingebaut statt Augmentation
 	- Tile Embeddings und Player Embeddings die auf die wiederholenden Blöcke angewendet werden => Gleiche Datenart nicht unabhängig voneinander lernen
-	- Data Augmentation basierend auf Spielerposition (alle Spieler random rotieren)
-    - Data Augmentation basierend auf Reduktion der Sichtbarkeit (alle Karten ausser die eines Spielers unknown machen, zufällig Karten unknown machen)
-	- Data Augmentation über Brett-Symmetrien (6 Rotationen x Spiegelung = 12x Daten), Permutationstabellen für Tiles, Intersections, Edges und Ports aus der Geometrie berechnen
+	- Data Augmentation über Reduktion der Sichtbarkeit (alle Karten außer die eines Spielers unknown machen, zufällig Karten unknown machen), sobald Hidden Information kommt
 	- Evaluation über val KL hinaus: Kalibrierung pro VP-Rückstand, Ranking von Geschwister-States gegen lange Playouts, Quality Bench gegen tiefe Suche, Self-Play bei gleicher Zeit
 	- Inference-Budget: das Net darf ~2-3x teurer werden (kostet laut Quality Bench ~4 Punkte Übereinstimmung), alternativ kleines Net für Leaves und großes für Root/Policy
 	- Reihenfolge siehe Roadmap v2
 	- Schätzung: 25-45% weniger KL bei gleichen Daten (Symmetrie und Weight Sharing wirken wie 4-10x mehr Daten), netto ~+50 bis +180 Elo nach Abzug der langsameren Inference, also weniger als der Sprung durch die abgeleiteten Features (+380)
 	- Vorher günstig messen, in Stufen:
-		1. Augmentation am jetzigen MLP (Spielerrotation, 12 Brett-Symmetrien) auf dem 3M-Datensatz: isoliert den "mehr Daten durch Symmetrie"-Anteil, Lernkurve sagt den Wert voraus (4x effektive Daten ~ -32% KL)
+		1. Augmentation am jetzigen MLP: erledigt, Spielerrotation -26% KL, Brett-Symmetrien -2% => einen Großteil des Symmetrie-Gewinns hat das MLP schon
 		2. Spieler-symmetrisches MLP (geteilter Encoder pro Spielerblock, DeepSets-artig): halber Weg zum Transformer
-		3. Erst dann der Transformer, Vergleich bei gleichen Daten, gleicher Denkzeit und im Duell
+		3. Erst dann der Transformer, Vergleich bei gleichen Daten, gleicher Denkzeit und im gespiegelten Duell
 - PolicyNet
 	- Wahrscheinlichkeitsverteilung darüber welche Moves aus einem State wie erkundenswert sind
 	- Action Space explodiert kombinatorisch, deshalb nicht über ein finite fixed-size Action Space die Verteilung berechnen
@@ -256,7 +196,6 @@
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
-	- Particle MCTS
 	- Subtree-Reuse nach Gegnerzügen verbessern
 		- HandleAction/ResetToState sind implementiert: nach eigenen Zügen wird der Baum immer weiterverwendet, nach Gegnerzügen nur in ~13% der Fälle
 		- Ursache: Gegnerzüge werden in der Selektion zufällig gewählt, ihre Nodes sind daher selten expandiert
@@ -268,10 +207,9 @@
 		- Discards kriegen eigene Extrazeit
 		- Initial Placements kriegen eigene Extrazeit
 		- Dann immer das ganze Budget nutzen um seinen Initiativabschnitt fertigzurechnen und dann diesen Pfad auch instantly fertig spielen
-	- Durchsatz (61k-66k Iterationen/s auf 32 Threads mit Server GC, Inference läuft 95% der Zeit und ist der Engpass)
-		- Quality Bench (30 Positionen, Übereinstimmung mit 20s-Referenz): 2,2s (entspricht den alten 5s) 89% => 5s 93%, Gewinn nur im Setup (87% => 100%), Turns bleiben bei 90%, mittlerer Regret 0,24 => 0,18 pp
-		- => Suche ist für das aktuelle Net fast konvergiert, Stärke begrenzen Net, zufälliges Gegnermodell (inzwischen max^n) und Hidden Information
-		- Inference läuft unter Windows auf der GPU (DirectML, siehe Weg zum starken Agent), Quantisierung (fp16/int8) nur mit Abgleich der Outputs
+	- Durchsatz
+		- Quality Bench (30 Positionen, Übereinstimmung mit 20s-Referenz): 2,2s 89% => 5s 93%, Gewinn nur im Setup (87% => 100%) => Suche ist für das Net fast konvergiert, Stärke begrenzt das Net
+		- Quantisierung (fp16/int8) nur mit Abgleich der Outputs
 		- Expansion kostete unter Last (32 Threads, Workstation GC) ~47 us für GetValidActions und ~43 us für Outcome Variants (Roll, Robber, Dev-Kauf), relevant sobald die Inference schneller ist
 		- Spielstärke nach dem Pipelining prüfen (Selektion arbeitet eine Batch hinter den Ergebnissen), z.B. MCTS vor/nach gegeneinander bei gleicher Zeit
 	- State Value Netzwerkarchitekturen aus Initial Placement Paper prüfen
@@ -310,7 +248,7 @@
 	- Headless: Matches, Duelle, Builder-Checks, Benchmarks und Datensammlung ohne Client (Kommandozeile/Konfiguration), auf dem Desktop und dem Linux-Server
 	- Bench übernehmen (liegt bisher nur in einem Scratch-Ordner außerhalb des Repos):
 		- Duell mit Herausforderern gegen eine Baseline (2 gegen 2, Sitze abwechselnd), Builder-Check (1 MCTS gegen 3 BuilderAgents, gleiche Karten pro Net)
-		- Gespiegelte Paare: jede Karte zweimal mit getauschten Seiten, Karte und Sitzvorteil heben sich im Paar auf => deutlich mehr Aussagekraft pro Spiel bei knappen Unterschieden (für den nächsten Modellvergleich vorgesehen)
+		- Gespiegelte Paare: jede Karte zweimal mit getauschten Seiten, Karte und Sitzvorteil heben sich im Paar auf => deutlich mehr Aussagekraft pro Spiel bei knappen Unterschieden; Start-Offset für neue Karten in Folgeläufen
 		- Parallele Spiele mit Iterationsbudget (Suchqualität unabhängig von der Last), Durchsatz-Messungen (MCTS, parallele Suchen, Inference)
 		- Ergebnisse pro Spiel als Log, laufender Stand, Statistik (Anteil, Konfidenzintervall, p-Wert, Elo-Äquivalent, Aufteilung nach Sitzen)
 	- Grundlage für Leaderboard, Catanatron-/JSettlers-Bridge und den Self-Play-Generator
@@ -343,11 +281,7 @@
 		- 2. ISimulation und LocalSimulation einführen, Client vollständig umstellen
 		- 3. Bench als Headless-Kommandos in den Server (inkl. gespiegelter Paare)
 		- 4. Protocol, RemoteSimulation und Netzwerk-Endpunkt im Server, Client bekommt "Mit Server verbinden"
-	- Zeitlimit für Agents
-	- Client schlägt Action vor, Server returned tatsächliches Ergebnis (Action mit History und Observation Filter)
 - Interface für JSettlers Agents/Server
-- Serialization
-	- Packets über Netzwerk
 - Tabletalking über LLMs
 	- Zusätzlich zu Value Functions von einem Basisbot
 	- Self-Hosted oder API?
@@ -387,4 +321,5 @@
     - https://github.com/moserware/Skills/blob/master/Skills/Team.cs
 	- https://trueskill.org/
 	- Sequential Probability Ratio Test
+	- OpenSkill => https://arxiv.org/abs/2401.05451, C#: https://github.com/myssto/OpenSkillSharp, Beyond All Reason: https://github.com/beyond-all-reason/teiserver
 	- Multiplayer Rating => https://light-and-code.com/?p=122, https://github.com/FigBug/Multiplayer-ELO
