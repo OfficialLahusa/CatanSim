@@ -17,6 +17,12 @@ the same game situation with the same labels, so each of the 5 pairs can be swap
 red 6/8 stay red, the generator's token counts stay the same). In any phase of the game. On the feature vector only the
 normalized numbers of the tiles and the robber's tile and the last roll change; the derived features depend on the
 numbers only through their pips and stay.
+
+Board symmetries: the classic board is symmetric under its 6 rotations around the center tile and their mirror images.
+Rotating or mirroring everything on it (tiles, buildings, roads, ports, robber) gives the same game situation with the
+same labels, in any phase. The ports must be features for this (rotated, they lie at other coastal edges than the
+generator's slots), so it needs the current layout. On the feature vector it permutes the tile, intersection, edge and
+port blocks and moves the robber's coordinates; the per-player features are sums over the board and stay.
 """
 
 import os
@@ -25,9 +31,10 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "DatasetProcessing"))
-from state_to_vector import (BASE_FEATURE_DIM, FEATURE_DIM, LEGACY_FEATURE_DIM, PLAYER_BLOCK_SIZE,  # noqa: E402
-                             PLAYER_BLOCK_STARTS, PLAYER_COUNT, PORT_FEATURE_DIM, ROUND_VOCAB, _INTERSECTION_SIZE,
-                             _INTERSECTION_START, _TILE_COUNT, _TILE_SIZE, _TILE_START)
+from state_to_vector import (BASE_FEATURE_DIM, CLASSIC_EDGE_TILES, CLASSIC_INTERSECTION_ALL_TILES,  # noqa: E402
+                             CLASSIC_MAP_WIDTH, COASTAL_INTERSECTIONS, FEATURE_DIM, LEGACY_FEATURE_DIM, PLAYER_BLOCK_SIZE,
+                             PLAYER_BLOCK_STARTS, PLAYER_COUNT, PORT_FEATURE_DIM, PORT_TYPES, ROUND_VOCAB,
+                             _INTERSECTION_SIZE, _INTERSECTION_START, _TILE_COUNT, _TILE_SIZE, _TILE_START)
 
 _TURN_PLAYER = 3                                    # one-hot of the player to act, after the settings (2) and the last roll
 _TURN_ROUND = _TURN_PLAYER + PLAYER_COUNT           # TypeOfRound one-hot
@@ -129,3 +136,85 @@ def swap_number_pairs(features: np.ndarray, masks) -> np.ndarray:
     rolls = np.rint(features[..., [_LAST_ROLL]].astype(np.float64)).astype(np.int64)
     features[..., [_LAST_ROLL]] = np.where(swapped(rolls), 14 - rolls, rolls)
     return features
+
+
+BOARD_SYMMETRY_COUNT = 12                           # 6 rotations, each also mirrored
+_ROBBER_X, _ROBBER_Y = 18, 19                       # map coordinates of the robber's tile
+_CENTER = (3, 3)
+
+
+def _to_cube(index: int):
+    x, y = index % CLASSIC_MAP_WIDTH, index // CLASSIC_MAP_WIDTH
+    q = x - (y + (y % 2)) // 2                      # even-r offset to cube coordinates, as Coordinates.EvenRToCube
+    return q, y, -q - y
+
+
+def _from_cube(q: int, r: int) -> int:
+    x = q + (r + (r & 1)) // 2
+    return r * CLASSIC_MAP_WIDTH + x
+
+
+def tile_symmetry(t: int) -> np.ndarray:
+    """New map index of every tile within distance 3 of the center (land and the water ring) under symmetry t (0-11:
+    t // 6 mirrors, then t % 6 rotates by 60 degrees); the non-playable tiles farther out stay"""
+    cq, cr, cs = _to_cube(_CENTER[1] * CLASSIC_MAP_WIDTH + _CENTER[0])
+    target = np.arange(_TILE_COUNT)
+    for index in range(_TILE_COUNT):
+        q, r, s = _to_cube(index)
+        dq, dr, ds = q - cq, r - cr, s - cs
+        if max(abs(dq), abs(dr), abs(ds)) > 3:
+            continue
+        if t // 6:
+            dr, ds = ds, dr                         # a reflection swaps two cube axes
+        for _ in range(t % 6):
+            dq, dr, ds = -dr, -ds, -dq              # rotation by 60 degrees
+        target[index] = _from_cube(cq + dq, cr + dr)
+    return target
+
+
+def _element_symmetry(tiles_of, tile_target):
+    """New index of every intersection or edge (given by the tiles around it) under a tile mapping"""
+    index_of = {frozenset(tiles): i for i, tiles in enumerate(tiles_of)}
+    return np.array([index_of[frozenset(int(tile_target[t]) for t in tiles)] for tiles in tiles_of])
+
+
+def board_symmetry_index(t: int):
+    """Source index per feature for symmetry t (rotated = features[..., index]) and the new map index of every tile
+    (for the robber's coordinates)"""
+    tiles = tile_symmetry(t)
+    intersections = _element_symmetry(CLASSIC_INTERSECTION_ALL_TILES, tiles)
+    edges = _element_symmetry(CLASSIC_EDGE_TILES, tiles)
+    coastal_of = {intersection: i for i, intersection in enumerate(COASTAL_INTERSECTIONS)}
+    coastal = np.array([coastal_of[int(intersections[i])] for i in COASTAL_INTERSECTIONS])
+
+    source = np.arange(FEATURE_DIM)
+
+    def move_blocks(start, size, target):
+        for old, new in enumerate(target):
+            source[start + new * size:start + (new + 1) * size] = np.arange(start + old * size, start + (old + 1) * size)
+
+    move_blocks(_TILE_START, _TILE_SIZE, tiles)
+    move_blocks(_INTERSECTION_START, _INTERSECTION_SIZE, intersections)
+    move_blocks(_EDGE_START, _EDGE_SIZE, edges)
+    move_blocks(LEGACY_FEATURE_DIM, len(PORT_TYPES), coastal)
+    assert sorted(source) == list(range(FEATURE_DIM))
+    return source, tiles
+
+
+_BOARD_SYMMETRIES = [board_symmetry_index(t) for t in range(BOARD_SYMMETRY_COUNT)]
+BOARD_INDEX = np.stack([index for index, _ in _BOARD_SYMMETRIES])
+BOARD_TILE_TARGET = np.stack([tiles for _, tiles in _BOARD_SYMMETRIES])
+
+
+def transform_board(features: np.ndarray, t: int) -> np.ndarray:
+    """The vectors (current layout) of the same situations on the board rotated and mirrored by symmetry t"""
+    features = np.asarray(features)
+    if features.shape[-1] != FEATURE_DIM:
+        raise ValueError(f"board symmetries need the ports as features ({FEATURE_DIM} features), not {features.shape[-1]}")
+    transformed = features[..., BOARD_INDEX[t]]
+    robber = (np.rint(features[..., _ROBBER_Y].astype(np.float64)) * CLASSIC_MAP_WIDTH
+              + np.rint(features[..., _ROBBER_X].astype(np.float64))).astype(np.int64)
+    moved = BOARD_TILE_TARGET[t][robber]
+    transformed[..., _ROBBER_X] = moved % CLASSIC_MAP_WIDTH
+    transformed[..., _ROBBER_Y] = moved // CLASSIC_MAP_WIDTH
+    return transformed

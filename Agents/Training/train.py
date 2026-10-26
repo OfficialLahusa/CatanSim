@@ -7,21 +7,25 @@ import torch.nn.functional as F
 import lightning as L
 from torch.utils.data import Dataset, DataLoader, Sampler
 from state_value_net import StateValueModule, PLAYER_COUNT
-from augmentation import (NUMBER_PAIR_COUNT, is_rotatable, rotate_features, rotate_player_index, rotate_players,
-                          swap_number_pairs)
+from augmentation import (BOARD_SYMMETRY_COUNT, NUMBER_PAIR_COUNT, is_rotatable, rotate_features, rotate_player_index,
+                          rotate_players, swap_number_pairs, transform_board)
+# augmentation legt DatasetProcessing in den Suchpfad
+from state_to_vector import FEATURE_DIM  # noqa: E402
 
 # Zusätzliche Label-Arrays aus DatasetProcessing/playout_results.py (gleiche Zeilenreihenfolge wie die States), alle optional
 AUX_ARRAYS = ("placements", "vp_shares", "rounds_left", "sibling_groups", "actors")
 
 
 class StateDataset(Dataset):
-    def __init__(self, states_path, labels_path, aux_dir=None, augment_rotation=False, augment_numbers=False):
+    def __init__(self, states_path, labels_path, aux_dir=None, augment_rotation=False, augment_numbers=False, augment_board=False):
         self.states_path = states_path
         self.labels_path = labels_path
         # Spieler zufällig zyklisch umbenennen (nur nach der Setup-Phase, siehe augmentation.py), für die Trainingsdaten
         self.augment_rotation = augment_rotation
         # Zahlenchip-Paare (2/12 bis 6/8) zufällig tauschen, in jeder Phase (siehe augmentation.py)
         self.augment_numbers = augment_numbers
+        # Das Brett zufällig drehen und spiegeln (12 Symmetrien, braucht die Häfen als Features)
+        self.augment_board = augment_board
         # Nur die Aux-Arrays, deren Datei existiert
         self.aux_paths = {}
         if aux_dir is not None:
@@ -96,6 +100,12 @@ class StateDataset(Dataset):
 
         if self.augment_numbers:
             x = swap_number_pairs(x, torch.randint(2 ** NUMBER_PAIR_COUNT, (n,)).numpy())
+        if self.augment_board:
+            ts = torch.randint(BOARD_SYMMETRY_COUNT, (n,)).numpy()
+            for t in range(1, BOARD_SYMMETRY_COUNT):
+                rows = np.flatnonzero(ts == t)
+                if rows.size:
+                    x[rows] = transform_board(x[rows], t)
 
         return {
             "x": torch.from_numpy(x),
@@ -177,6 +187,8 @@ def main():
     parser.add_argument("--augment-rotation", action="store_true")
     # Zusätzlich zufällig Zahlenchip-Paare tauschen (32 Sichten pro State)
     parser.add_argument("--augment-numbers", action="store_true")
+    # Zusätzlich das Brett zufällig drehen und spiegeln (12 Sichten, nur mit dem aktuellen Layout mit Häfen)
+    parser.add_argument("--augment-board", action="store_true")
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--max-epochs", type=int, default=60)
@@ -196,11 +208,13 @@ def main():
         # Das Ranking trainiert nur Unterschiede innerhalb der Gruppen, das absolute Niveau kommt vom Platzierungs-Loss
         raise SystemExit("--ranking-placement-weight needs --placement-weight > 0")
     print(f"Aux labels: {', '.join(full_ds.aux_paths) or 'none'}")
+    if args.augment_board and full_ds.states.shape[1] != FEATURE_DIM:
+        raise SystemExit(f"--augment-board needs states with the ports as features ({FEATURE_DIM} features, see migrate_states_1764_to_1965.py)")
 
     train_idx, val_idx = np.load(args.train_idx), np.load(args.val_idx)
-    augment = args.augment_rotation or args.augment_numbers
+    augment = args.augment_rotation or args.augment_numbers or args.augment_board
     train_ds = StateDataset(args.states, args.labels, args.aux_dir, augment_rotation=args.augment_rotation,
-                            augment_numbers=args.augment_numbers) if augment else full_ds
+                            augment_numbers=args.augment_numbers, augment_board=args.augment_board) if augment else full_ds
     loader_args = dict(num_workers=args.num_workers, pin_memory=True, persistent_workers=True, collate_fn=keep_batch)
     if args.ranking_weight > 0:
         # Sibling-Gruppen zusammenhalten, auch in der Validation (für die Ranking-Metriken)
@@ -226,6 +240,10 @@ def main():
                 states[ks == k] = rotate_features(states[ks == k], k)
         if args.augment_numbers:
             states = swap_number_pairs(states, np.random.default_rng(2).integers(2 ** NUMBER_PAIR_COUNT, size=len(states)))
+        if args.augment_board:
+            ts = np.random.default_rng(3).integers(BOARD_SYMMETRY_COUNT, size=len(states))
+            for t in range(1, BOARD_SYMMETRY_COUNT):
+                states[ts == t] = transform_board(states[ts == t], t)
         scaled = model.set_input_normalization(states)
         print(f"Input normalization: {scaled} of {in_dim} features standardized, the binary ones unchanged")
 
