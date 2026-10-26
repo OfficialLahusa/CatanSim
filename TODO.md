@@ -71,7 +71,7 @@
 		- Dann python prepare_dataset.py für v2 und das Präzisions-Set getrennt, die vorbereiteten Arrays (~35 GB) auf die SSD
 		- Bisherige Datensätze folgen der alten Road-Building-Regel, der neue Run nutzt die korrigierte
 	- Phase 2: Training auf v2
-		- Baseline xnebmrjf erledigt (sl159q7y-Setup, 40 Epochen à ~30 s, Daten auf C:): val KL 0.0215, jetzt Default-Modell (Hugging Face und Agents.csproj)
+		- Baseline xnebmrjf erledigt (sl159q7y-Setup, 40 Epochen à ~30 s, Daten auf C:): val KL 0.0215, bis 26.10. Default-Modell
 			- v2-Labels sind deutlich flacher als v1 (Uniform-KL 0,50 statt 0,77, gemischte Agents mit 30% Random): KL zwischen v1- und v2-Modellen nicht vergleichbar
 			- Präzisions-Set (evaluate_precision.py): Paar-Genauigkeit 73,2% statt 67,7%, bester Zug 55,6% statt 47,9%, Regret 0,52 statt 0,78pp, kalibriert auch weit hinten
 			- Duell gegen sl159q7y (MaxN, 60k Iterationen, 12 parallel): 55:32 (63%, p ≈ 0,018, ~+95 Elo)
@@ -84,7 +84,7 @@
 			- C zjahe050 (Aux plus Spielerrotation): val KL 0.0170, Präzisions-KL 0.0126 (-26% gegen xnebmrjf 0.0170), bester Zug 59,8%, Regret 0,41pp, Endspiel-KL -35% (0.0243 => 0.0157)
 			- Duell C gegen xnebmrjf (MaxN, 60k Iterationen, 12 parallel, 1,5 h): 50:36 (58%, ~+57 Elo, 95%-KI -16 bis +135, p ≈ 0,08 einseitig) => Tendenz klar, aber nicht signifikant
 				- Sitzvorteil dominiert: C auf Plätzen 0+2 30/43, auf 1+3 20/43 => vordere Seite gewinnt 62% => nächster Modellvergleich mit gespiegelten Paaren
-			- C ist Kandidat fürs neue Default-Modell (Hugging Face Upload offen)
+			- C ist jetzt Default-Modell (Hugging Face und Agents.csproj)
 		- Nächste Schritte daraus, nach erwartetem Gewinn pro Aufwand:
 			- 1. (erledigt, Aux ja, Ranking nein) Sibling-Ranking-Loss und Aux Heads zuschalten (in train.py fertig, ~20 min Training pro Variante): Ranking trainiert direkt die Zugreihenfolge, wo v2 am meisten gewonnen hat; Aux Heads regularisieren
 			- 2. (erledigt, -26% KL) Augmentation per Spielerrotation: in train.py (--augment-rotation, augmentation.py), Paritätstest gegen echte rotierte Spielzustände

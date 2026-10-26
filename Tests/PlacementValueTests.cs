@@ -8,14 +8,16 @@ using Action = Common.Actions.Action;
 namespace Tests
 {
     /// <summary>
-    /// Value nets with a placements output and the placement tie-breaker of the MCTS agent. Uses a tiny untrained net with
-    /// auxiliary heads (Fixtures/ValueNet/placements_tiny.onnx, exported by export_onnx.py from StateValueNet(1764, hidden=16,
-    /// aux_heads=True)), so only the plumbing is tested, not playing strength.
+    /// Value nets with a placements output and the placement tie-breaker of the MCTS agent. Uses tiny untrained nets with
+    /// and without auxiliary heads (Fixtures/ValueNet/placements_tiny.onnx and plain_tiny.onnx, exported by export_onnx.py
+    /// from StateValueNet(1764, hidden=16, aux_heads=True) and StateValueNet(1764, hidden=16)), so only the plumbing is
+    /// tested, not playing strength.
     /// </summary>
     public class PlacementValueTests
     {
         private static readonly StateVectorizer Vectorizer = new();
         private static string TinyModelPath => TestUtil.FixturePath("ValueNet", "placements_tiny.onnx");
+        private static string PlainTinyModelPath => TestUtil.FixturePath("ValueNet", "plain_tiny.onnx");
 
         [Fact]
         public void NetsWithPlacementsGiveADistributionPerPlayer()
@@ -42,11 +44,10 @@ namespace Tests
             Assert.Equal(net.Run(batch), winProbabilities);
         }
 
-        [SkippableFact]
+        [Fact]
         public void ThePlacementWeightNeedsANetWithPlacements()
         {
-            TestUtil.SkipWithoutModel();
-            StateValueNet plain = new(TestUtil.ModelPath);
+            StateValueNet plain = new(PlainTinyModelPath);
             Assert.False(plain.HasPlacements);
             Assert.Throws<InvalidOperationException>(() => plain.RunWithPlacements(Vectorizer.Vectorize(TestUtil.NewGame())));
 
