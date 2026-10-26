@@ -90,7 +90,8 @@
 		- Duelle gleiches Net (sl159q7y): 0,25s 8:4, 0,5s 59:41 gegen Random (59%, zusammen 67:45 = 60%, p ≈ 0,05)
 		- Gegen 3 BuilderAgents (0,5s, 30 gleiche Karten): MaxN 20/30, Random 15/30 (25% = gleich stark), gepaart 5:0 für MaxN, nie schlechter
 		- MinMax-Bereich ohne ausstehende Visits (korrekt): im Duell neu gegen alt 45:55 (p ≈ 0,35), kein Gewinn; der alte Fehler zog das Minimum gegen 0 und explorierte dadurch stärker
-			- => Explorationskonstante (bisher 1,414) mit dem korrekten Bereich per Duell neu tunen, z.B. 1,414 / 2 / 2,8
+			- Explorationskonstante neu getestet (MaxN, 0,25s bzw. 60k Iterationen, 91 Spiele): c=2 gegen 1,414 25:21, c=2,8 gegen 1,414 21:24 => kein Unterschied, 1,414 bleibt
+			- Suchparameter sind damit nicht der Hebel, die nächsten Sprünge kommen vom v2-Net und Self-Play
 		- Offen: Paranoid erst nach Fix testen (ausstehende Visits machen bei invertiertem Wert Kinder attraktiver statt unattraktiver), Subtree-Reuse nach Gegnerzügen neu messen (war ~13%), später Gegnerzüge nach Policy-Prior gewichten
 	- 3. GPU-Inference: erledigt mit DirectML (Windows, kein Installieren nötig), Linux bleibt auf der CPU; Auswahl automatisch, CATANSIM_INFERENCE=cpu|dml erzwingt
 		- Net allein bei Batch 256: CPU 89k States/s, DirectML mit fester Batchgröße 566k (6,4x), mit dynamischer nur 136k
