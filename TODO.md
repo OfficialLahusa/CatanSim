@@ -9,6 +9,7 @@
 		- Monopoly macht die Anzahl einer Ressource bei allen Spielern öffentlich
 		- Kleine Information Sets, hohe Disambiguation und Leaf Correlation => Determinisierung funktioniert gut (Long et al.)
 	- 1. Observation Filter / StateView + Belief Tracker in Common
+		- Vor der Implementierung des Observation Filters vollständige Test-Suite dafür schreiben: jede Regel des Beobachtungsmodells pro Beobachter (Steal nur für Beteiligte sichtbar, Dev-Kauf nur für Käufer, VP-Karten bis Spielende, Monopoly öffentlich, public Actions unverändert), Randfälle (Spielende, Undo, Laden), kein Leck verdeckter Info in StateView und gefilterten Actions
 		- StateView(p): fremde Hände als bekannte Karten + Unknown x k, fremde Dev Cards als Unknown, Dev Bank als öffentlicher Rest
 		- Belief Tracker pro Beobachter, gefüttert mit observation-gefilterten Actions (gleiche Schnittstelle für Simulation Server, HandleAction und Vectorizer)
 		- Unknowns mit Herkunft tracken (aus welchem Steal, Handverteilung des Opfers zu dem Zeitpunkt)
