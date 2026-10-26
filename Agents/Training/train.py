@@ -7,18 +7,21 @@ import torch.nn.functional as F
 import lightning as L
 from torch.utils.data import Dataset, DataLoader, Sampler
 from state_value_net import StateValueModule, PLAYER_COUNT
-from augmentation import is_rotatable, rotate_features, rotate_player_index, rotate_players
+from augmentation import (NUMBER_PAIR_COUNT, is_rotatable, rotate_features, rotate_player_index, rotate_players,
+                          swap_number_pairs)
 
 # Zusätzliche Label-Arrays aus DatasetProcessing/playout_results.py (gleiche Zeilenreihenfolge wie die States), alle optional
 AUX_ARRAYS = ("placements", "vp_shares", "rounds_left", "sibling_groups", "actors")
 
 
 class StateDataset(Dataset):
-    def __init__(self, states_path, labels_path, aux_dir=None, augment_rotation=False):
+    def __init__(self, states_path, labels_path, aux_dir=None, augment_rotation=False, augment_numbers=False):
         self.states_path = states_path
         self.labels_path = labels_path
         # Spieler zufällig zyklisch umbenennen (nur nach der Setup-Phase, siehe augmentation.py), für die Trainingsdaten
         self.augment_rotation = augment_rotation
+        # Zahlenchip-Paare (2/12 bis 6/8) zufällig tauschen, in jeder Phase (siehe augmentation.py)
+        self.augment_numbers = augment_numbers
         # Nur die Aux-Arrays, deren Datei existiert
         self.aux_paths = {}
         if aux_dir is not None:
@@ -90,6 +93,9 @@ class StateDataset(Dataset):
                     placements[rows] = rotate_players(placements[rows], k, axis=1)
                     vp_shares[rows] = rotate_players(vp_shares[rows], k)
                     actors[rows] = rotate_player_index(actors[rows], k)
+
+        if self.augment_numbers:
+            x = swap_number_pairs(x, torch.randint(2 ** NUMBER_PAIR_COUNT, (n,)).numpy())
 
         return {
             "x": torch.from_numpy(x),
@@ -169,6 +175,8 @@ def main():
     parser.add_argument("--normalize-inputs", action="store_true")
     # Trainingsdaten per zufälliger zyklischer Spielerrotation vervielfachen (siehe augmentation.py), Validation bleibt unverändert
     parser.add_argument("--augment-rotation", action="store_true")
+    # Zusätzlich zufällig Zahlenchip-Paare tauschen (32 Sichten pro State)
+    parser.add_argument("--augment-numbers", action="store_true")
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--max-epochs", type=int, default=60)
@@ -190,7 +198,9 @@ def main():
     print(f"Aux labels: {', '.join(full_ds.aux_paths) or 'none'}")
 
     train_idx, val_idx = np.load(args.train_idx), np.load(args.val_idx)
-    train_ds = StateDataset(args.states, args.labels, args.aux_dir, augment_rotation=True) if args.augment_rotation else full_ds
+    augment = args.augment_rotation or args.augment_numbers
+    train_ds = StateDataset(args.states, args.labels, args.aux_dir, augment_rotation=args.augment_rotation,
+                            augment_numbers=args.augment_numbers) if augment else full_ds
     loader_args = dict(num_workers=args.num_workers, pin_memory=True, persistent_workers=True, collate_fn=keep_batch)
     if args.ranking_weight > 0:
         # Sibling-Gruppen zusammenhalten, auch in der Validation (für die Ranking-Metriken)
@@ -214,6 +224,8 @@ def main():
             ks[~is_rotatable(states)] = 0
             for k in range(1, PLAYER_COUNT):
                 states[ks == k] = rotate_features(states[ks == k], k)
+        if args.augment_numbers:
+            states = swap_number_pairs(states, np.random.default_rng(2).integers(2 ** NUMBER_PAIR_COUNT, size=len(states)))
         scaled = model.set_input_normalization(states)
         print(f"Input normalization: {scaled} of {in_dim} features standardized, the binary ones unchanged")
 

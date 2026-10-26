@@ -1,5 +1,7 @@
 """
-Player rotation as data augmentation: relabeling the players cyclically (player p becomes player p + k) keeps the turn
+Data augmentation by exact symmetries of the rules.
+
+Player rotation: relabeling the players cyclically (player p becomes player p + k) keeps the turn
 order, so after the setup phase the rotated state is the same game situation and its labels rotate along. In the setup
 phase it isn't (the snake order always starts with player 0), so setup states are never rotated. Only cyclic rotations
 are equivalences; any other permutation of the players would change the turn order.
@@ -7,6 +9,13 @@ are equivalences; any other permutation of the players would change the turn ord
 On the feature vector (1764 layout) the rotation is a pure index permutation: the player to act and the awaited
 discards in the turn state, the owner one-hots of intersections and edges, the player blocks and the derived features
 per player move with their player; everything else stays.
+
+Number token pairs: 2/12, 3/11, 4/10, 5/9 and 6/8 are rolled equally often, and a number token matters only through how
+often it is rolled (the 7 has no token). Swapping the tokens of any pairs on the board (and the last roll along) gives
+the same game situation with the same labels, so each of the 5 pairs can be swapped independently (32 views, the
+red 6/8 stay red, the generator's token counts stay the same). In any phase of the game. On the feature vector only the
+normalized numbers of the tiles and the robber's tile and the last roll change; the derived features depend on the
+numbers only through their pips and stay.
 """
 
 import os
@@ -16,7 +25,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "DatasetProcessing"))
 from state_to_vector import (BASE_FEATURE_DIM, FEATURE_DIM, PLAYER_BLOCK_SIZE, PLAYER_BLOCK_STARTS,  # noqa: E402
-                             PLAYER_COUNT, ROUND_VOCAB, _INTERSECTION_SIZE, _INTERSECTION_START)
+                             PLAYER_COUNT, ROUND_VOCAB, _INTERSECTION_SIZE, _INTERSECTION_START, _TILE_COUNT, _TILE_SIZE,
+                             _TILE_START)
 
 _TURN_PLAYER = 3                                    # one-hot of the player to act, after the settings (2) and the last roll
 _TURN_ROUND = _TURN_PLAYER + PLAYER_COUNT           # TypeOfRound one-hot
@@ -83,3 +93,29 @@ def rotate_player_index(player, k: int):
         return player if player < 0 else (player + k) % PLAYER_COUNT
     player = np.asarray(player)
     return np.where(player < 0, player, (player + k) % PLAYER_COUNT)
+
+
+_LAST_ROLL = 2                                      # total of the last roll (0 before anyone rolled), after the settings
+# Normalized numbers ((n - 2) / 10, the presence flag right after): the robber's tile, then the 49 tiles
+_NUMBERS = np.array([28] + [_TILE_START + t * _TILE_SIZE + 8 for t in range(_TILE_COUNT)])
+NUMBER_PAIR_COUNT = 5                               # pairs (2, 12) to (6, 8), bit p of a mask swaps the pair (2 + p, 12 - p)
+
+
+def swap_number_pairs(features: np.ndarray, masks) -> np.ndarray:
+    """Swaps the number token pairs chosen by masks (0 to 31, one per state or one for all) on the board and in the last roll"""
+    features = np.array(features, copy=True)
+    masks = np.asarray(masks, dtype=np.int64)[..., None]
+
+    def swapped(numbers):
+        # A number n is swapped with 14 - n if the bit of its pair is set (the 7 has no pair, absent numbers stay)
+        low = np.minimum(numbers, 14 - numbers)
+        return ((numbers >= 2) & (numbers <= 12) & (low <= 6) & ((masks >> np.clip(low - 2, 0, 4)) & 1).astype(bool))
+
+    values = features[..., _NUMBERS].astype(np.float64)
+    numbers = np.rint(values * 10 + 2).astype(np.int64)
+    swap = swapped(numbers) & (features[..., _NUMBERS + 1] > 0.5)
+    features[..., _NUMBERS] = np.where(swap, (12 - numbers) / 10, values)
+
+    rolls = np.rint(features[..., [_LAST_ROLL]].astype(np.float64)).astype(np.int64)
+    features[..., [_LAST_ROLL]] = np.where(swapped(rolls), 14 - rolls, rolls)
+    return features
