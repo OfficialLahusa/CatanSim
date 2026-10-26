@@ -428,6 +428,8 @@ namespace Client
                     }
                 }
 
+                ImGui.Separator();
+
                 // All apply to the MCTS agents already selected as well, from their next decision on
                 ImGui.SetNextItemWidth(120);
                 if (ImGui.Combo("MCTS Budget", ref _selectedMctsBudget, _mctsBudgetTypes, _mctsBudgetTypes.Length))
