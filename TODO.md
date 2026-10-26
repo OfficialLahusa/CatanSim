@@ -294,6 +294,16 @@
 		- Sprachneutral (Python-Bridge, später Web-UI möglich), JSON lesbar und erweiterbar, schnell genug für interaktive Nachrichten
 		- .NET: ClientWebSocket im Client, ASP.NET Core (Kestrel) oder HttpListener im Server; Common/Net/Packet.cs und der alte Server-Code werden ersetzt
 		- gRPC wäre die Alternative mit striktem Schema, aber mehr Tooling und ohne Browser-Support
+	- Rollen und Authentifizierung
+		- Admin: volle Sicht und alle Rechte (Edit-Modus, Undo/Redo, Laden/Speichern, Matches anlegen, Agents/Budgets ändern, Bench-/Headless-Läufe starten)
+		- Spectator: volle Sicht (alle Hände, VP-Karten, Dev-Deck), nur lesend
+		- Player: an einen Sitz gebunden, darf nur für diesen Sitz handeln, sieht nur seine Perspektive (Observation-Filter, sobald Hidden Information umgesetzt ist)
+		- Agent/Bridge: wie Player, für externe Bots (Catanatron, JSettlers), Rechte pro Match vergeben
+		- Lokaler Modus (Server im Client-Prozess): automatisch Admin, keine Anmeldung
+		- Netzwerk: Token-basiert, zufällig erzeugte Tokens pro Rolle in der Server-Konfiguration (nur als Hash gespeichert), mitgeschickt im hello oder als Authorization-Header beim Handshake (ClientWebSocket kann Header setzen, Browser nicht => beides unterstützen)
+		- Außerhalb des lokalen Netzes nur über wss (TLS), sonst gehen die Tokens im Klartext übers Netz
+		- Prüfung im Server bei jedem Kommando (nie dem Client vertrauen), Rolle hängt an der Session und bleibt über Reconnects erhalten; Spectator-Zugang optional ohne Token konfigurierbar
+		- Event-Stream pro Session gefiltert: volle Sicht für Admin/Spectator, gefilterte Actions (z.B. gezogene Karte verdeckt) für Player
 	- Migration schrittweise, der Client funktioniert dabei durchgehend:
 		- 1. Simulation als Bibliothek herauslösen (Spiel-, Agent- und Runner-Logik aus GameScreen in eine Match-Klasse), Client nutzt sie direkt
 		- 2. ISimulation und LocalSimulation einführen, Client vollständig umstellen
