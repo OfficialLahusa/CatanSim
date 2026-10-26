@@ -362,6 +362,26 @@ namespace Tests
         }
 
         [Fact]
+        public void AnExistingDatasetIsNeverOverwritten()
+        {
+            string directory = Path.Combine(Path.GetTempPath(), "catansim-collector-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var settings = new CollectorSettings { Threads = 2, Matches = 1000, PlayoutsPerSample = 1000, Seed = 155, OutputDirectory = directory, Name = "existing" };
+                new DatasetCollector.DatasetCollector(settings, TextWriter.Null).Collect(new CancellationToken(canceled: true));
+                string metadata = File.ReadAllText(Path.Combine(directory, "existing", "metadata.json"));
+
+                var error = Assert.Throws<InvalidOperationException>(() => new DatasetCollector.DatasetCollector(settings, TextWriter.Null).Collect());
+                Assert.Contains("already holds a dataset (status cancelled)", error.Message);
+                Assert.Equal(metadata, File.ReadAllText(Path.Combine(directory, "existing", "metadata.json")));
+            }
+            finally
+            {
+                DeleteTemporaryDirectory(directory);
+            }
+        }
+
+        [Fact]
         public void AssembledSaveFilesAreIdenticalToSerializingEachSample()
         {
             TestUtil.Seed(152);

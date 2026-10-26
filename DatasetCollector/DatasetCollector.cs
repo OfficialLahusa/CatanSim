@@ -62,6 +62,12 @@ namespace DatasetCollector
         /// </summary>
         public CollectionResult Collect(CancellationToken cancellation = default)
         {
+            // Never write into an earlier dataset (its files would clash, and its metadata would be overwritten)
+            if (Directory.Exists(_datasetDirectory) && Directory.EnumerateFileSystemEntries(_datasetDirectory).Any())
+                throw new InvalidOperationException(
+                    $"The dataset directory \"{Path.GetFullPath(_datasetDirectory)}\" already holds a dataset ({ExistingStatus()}).\n" +
+                    "Delete it to collect it again, or choose another --name. A run in parts (--parts) resumes instead when started again with the same command.");
+
             Directory.CreateDirectory(_stateDirectory);
             Directory.CreateDirectory(_evaluationDirectory);
             Directory.CreateDirectory(_vectorDirectory);
@@ -459,6 +465,25 @@ namespace DatasetCollector
         {
             if (Interlocked.Increment(ref _errorCount) == 1)
                 _firstError = e;
+        }
+
+        /// <summary>
+        /// The status in the metadata of a dataset already in the directory, for the message that refuses to overwrite it
+        /// </summary>
+        private string ExistingStatus()
+        {
+            string path = Path.Combine(_datasetDirectory, "metadata.json");
+            if (!File.Exists(path)) return "no metadata.json";
+
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
+                return document.RootElement.TryGetProperty("status", out JsonElement status) ? $"status {status.GetString()}" : "no status";
+            }
+            catch (JsonException)
+            {
+                return "unreadable metadata.json";
+            }
         }
 
         private void WriteMetadata(DateTime started, DateTime? finished, CollectionResult? result)
