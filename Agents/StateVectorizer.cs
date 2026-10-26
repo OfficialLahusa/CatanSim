@@ -368,7 +368,16 @@ namespace Agents
         /// </summary>
         private static void EncodePorts(GameState state, ref FeatureWriter writer)
         {
-            Board board = state.Board;
+            Span<float> features = writer.Reserve(PortFeatureDim);
+            foreach (int position in PortFeaturePositions.GetValue(state.Board.Ports, _ => ComputePortFeaturePositions(state.Board)))
+                features[position] = 1f;
+        }
+
+        // Ports never change and are shared by all copies of a board, so their feature positions are computed once per map
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<List<Port>, int[]> PortFeaturePositions = new();
+
+        private static int[] ComputePortFeaturePositions(Board board)
+        {
             Span<int> coastalIndex = stackalloc int[board.IntersectionCount];
             Span<int> tiles = stackalloc int[6];
             int coastal = 0;
@@ -377,7 +386,7 @@ namespace Agents
             if (coastal * PortTypeCount != PortFeatureDim)
                 throw new InvalidOperationException($"The board has {coastal} coastal intersections instead of {PortFeatureDim / PortTypeCount}.");
 
-            Span<float> features = writer.Reserve(PortFeatureDim);
+            List<int> positions = new(2 * board.Ports.Count);
             foreach (Port port in board.Ports)
             {
                 // The port's edge between its water tile and the land, as for the port privileges (see SettlementAction)
@@ -385,9 +394,10 @@ namespace Agents
                 Tile land = board.Adjacency.GetTile(sea, port.AnchorDirection)!;
                 Edge edge = board.Adjacency.GetEdge(land, port.AnchorDirection.Mirror())!;
                 (int top, int bottom) = board.Adjacency.GetIntersectionIndices(edge.Index);
-                features[coastalIndex[top] * PortTypeCount + (int)port.Type] = 1f;
-                features[coastalIndex[bottom] * PortTypeCount + (int)port.Type] = 1f;
+                positions.Add(coastalIndex[top] * PortTypeCount + (int)port.Type);
+                positions.Add(coastalIndex[bottom] * PortTypeCount + (int)port.Type);
             }
+            return positions.ToArray();
         }
 
         /// <summary>
@@ -405,40 +415,35 @@ namespace Agents
             for (int i = 0; i < board.IntersectionCount; i++)
                 if (board.GetBuilding(i) == Intersection.BuildingType.Settlement) settlements[board.GetBuildingOwner(i)]++;
 
+            UInt128 freeSites = board.GetFreeBuildingSites();
             Span<int> hand = stackalloc int[resources];
             Span<int> rates = stackalloc int[resources];
             for (int p = 0; p < players; p++)
             {
                 PlayerState player = state.Players[p];
-                int settlementSpots = (int)UInt128.PopCount(board.GetSettlementSites(p));
+                int settlementSpots = (int)UInt128.PopCount(board.GetRoadEndMask(p) & freeSites);
                 int roadSpots = (int)UInt128.PopCount(board.GetRoadSites(p));
 
+                int handSize = 0;
                 for (int r = 0; r < resources; r++)
                 {
                     hand[r] = (int)player.ResourceCards.Get((ResourceCardType)(r + 1));
+                    handSize += hand[r];
                     PortPrivileges resourcePort = (PortPrivileges)(1 << (r + 1));
                     rates[r] = player.PortPrivileges.HasFlag(resourcePort) ? 2 : player.PortPrivileges.HasFlag(PortPrivileges.GenericThreeToOne) ? 3 : 4;
                 }
 
-                // Settlements s and cities c the cards pay for, trading surplus as for "missing after trading"
+                // Settlements s and cities c the cards pay for, trading surplus as for "missing after trading". A build costs
+                // at least 4 cards, and what more of one build doesn't pay for, more of it never pays for either.
                 int maxSettlements = Math.Min(settlementSpots, (int)player.BuildingStock.RemainingSettlements);
                 int maxCitiesStock = (int)player.BuildingStock.RemainingCities;
                 int gain = 0;
-                for (int s = 0; s <= 5; s++)
+                for (int s = 0; s <= maxSettlements && handSize >= 4; s++)
                 {
-                    for (int c = 0; c <= 4; c++)
-                    {
-                        if (s > maxSettlements || c > Math.Min(maxCitiesStock, settlements[p] + s)) continue;
-
-                        int lacking = 0, tradeable = 0;
-                        for (int r = 0; r < resources; r++)
-                        {
-                            int cost = s * BuildCosts[1, r] + c * BuildCosts[2, r];
-                            lacking += Math.Max(cost - hand[r], 0);
-                            tradeable += Math.Max(hand[r] - cost, 0) / rates[r];
-                        }
-                        if (lacking <= tradeable) gain = Math.Max(gain, s + c);
-                    }
+                    if (!Affordable(hand, rates, s, 0)) break;
+                    gain = Math.Max(gain, s);
+                    for (int c = 1; c <= Math.Min(maxCitiesStock, settlements[p] + s) && Affordable(hand, rates, s, c); c++)
+                        gain = Math.Max(gain, s + c);
                 }
 
                 var points = player.VictoryPoints;
@@ -458,6 +463,21 @@ namespace Agents
             foreach (DevelopmentCardType development in DevelopmentTypes)
                 if (development != DevelopmentCardType.Unknown) developmentLeft += state.DevelopmentBank.Get(development);
             writer.Add(developmentLeft > 0 ? (float)state.DevelopmentBank.Get(DevelopmentCardType.VictoryPoint) / developmentLeft : 0f);
+        }
+
+        /// <summary>
+        /// Whether the cards pay for s settlements and c cities, trading surplus at the rates
+        /// </summary>
+        private static bool Affordable(ReadOnlySpan<int> hand, ReadOnlySpan<int> rates, int settlements, int cities)
+        {
+            int lacking = 0, tradeable = 0;
+            for (int r = 0; r < hand.Length; r++)
+            {
+                int cost = settlements * BuildCosts[1, r] + cities * BuildCosts[2, r];
+                lacking += Math.Max(cost - hand[r], 0);
+                tradeable += Math.Max(hand[r] - cost, 0) / rates[r];
+            }
+            return lacking <= tradeable;
         }
 
         private static int Lead(ReadOnlySpan<int> values, int player)
