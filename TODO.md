@@ -83,13 +83,17 @@
 			- 2. Augmentation per Spielerrotation: in train.py (--augment-rotation, augmentation.py), Paritätstest gegen echte rotierte Spielzustände
 				- Nur zyklische Rotationen (Spieler p => p + k) erhalten die Zugreihenfolge, nur nach der Setup-Phase (die Schlangenreihenfolge beginnt immer bei Spieler 0)
 				- Sitzvorteil kein Problem: er steckt nach dem Setup vollständig im State (Plätze, Zug, Karten), Playout-Limit (50.000 Runden) irrelevant
-			- 3. Häfen als Features, Voraussetzung für Brett-Symmetrien
+			- 3. Augmentation per Zahlenchip-Paaren: 2/12, 3/11, 4/10, 5/9, 6/8 haben dieselbe Würfelwahrscheinlichkeit, jedes Paar unabhängig tauschbar => 32 regelgetreue Sichten, mit Rotation bis 128x
+				- Nur Wertumbelegung (Zahlen der Tiles, letzter Wurf), die 7 bleibt; abgeleitete Features (Pips, Produktion) bleiben gleich => kein neues Layout nötig
+				- Paritätstest wie bei der Rotation: Zahlen im echten Spielzustand tauschen, vektorisieren, mit dem umbelegten Vektor vergleichen
+				- Holz/Lehm-Tausch (gleiche Baukosten) bewusst nicht: verschiebt die Verteilung (3 Wälder und 4 Hügel statt 4/3)
+			- 4. Häfen als Features, Voraussetzung für Brett-Symmetrien
 				- Bisher sieht das Net Häfen nur als Privilegien ihrer Besitzer: nicht, wo ein freier Hafen liegt und welchen Typ er hat (Positionen fest, Typen zufällig) => es kann "zum passenden 2:1-Hafen bauen" nicht bewerten
 				- Pro Küsten-Kreuzung (30 von 54) der Hafentyp (3:1 plus 5x 2:1, kein Hafen = alles 0): 180 Features, regelgetreu (ein Hafen markiert 2 Küsten-Kreuzungen) und unabhängig von festen Slots
 				- Neues Layout: beide Vektorizer, Paritäts-Fixtures, neu vektorisieren (Rohdaten liegen auf dem Server)
-			- 4. Brett-Symmetrien (6 Drehungen x Spiegelung = 12 Sichten, Tiles/Kreuzungen/Kanten/Häfen/Räuber über die Adjazenztabellen permutieren) erst mit den Hafen-Features: ohne sie verwischen Drehungen das implizite Wissen über die festen Hafen-Positionen; zusammen mit Rotation bis 48x effektive Daten
-			- 5. Endspiel-Features: in diesem Zug erreichbare VP (Hand plus Trades), mögliche Verlängerung der längsten Straße auf freien Kanten, Ritter-Rennen um die größte Rittermacht, erwartete VP aus dem restlichen Dev-Deck
-			- 6. Größeres Net (z.B. 4096 breit, länger trainieren) erst wenn die Lücke train/val nach der Augmentation kleiner wird
+			- 5. Brett-Symmetrien (6 Drehungen x Spiegelung = 12 Sichten, Tiles/Kreuzungen/Kanten/Häfen/Räuber über die Adjazenztabellen permutieren) erst mit den Hafen-Features: ohne sie verwischen Drehungen das implizite Wissen über die festen Hafen-Positionen; zusammen mit Rotation bis 48x effektive Daten
+			- 6. Endspiel-Features: in diesem Zug erreichbare VP (Hand plus Trades), mögliche Verlängerung der längsten Straße auf freien Kanten, Ritter-Rennen um die größte Rittermacht, erwartete VP aus dem restlichen Dev-Deck
+			- 7. Größeres Net (z.B. 4096 breit, länger trainieren) erst wenn die Lücke train/val nach der Augmentation kleiner wird
 		- Beobachtungen aus Beispielpartie (xnebmrjf, 4x MCTS, 20 Runden, Sieger mit 10 VP über Längste Straße und 8x 2:1-Holz-Hafen):
 			- Das komplette Dev-Deck (25 Karten) war nach 20 Runden gekauft, zwei eingeschlossene Spieler bauten nach dem Setup keine Straße und keine Siedlung mehr (7 VP über Rittermacht, 6 VP über drei VP-Karten)
 			- Ursachen vermutlich Perfect Information (das Net sieht die genaue Deck-Zusammensetzung und versteckte VP-Karten) und die Playout-Labels (Wert von Dev-Karten für schwache Agents) => beobachten, Self-Play und Hidden Information beheben es
