@@ -7,11 +7,11 @@
 	- 1. Observation Filter / StateView + Belief Tracker in Common
 		- Vorher vollständige Test-Suite: jede Regel pro Beobachter, Randfälle (Spielende, Undo, Laden), kein Leck verdeckter Info
 		- StateView(p): fremde Hände als bekannte Karten + Unknown x k, fremde Dev Cards als Unknown
-		- Belief Tracker pro Beobachter aus gefilterten Actions: Unknowns mit Herkunft, Constraint Propagation bei Ausgaben, Sampler unter der 19-pro-Ressource-Constraint, versteckte VP hypergeometrisch
+		- Belief Tracker pro Beobachter aus gefilterten Actions (gleiche Schnittstelle für Server, HandleAction und Vectorizer): Unknowns mit Herkunft, Constraint Propagation bei Ausgaben, Sampler unter der 19-pro-Ressource-Constraint, versteckte VP hypergeometrisch
 		- Test: wahrer State liegt immer im Support des Beliefs; Belief-Entropie bestimmt die Anzahl Determinisierungen
 	- 2. Determinized MCTS (PIMC): N Determinisierungen, Root Visits aggregieren, Net bleibt gültig; Benchmark gegen Cheating MCTS; Schwächen Strategy Fusion und Non-Locality
 	- 3. SO-ISMCTS: Knoten = Information Sets des Root-Spielers, Availability Counts statt Parent Visits, Zufall nur branchen, wo der Root-Spieler das Ergebnis sieht
-	- 4. Belief-aware StateValueNet: Training auf StateView-Inputs (Views per Replay der Histories rekonstruierbar), erwartete versteckte VP als Feature
+	- 4. Belief-aware StateValueNet: Training auf StateView-Inputs (Views per Replay der Histories rekonstruierbar), Sichtbarkeits-Augmentation nach der echten Beobachtungsverteilung statt zufällig, erwartete versteckte VP als Feature
 	- 5. Particle MCTS / POMCP erst mit Spielerhandel (Angebote schwer als Constraints)
 - Action für variable Player Trades
 - Client
@@ -52,7 +52,7 @@
 	- 6. Self-Play: Labels schwacher Agents binden das Net an deren Niveau
 		- Generator: viele Spiele parallel, ~400-1000 Iterationen pro Zug, Playout Cap Randomization, Dirichlet-Noise; aufzeichnen State, Root-q, Visits, Ergebnis (~40-100k Spiele/Tag auf der 5080)
 		- Target λ·z + (1-λ)·q, von E2 weitertrainieren, v2-Daten anfangs beimischen, Gate per gespiegeltem Duell
-		- Server-GPU (GTX 1070 Ti): Netzteil reicht, CUDA 12.x und Treiber 580, CUDA-Provider für Linux, ~15-25k Spiele/Tag
+		- Server-GPU (GTX 1070 Ti) einbauen: Netzteil reicht (650 W), 8-Pin-Kabel, oberer x16-Slot frei; CUDA 12.x, Treiber 580, PyTorch cu126; CUDA-Provider für Linux, ~15-25k Spiele/Tag
 		- Risiken: Bootstrapping (q vom eigenen Net), Kollaps in einen ausnutzbaren Stil
 	- 7. Netzarchitektur v2 (siehe Graph Transformer)
 	- Kleinere Suchverbesserungen: Pondering, Transpositionen über State Hashes, Trade-Varianten bündeln
@@ -63,6 +63,7 @@
 	- Maßgeblich: Batch-Fit Plackett-Luce über alle Spiele (reihenfolgeunabhängig), ganze Platzierung statt nur Sieg, Intervalle per Bootstrap
 	- Live: OpenSkill Plackett-Luce wie Beyond All Reason, in C# OpenSkillSharp; für Bots tau = 0, LimitSigma, Anzeige μ - σ
 	- Anker BuilderAgent = 0 als feste Version (nicht RandomAgent: verliert immer, schlecht bestimmt), RandomAgent nur als Referenz
+	- Etablierte Ratings bleiben stabil (Updates ~σ², Neue nehmen die Änderung auf), Nicht-Transitivität bildet eine Zahl nicht ab
 	- Zwei Sitze desselben Agents zählen als ein Team, jedes Spiel speichern (Agents, VP, Karten-Seed)
 	- Turnier-Runner: zufällige 4er-Besetzungen, Sitze rotieren, feste Denkzeit pro Eintrag
 	- A/B-Tests per gespiegeltem Duell: nur doppelt gewonnene Paare zählen, Intervall pro Paar, SPRT als Abbruch
@@ -88,7 +89,6 @@
 - Graph Transformer als Alternative
 	- Ein Token pro Tile, Intersection, Edge und Spieler plus globaler Token, Attention Bias nach Graph-Distanz, d=128 mit 4 Layern ~1-3x das MLP
 	- Spieler-symmetrisch (geteilter Player Encoder, Value Head pro Spieler) => Rotation eingebaut statt Augmentation
-	- Sichtbarkeits-Augmentation (Karten zufällig unknown), sobald Hidden Information kommt
 	- Erwartung ~+50 bis +180 Elo nach langsamerer Inference; Augmentation am MLP hat einen Teil schon geholt (Rotation -26%, Brett -2%)
 	- Stufen: spieler-symmetrisches MLP (DeepSets-artig) => Transformer, Vergleich bei gleichen Daten und gleicher Denkzeit
 - PolicyNet
@@ -145,7 +145,9 @@
 	- Schichten: Common (Engine) => Agents => neue Bibliothek Simulation (Match, History, Undo, Runner, Event-Stream); ISimulation mit LocalSimulation und RemoteSimulation; Protocol; Server- und Client-exe
 	- Server autoritativ, schickt angewandte Actions mit aufgelöstem Zufall, Client spielt sie nach; Hidden Information später als Observation-Filter
 	- Protokoll WebSocket + JSON (Framing, Ping, TLS gratis, sprachneutral für Bridges), ersetzt Common/Net/Packet.cs
-	- Rollen Admin, Spectator, Player, Agent/Bridge; Tokens als Hash in der Konfiguration, außerhalb des LAN nur wss, Prüfung bei jedem Kommando, Events pro Session gefiltert
+	- Rollen Admin, Spectator, Player, Agent/Bridge; lokal (Server im Client) automatisch Admin
+		- Netzwerk: Tokens als Hash in der Konfiguration, im hello oder Authorization-Header, außerhalb des LAN nur wss; Rolle bleibt über Reconnects, Spectator optional ohne Token
+		- Prüfung bei jedem Kommando, Events pro Session gefiltert
 	- Migration: 1. Simulation aus GameScreen herauslösen, 2. ISimulation/LocalSimulation, 3. Bench als Headless-Kommandos, 4. Netzwerk und "Mit Server verbinden"
 - Interface für JSettlers Agents/Server
 - Tabletalking über LLMs
