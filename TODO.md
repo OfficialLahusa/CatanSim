@@ -60,7 +60,7 @@
 		- Server: 32 Threads am schnellsten, ~45k Playouts/s auf der SSD, auf der HDD nur ~20k => Rohdaten auf die SSD
 		- Pro Match ~10 Samples (5 + ~5 Siblings), ~2980 Playouts, 0,70 MB, ~20 Dateien
 		- Weitere abgeleitete Features (z.B. Expansionspotenzial) blockieren nicht: sie werden aus dem Basisvektor berechnet, gespeicherte Datensätze lassen sich migrieren
-	- Phase 1: Server-Run v2 (läuft seit 25.10.)
+	- Phase 1: Server-Run v2 erledigt (25./26.10.): 1M Matches, 9.996.128 Samples in 999.750 Gruppen (250 Zwillings-Matches zusammengelegt), alle mit Rohergebnissen; Präzisions-Set 6000 Matches (7 auch in v2, werden bei der Auswertung ausgelassen)
 		- Hauptlauf: DatasetCollector --matches 1000000 --parts 20 --samples 5 --playouts 300 --threads 32 --seed 20261025 --name v2, ~3 Mrd. Playouts, ~18,5 h, ~700 GB, ~20M Dateien
 		- Jederzeit abbrechbar (fertige Teile sind nutzbar), Fortsetzen mit demselben Befehl, Erweitern mit gleichem Seed und --first-match
 		- Lernkurve auf dem v1-Datensatz (sl159q7y-Setup, 6,25% bis 100% der 420k Trainings-Matches): val KL 0.0683 / 0.0555 / 0.0454 / 0.0379 / 0.0318
@@ -71,11 +71,14 @@
 		- Dann python prepare_dataset.py für v2 und das Präzisions-Set getrennt, die vorbereiteten Arrays (~35 GB) auf die SSD
 		- Bisherige Datensätze folgen der alten Road-Building-Regel, der neue Run nutzt die korrigierte
 	- Phase 2: Training auf v2
-		- Baseline mit dem sl159q7y-Setup (1764 Features, Normalisierung), val KL ist wegen der anderen Playout-Agents nicht mit v1 vergleichbar => Vergleich im MCTS
-		- states.npy mit ~10M Samples ist ~35 GB: train.py liest zufällig, schnell nur wenn es in den RAM passt, sonst Teilmenge oder blockweises Laden
+		- Baseline xnebmrjf erledigt (sl159q7y-Setup, 40 Epochen à ~30 s, Daten auf C:): val KL 0.0215, jetzt Default-Modell (Hugging Face und Agents.csproj)
+			- v2-Labels sind deutlich flacher als v1 (Uniform-KL 0,50 statt 0,77, gemischte Agents mit 30% Random): KL zwischen v1- und v2-Modellen nicht vergleichbar
+			- Präzisions-Set (evaluate_precision.py): Paar-Genauigkeit 73,2% statt 67,7%, bester Zug 55,6% statt 47,9%, Regret 0,52 statt 0,78pp, kalibriert auch weit hinten
+			- Duell gegen sl159q7y (MaxN, 60k Iterationen, 12 parallel): 55:32 (63%, p ≈ 0,018, ~+95 Elo)
+		- states.npy (~35 GB) passt in den RAM-Cache, train.py liest damit schnell genug
 		- Aux Heads und Sibling-Ranking zuschalten, Gewichte tunen, Maßstab ist die Ranking-Genauigkeit auf dem Präzisions-Set
 		- Umgewichten nach Position im Match / Matchlänge und nach Anzahl beendeter Playouts prüfen, Chance-Siblings ggf. aus dem Ranking nehmen
-		- Bewertung: Duell gegen sl159q7y, gegen 3 BuilderAgents, Kalibrierung pro VP-Rückstand
+		- Bewertung der Varianten: Präzisions-Set (Ranking, Kalibrierung), Duell gegen xnebmrjf, gegen 3 BuilderAgents
 		- Platzierung als Tie-Breaker: Plumbing fertig (zweiter ONNX-Output "placements", MCTSAgent.PlacementWeight β, train.py --ranking-placement-weight), mit dem ersten v2-Modell β per Duell tunen (0 / 0,03 / 0,1)
 			- Wert im MCTS = P(Sieg) + β * Platzierungs-Score (1. = 1 bis 4. = 0), Terminal-States ebenso aus der tatsächlichen Platzierung
 			- Hilft dem eigenen Spiel weit hinten (alle Optionen sonst ~0) und mit max^n auch dem Gegnermodell (Nutzen pro Spieler mit eigenem Platzierungs-Score)

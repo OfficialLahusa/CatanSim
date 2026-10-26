@@ -11,8 +11,8 @@
          The file lives in Artifacts/, which is not tracked in git. When it is missing, the build downloads it from
          Hugging Face and checks its SHA-256 (disable with -p:DownloadStateValueNet=false). It is copied next to every
          program referencing Agents. -->
-    <StateValueNetModel>state_value_net-sl159q7y.onnx</StateValueNetModel>
-    <StateValueNetModelSha256>b35230b94965cb8ef67af07acc82e38188ac8c68cee0102f4ca87219052d05bd</StateValueNetModelSha256>
+    <StateValueNetModel>state_value_net-xnebmrjf.onnx</StateValueNetModel>
+    <StateValueNetModelSha256>b2ac76e185beeddf0109f0db82c438702fa3c49bcd9a2ae75db3b4f354a08391</StateValueNetModelSha256>
     <StateValueNetModelUrl>https://huggingface.co/Lahusa/catansim-state-value-net/resolve/main/$(StateValueNetModel)</StateValueNetModelUrl>
     <StateValueNetModelPath>$(MSBuildThisFileDirectory)Artifacts\$(StateValueNetModel)</StateValueNetModelPath>
     <DownloadStateValueNet Condition="'$(DownloadStateValueNet)' == ''">true</DownloadStateValueNet>
