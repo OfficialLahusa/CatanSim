@@ -52,35 +52,59 @@ class StateDataset(Dataset):
         return len(self.states)
 
     def __getitem__(self, idx):
-        x = self.states[idx].astype(np.float32)
-        y = np.asarray(self.labels[idx], dtype=np.float32)
+        return {key: value[0] for key, value in self.__getitems__([idx]).items()}
+
+    def __getitems__(self, indices):
+        # Ganze Batches auf einmal (der DataLoader ruft das statt __getitem__ pro Sample auf): ein sortierter Zugriff pro
+        # Array statt einer Python-Schleife über die Samples
+        indices = np.asarray(indices, dtype=np.int64)
+        n = len(indices)
+        order = np.argsort(indices, kind="stable")
+        restore = np.empty_like(order)
+        restore[order] = np.arange(n)
+        sorted_indices = indices[order]
+
+        def take(array, dtype):
+            return np.asarray(array[sorted_indices], dtype=dtype)[restore]
+
+        # Im gespeicherten Typ (meist float16), das Modell rechnet sie in float32 um
+        x = take(self.states, self.states.dtype)
+        y = take(self.labels, self.labels.dtype)
         # Fehlende Labels als NaN bzw. -1, die Losses lassen solche Samples aus
         aux = self.aux
-        placements = np.asarray(aux["placements"][idx], dtype=np.float32) if "placements" in aux \
-            else np.full((PLAYER_COUNT, PLAYER_COUNT), np.nan, dtype=np.float32)
-        vp_shares = np.asarray(aux["vp_shares"][idx], dtype=np.float32) if "vp_shares" in aux \
-            else np.full((PLAYER_COUNT,), np.nan, dtype=np.float32)
-        actor = int(aux["actors"][idx]) if "actors" in aux else -1
+        placements = take(aux["placements"], np.float32) if "placements" in aux             else np.full((n, PLAYER_COUNT, PLAYER_COUNT), np.nan, dtype=np.float32)
+        vp_shares = take(aux["vp_shares"], np.float32) if "vp_shares" in aux else np.full((n, PLAYER_COUNT), np.nan, dtype=np.float32)
+        rounds_left = take(aux["rounds_left"], np.float32) if "rounds_left" in aux else np.full(n, np.nan, dtype=np.float32)
+        sibling_groups = take(aux["sibling_groups"], np.int64) if "sibling_groups" in aux else np.full(n, -1, dtype=np.int64)
+        actors = take(aux["actors"], np.int64) if "actors" in aux else np.full(n, -1, dtype=np.int64)
 
         # Die Labels pro Spieler wandern mit ihrem Spieler (torch.randint, damit jeder Worker eigene Zufallszahlen hat)
-        if self.augment_rotation and is_rotatable(x):
-            k = int(torch.randint(PLAYER_COUNT, (1,)))
-            if k:
-                x = rotate_features(x, k)
-                y = rotate_players(y, k)
-                placements = rotate_players(placements, k, axis=0)
-                vp_shares = rotate_players(vp_shares, k)
-                actor = rotate_player_index(actor, k)
+        if self.augment_rotation:
+            ks = torch.randint(PLAYER_COUNT, (n,)).numpy()
+            ks[~is_rotatable(x)] = 0
+            for k in range(1, PLAYER_COUNT):
+                rows = np.flatnonzero(ks == k)
+                if rows.size:
+                    x[rows] = rotate_features(x[rows], k)
+                    y[rows] = rotate_players(y[rows], k)
+                    placements[rows] = rotate_players(placements[rows], k, axis=1)
+                    vp_shares[rows] = rotate_players(vp_shares[rows], k)
+                    actors[rows] = rotate_player_index(actors[rows], k)
 
         return {
-            "x": torch.from_numpy(np.ascontiguousarray(x)),
-            "y": torch.from_numpy(np.ascontiguousarray(y)),
-            "placements": torch.from_numpy(np.ascontiguousarray(placements)),
-            "vp_shares": torch.from_numpy(np.ascontiguousarray(vp_shares)),
-            "rounds_left": torch.tensor(float(aux["rounds_left"][idx]) if "rounds_left" in aux else float("nan")),
-            "sibling_groups": torch.tensor(int(aux["sibling_groups"][idx]) if "sibling_groups" in aux else -1),
-            "actors": torch.tensor(max(actor, 0)),
+            "x": torch.from_numpy(x),
+            "y": torch.from_numpy(y),
+            "placements": torch.from_numpy(placements),
+            "vp_shares": torch.from_numpy(vp_shares),
+            "rounds_left": torch.from_numpy(rounds_left),
+            "sibling_groups": torch.from_numpy(sibling_groups),
+            "actors": torch.from_numpy(np.maximum(actors, 0)),
         }
+
+
+def keep_batch(batch):
+    """collate_fn für Datasets mit __getitems__: der Batch ist schon fertig zusammengesetzt"""
+    return batch
 
 
 class GroupBatchSampler(Sampler):
@@ -151,7 +175,7 @@ def main():
     parser.add_argument("--devices", type=int, default=1)
     # bf16-mixed auf Ampere oder neuer, sonst 16-mixed
     parser.add_argument("--precision", default="bf16-mixed")
-    parser.add_argument("--num-workers", type=int, default=8)
+    parser.add_argument("--num-workers", type=int, default=16)
     args = parser.parse_args()
 
     full_ds = StateDataset(args.states, args.labels, args.aux_dir)
@@ -167,7 +191,7 @@ def main():
 
     train_idx, val_idx = np.load(args.train_idx), np.load(args.val_idx)
     train_ds = StateDataset(args.states, args.labels, args.aux_dir, augment_rotation=True) if args.augment_rotation else full_ds
-    loader_args = dict(num_workers=args.num_workers, pin_memory=True, persistent_workers=True)
+    loader_args = dict(num_workers=args.num_workers, pin_memory=True, persistent_workers=True, collate_fn=keep_batch)
     if args.ranking_weight > 0:
         # Sibling-Gruppen zusammenhalten, auch in der Validation (für die Ranking-Metriken)
         groups = full_ds.aux["sibling_groups"]
@@ -186,9 +210,10 @@ def main():
         states = np.asarray(full_ds.states[sample], dtype=np.float32)
         if args.augment_rotation:
             # Statistik über die Sichten, die das Training sieht: jede rotierbare Zeile um ein zufälliges k gedreht
-            rng = np.random.default_rng(1)
-            for row in np.flatnonzero(is_rotatable(states)):
-                states[row] = rotate_features(states[row], int(rng.integers(PLAYER_COUNT)))
+            ks = np.random.default_rng(1).integers(PLAYER_COUNT, size=len(states))
+            ks[~is_rotatable(states)] = 0
+            for k in range(1, PLAYER_COUNT):
+                states[ks == k] = rotate_features(states[ks == k], k)
         scaled = model.set_input_normalization(states)
         print(f"Input normalization: {scaled} of {in_dim} features standardized, the binary ones unchanged")
 

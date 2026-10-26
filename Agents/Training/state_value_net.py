@@ -84,7 +84,8 @@ class StateValueModule(L.LightningModule):
         return self.model(x)
 
     def _step(self, batch, stage):
-        x, y = batch["x"], batch["y"]
+        # States und Labels kommen im gespeicherten Typ (float16 halbiert den Transfer aus den Workern), gerechnet wird in float32
+        x, y = batch["x"].float(), batch["y"].float()
         outputs = self.model.forward_all(x)
         logits = outputs["logits"]
 
@@ -139,22 +140,28 @@ class StateValueModule(L.LightningModule):
 
 def masked_kl(logits, target):
     """KL-Divergenz zwischen Zielverteilung und Softmax über die letzte Dimension, gemittelt über alle Verteilungen.
-    Samples ohne Label (NaN, z.B. aus Datensätzen ohne Rohergebnisse) zählen nicht."""
+    Samples ohne Label (NaN, z.B. aus Datensätzen ohne Rohergebnisse) zählen nicht. Maskiert statt indiziert, damit die
+    GPU nicht pro Batch auf die CPU warten muss."""
+    target = target.float()
     valid = ~torch.isnan(target).flatten(1).any(dim=1)
-    if not valid.any():
-        return logits.sum() * 0.0
-    log_probs = F.log_softmax(logits[valid].float(), dim=-1)
-    target = target[valid].float()
+    target = torch.nan_to_num(target)
+    log_probs = F.log_softmax(logits.float(), dim=-1)
     kl = (torch.xlogy(target, target) - target * log_probs).sum(dim=-1)
-    return kl.mean()
+    # Mittel pro Sample (Platzierungen: über die Spieler), dann über die Samples mit Label
+    return _masked_mean(kl.flatten(1).mean(dim=1) if kl.dim() > 1 else kl, valid)
+
+
+def _masked_mean(values, valid):
+    """Mittelwert über die gültigen Einträge, 0 wenn keiner gültig ist"""
+    return (values * valid).sum() / valid.sum().clamp(min=1)
 
 
 def masked_rounds_loss(prediction, rounds_left):
     """Smooth L1 auf die skalierten Runden bis Spielende, ohne Samples ohne Label"""
+    rounds_left = rounds_left.float()
     valid = ~torch.isnan(rounds_left)
-    if not valid.any():
-        return prediction.sum() * 0.0
-    return F.smooth_l1_loss(prediction[valid].float(), rounds_left[valid].float() / ROUNDS_LEFT_SCALE)
+    loss = F.smooth_l1_loss(prediction.float(), torch.nan_to_num(rounds_left) / ROUNDS_LEFT_SCALE, reduction="none")
+    return _masked_mean(loss, valid)
 
 
 def placement_score(placements):

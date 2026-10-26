@@ -77,5 +77,9 @@ def rotate_players(values: np.ndarray, k: int, axis: int = -1) -> np.ndarray:
     return np.roll(values, k, axis=axis)
 
 
-def rotate_player_index(player: int, k: int) -> int:
-    return player if player < 0 else (player + k) % PLAYER_COUNT
+def rotate_player_index(player, k: int):
+    """A player index (-1 for none stays), or an array of them"""
+    if np.ndim(player) == 0:
+        return player if player < 0 else (player + k) % PLAYER_COUNT
+    player = np.asarray(player)
+    return np.where(player < 0, player, (player + k) % PLAYER_COUNT)
