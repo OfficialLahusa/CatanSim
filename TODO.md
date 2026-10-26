@@ -167,11 +167,22 @@
 - Leaderboard für Agents verschiedener Herkunft (MCTS mit verschiedenen Modellen und Zeiten, BuilderAgent, später Catanatron über eine Bridge)
 	- Batch-Fit Plackett-Luce über alle Spiele (wie BayesElo/Ordo bei Schach-Engines) statt Online-Elo/TrueSkill: reihenfolgeunabhängig und am genauesten für Agents, die sich nicht verändern
 		- Ganze Platzierung pro Spiel (Sieger, dann nach VP, Gleichstände anteilig) statt nur Sieg, umgerechnet auf Elo-Skala (400 * log10 Stärke), Konfidenzintervalle per Bootstrap
-		- Anker-Agent mit festem Wert (z.B. RandomAgent oder BuilderAgent), damit die Skala beim Hinzufügen stabil bleibt
+		- Anker BuilderAgent = 0 (mittelstark, gut vernetzt, präzise bestimmt), damit die Skala beim Hinzufügen stabil bleibt; Ratings sind nicht nullsummig, ohne Anker driftet die Skala
+			- Nicht RandomAgent: verliert praktisch immer, "immer Letzter" bestimmt seinen Wert kaum (nur der Prior hält ihn), lange Kette bis zur Spitze; nur als Referenzpunkt anzeigen
+			- Anker als feste Version einfrieren (RandomAgent wurde schon mehrfach geändert)
+		- Etablierte Ratings bleiben stabil: Updates skalieren mit σ², neue Agents (großes σ) nehmen die Änderungen auf; Nicht-Transitivität (Agent nutzt gezielt eine Schwäche) bildet eine Zahl nicht ab
+		- Jedes Spiel speichern (Agents pro Sitz, VP, Sieger, Karten-Seed), damit jederzeit neu gefittet werden kann (auf dem Simulator-Server)
 	- Turnier-Runner (ModelMatch verallgemeinern): zufällige 4er-Besetzungen aus dem Pool, Sitze ausbalanciert rotieren oder Sitzeffekt im Modell, eine CSV-Zeile pro Spiel (Agents pro Sitz, VP, Sieger, Runden)
 	- Feste Denkzeit pro Entscheidung, MCTS 0,5 s und MCTS 5 s sind getrennte Einträge
-	- Für schnelle A/B-Entscheidungen (ist das neue Modell besser?) weiter 2-gegen-2-Duelle, dazu SPRT als Abbruchkriterium
-	- Online-Alternative für laufende Ratings: OpenSkill (Weng-Lin, Plackett-Luce, offene Alternative zu TrueSkill)
+	- Für schnelle A/B-Entscheidungen (ist das neue Modell besser?) gespiegelte 2-gegen-2-Duelle, dazu SPRT als Abbruchkriterium
+		- Nur doppelt gewonnene Paare messen die Stärke (Vorzeichentest), Splits entscheidet der Sitz; Konfidenzintervall pro Paar (1, 1/2, 0) ist enger als pro Spiel, da der Sitzeffekt aus der Varianz fällt
+	- Online-Ratings für die Live-Anzeige: OpenSkill Plackett-Luce (Weng-Lin), wie Beyond All Reason (Teiserver: Plackett-Luce, tau, prevent_sigma_increase, Anzeige max(μ - σ, 0))
+		- C#: OpenSkillSharp (NuGet, MIT, Port von openskill.py mit dessen Testdaten), model.Rate(Teams, scores: VP), ein Team pro Spieler, Gleichstände über gleiche VP
+		- Für Bots tau = 0 (Stärke ändert sich nicht, sonst wachsen die σ und die Ratings zittern), LimitSigma = true
+		- Zwei Sitze desselben Agents in einem Spiel nicht als zwei Spieler werten (zählt doppelt, σ schrumpft zu schnell): ein Team mit beiden Sitzen oder nur Spiele mit einem Sitz pro Agent
+		- Online-Updates hängen von der Spielreihenfolge ab => für die maßgebliche Rangliste regelmäßig Batch-Fit über alle Spiele
+	- Plackett-Luce misst die Unsicherheit über den Spielausgang (Verteilung über Platzierungen), nicht wie sicher sich das Value Net ist; dafür Ensemble, MC Dropout oder Varianz-Head (z.B. für Exploration in MCTS)
+		- Platzierungs-Head als Plackett-Luce (4 Stärken statt 16 Logits) wäre konsistent: heute kann "A mit 60% Erster" und "B mit 60% Erster" gleichzeitig herauskommen
 - Agents/env: OpenMP-Konflikt (libiomp5md.dll von conda-MKL und torch), torch läuft nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren oder Duplikat entfernen
 - Spezialisierten Datensatz für Initial Placements anlegen
 	- Größter Hebel: im Setup reicht die Suche nicht über den eigenen Zug hinaus (PV = Settlement + Road), die Entscheidung ist praktisch eine 1-Ply-Bewertung des Nets
