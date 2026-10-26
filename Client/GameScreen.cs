@@ -108,7 +108,6 @@ namespace Client
         // State value network for win rate evaluation
         // Null when the model file is missing (it is not tracked in git), the net evaluation is unavailable then
         private StateValueNet? _stateValueNet = StateValueNet.IsDefaultModelAvailable ? new StateValueNet(StateValueNet.DefaultModelFile) : null;
-        private StateVectorizer _stateVectorizer = new StateVectorizer();
         private readonly string[] _valuationTypes = ["State Value Network", "Simple Agent"];
         private int _selectedValuationType = 0;
         private float[] _valuation = new float[PLAYER_COUNT];
@@ -712,7 +711,7 @@ namespace Client
             // Print state valuation network output
             if (Keyboard.IsKeyPressed(Keyboard.Key.Enter) && _stateValueNet != null)
             {
-                float[] winProbabilities = _stateValueNet.Run(_stateVectorizer.Vectorize(_state));
+                float[] winProbabilities = _stateValueNet.Run(StateVectorizer.For(_stateValueNet).Vectorize(_state));
                 Console.WriteLine("Win Probabilities: " + string.Join(", ", winProbabilities.Select(p => p.ToString("P5"))));
             }
         }
@@ -1359,7 +1358,7 @@ namespace Client
         {
             _valuation = _selectedValuationType switch
             {
-                0 when _stateValueNet != null => _stateValueNet.Run(_stateVectorizer.Vectorize(_state)),
+                0 when _stateValueNet != null => _stateValueNet.Run(StateVectorizer.For(_stateValueNet).Vectorize(_state)),
                 0 or 1 => SimpleAgent.StateValueFunc(_state),
                 _ => throw new NotImplementedException()
             };

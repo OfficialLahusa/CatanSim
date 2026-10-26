@@ -71,19 +71,22 @@ def vectorize_states(base_path: Path, index, max_workers=None, chunksize=64, out
     for entry in index:
         entries_by_subdir.setdefault(entry[2], []).append(entry)
 
-    # Nur die übrigen State YAMLs (z.B. ältere Datensätze ohne Chunks) multi-processed vektorisieren
+    # Nur die übrigen State YAMLs (z.B. ältere Datensätze ohne Chunks oder mit Chunks eines älteren Layouts) multi-processed vektorisieren
     tasks = []
+    outdated = 0
     for subdir_name, entries in entries_by_subdir.items():
         chunk_vectors = load_vector_chunks(str(base_path / subdir_name))
         for entry_idx, group_idx, _, entry_name in entries:
             vec = chunk_vectors.get(entry_name)
-            if vec is not None:
+            if vec is not None and len(vec) == FEATURE_DIM:
                 state_matrix[entry_idx, :] = vec
             else:
+                outdated += vec is not None
                 tasks.append((entry_idx, base_path, subdir_name, entry_name))
         del chunk_vectors
 
-    print(f"{len(index) - len(tasks)} state vectors taken from vector chunks, {len(tasks)} to vectorize from YAML.")
+    print(f"{len(index) - len(tasks)} state vectors taken from vector chunks, {len(tasks)} to vectorize from YAML"
+          f"{f' ({outdated} with chunks of an older layout)' if outdated else ''}.")
  
     progress_columns = [
         SpinnerColumn(),

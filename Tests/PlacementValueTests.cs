@@ -10,7 +10,7 @@ namespace Tests
     /// <summary>
     /// Value nets with a placements output and the placement tie-breaker of the MCTS agent. Uses tiny untrained nets with
     /// and without auxiliary heads (Fixtures/ValueNet/placements_tiny.onnx and plain_tiny.onnx, exported by export_onnx.py
-    /// from StateValueNet(1764, hidden=16, aux_heads=True) and StateValueNet(1764, hidden=16)), so only the plumbing is
+    /// from StateValueNet(1965, hidden=16, aux_heads=True) and StateValueNet(1965, hidden=16)), so only the plumbing is
     /// tested, not playing strength.
     /// </summary>
     public class PlacementValueTests

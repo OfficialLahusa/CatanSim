@@ -66,7 +66,8 @@ namespace DatasetCollector
     /// <summary>
     /// What the command line asks for: a run with the settings, after an optional thread calibration
     /// </summary>
-    public sealed record CommandLine(CollectorSettings Settings, bool CalibrateThreads, bool CalibrateOnly, TimeSpan CalibrationTime, bool ShowHelp)
+    public sealed record CommandLine(CollectorSettings Settings, bool CalibrateThreads, bool CalibrateOnly, TimeSpan CalibrationTime, bool ShowHelp,
+        (string Seeds, string Output)? RegenerateMaps = null)
     {
         public const string Usage = """
             Usage: DatasetCollector [options]
@@ -96,6 +97,11 @@ namespace DatasetCollector
               --calibrate            Only calibrate the thread count with the other settings and report it
                                      (tries all, 3/4, 1/2 and 1/4 of the logical cores and 32 and 24 threads)
               --calibration-seconds  Seconds per calibration run (default 20, every thread count runs twice)
+              --regenerate-maps SEEDS OUT
+                                     Instead of collecting: regenerate the maps of the matches with the seeds in
+                                     SEEDS (one per line) and write their ports and tiles to OUT, to extend a
+                                     dataset of an older feature layout; needs the run's --agents, --exploration
+                                     and --center-desert
               --help                 Show this help
             """;
 
@@ -104,6 +110,7 @@ namespace DatasetCollector
             CollectorSettings settings = new();
             bool calibrateThreads = false, calibrateOnly = false, showHelp = false;
             TimeSpan calibrationTime = TimeSpan.FromSeconds(20);
+            (string, string)? regenerateMaps = null;
             string agents = "random=0.3,simple=0.35,builder=0.35", exploration = "0.1-0.2";
 
             for (int i = 0; i < args.Length; i++)
@@ -133,6 +140,7 @@ namespace DatasetCollector
                     case "--name": settings = settings with { Name = Value() }; break;
                     case "--calibrate": calibrateThreads = calibrateOnly = true; break;
                     case "--calibration-seconds": calibrationTime = TimeSpan.FromSeconds(double.Parse(Value(), CultureInfo.InvariantCulture)); break;
+                    case "--regenerate-maps": regenerateMaps = (Value(), Value()); break;
                     case "--help" or "-h": showHelp = true; break;
                     default: throw new ArgumentException($"Unknown option \"{args[i]}\".");
                 }
@@ -140,7 +148,7 @@ namespace DatasetCollector
 
             settings = settings with { Agents = AgentMix.Parse(agents, exploration) };
             settings.Validate();
-            return new CommandLine(settings, calibrateThreads, calibrateOnly, calibrationTime, showHelp);
+            return new CommandLine(settings, calibrateThreads, calibrateOnly, calibrationTime, showHelp, regenerateMaps);
         }
     }
 }

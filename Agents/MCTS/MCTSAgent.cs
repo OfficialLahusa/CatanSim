@@ -28,7 +28,6 @@ namespace Agents.MCTS
 
         // The default net is shared by all agents that aren't given another one, and loaded on first use
         private static readonly Lazy<StateValueNet> DefaultValueNet = new(() => new StateValueNet(StateValueNet.DefaultModelFile));
-        private static readonly StateVectorizer DefaultVectorizer = new();
 
         protected readonly StateValueNet _stateValueNet;
         protected readonly IStateVectorizer _stateVectorizer;
@@ -64,7 +63,7 @@ namespace Agents.MCTS
 
 
         /// <param name="valueNet">Value net for the leaves, the default model if null</param>
-        /// <param name="vectorizer">Encoding the value net was trained on, the current StateVectorizer if null</param>
+        /// <param name="vectorizer">Encoding the value net was trained on, the StateVectorizer for the net's input size if null</param>
         /// <summary>
         /// Weight of the placement score in the search value: the value of a state is the win probability plus this weight
         /// times the expected placement score (1 for first place to 0 for last), so the search can tell options apart when it
@@ -126,7 +125,7 @@ namespace Agents.MCTS
             _timeLimitSeconds = timeLimitSeconds;
             IterationLimit = iterationLimit;
             _stateValueNet = valueNet ?? DefaultValueNet.Value;
-            _stateVectorizer = vectorizer ?? DefaultVectorizer;
+            _stateVectorizer = vectorizer ?? StateVectorizer.For(_stateValueNet);
             PlacementWeight = placementWeight;
             _opponentModel = opponentModel;
 

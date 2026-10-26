@@ -24,7 +24,7 @@ namespace Agents
         static GreedyAgent()
         {
             _stateValueNet = new StateValueNet(StateValueNet.DefaultModelFile);
-            _stateVectorizer = new StateVectorizer();
+            _stateVectorizer = StateVectorizer.For(_stateValueNet);
         }
 
         public override Action Act(GameState state)

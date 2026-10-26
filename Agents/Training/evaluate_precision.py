@@ -132,9 +132,11 @@ def run_model(path: str, states: np.ndarray, batch: int = 4096) -> np.ndarray:
 
     session = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
     width = session.get_inputs()[0].shape[1]
-    if isinstance(width, int) and width != states.shape[1]:
+    width = width if isinstance(width, int) else states.shape[1]
+    # Nets of an older layout take the start of the vectors (later feature blocks are appended)
+    if width > states.shape[1]:
         raise ValueError(f"{path} expects {width} features, the precision set has {states.shape[1]}.")
-    logits = np.concatenate([session.run(["logits"], {"state": np.asarray(states[i:i + batch], dtype=np.float32)})[0]
+    logits = np.concatenate([session.run(["logits"], {"state": np.asarray(states[i:i + batch, :width], dtype=np.float32)})[0]
                              for i in range(0, len(states), batch)])
     exp = np.exp(logits - logits.max(axis=1, keepdims=True))
     return exp / exp.sum(axis=1, keepdims=True)

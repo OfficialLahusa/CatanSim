@@ -60,6 +60,11 @@ namespace Agents.Inference
         /// </summary>
         public bool HasPlacements { get; }
 
+        /// <summary>
+        /// Number of features the model takes, the layout it was trained on (see StateVectorizer.For)
+        /// </summary>
+        public int InputDim { get; }
+
         public StateValueNet(string modelPath, int intraOpThreads = 0, InferenceProvider provider = InferenceProvider.Auto, int fixedBatchSize = DefaultFixedBatchSize)
         {
             string resolvedPath = ResolveModelPath(modelPath);
@@ -93,6 +98,7 @@ namespace Agents.Inference
 
             Provider = provider;
             HasPlacements = _session!.OutputMetadata.ContainsKey("placements");
+            InputDim = _session.InputMetadata["state"].Dimensions[1];
         }
 
         private static InferenceProvider ResolveProvider(InferenceProvider provider)

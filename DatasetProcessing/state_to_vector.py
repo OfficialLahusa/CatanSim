@@ -1,5 +1,5 @@
 """
-Convert GameState YAML snapshots into a flat fixed-length (currently 1764) numeric feature vector.
+Convert GameState YAML snapshots into a flat fixed-length (currently 1965) numeric feature vector.
 
 Design notes
 ------------
@@ -31,6 +31,10 @@ Design notes
 - After the base features come derived ones (production, trade rates,
   affordability, race margins, see derived_features); with them and input
   normalization the value net's val KL fell from 0.087 to 0.032.
+- Then the ports (type per coastal intersection, see port_features) and the
+  endgame features (see endgame_features). All blocks are appended, so the
+  first LEGACY_FEATURE_DIM features are the layout of the value nets up to
+  zjahe050.
 - Output ordering is 100% deterministic given a fixed board (Width/Height,
   hex count, intersection/edge count, player count), so tensors from
   different snapshots of the *same* map/player-count are directly
@@ -44,12 +48,17 @@ from typing import Any, Dict, Iterable, List, Sequence
 import numpy as np
 import yaml
 
-# Size of the base features (the encoded state) and of the derived features after them
+# Size of the base features (the encoded state) and of the derived features, ports and endgame features after them
 BASE_FEATURE_DIM = 1608
 DERIVED_FEATURE_DIM = 156
+PORT_FEATURE_DIM = 180
+ENDGAME_FEATURE_DIM = 21
+
+# Layout of the value nets up to zjahe050: base and derived features
+LEGACY_FEATURE_DIM = BASE_FEATURE_DIM + DERIVED_FEATURE_DIM
 
 # Total size of the final GameState feature vector
-FEATURE_DIM = BASE_FEATURE_DIM + DERIVED_FEATURE_DIM
+FEATURE_DIM = LEGACY_FEATURE_DIM + PORT_FEATURE_DIM + ENDGAME_FEATURE_DIM
 
 # The setup rounds count the round counter up to 2, so the first normal round is 2
 FIRST_NORMAL_ROUND = 2
@@ -371,9 +380,23 @@ CLASSIC_INTERSECTION_TILES = [
 ]
 CLASSIC_MAP_WIDTH = 7
 
+# The rest of the classic geometry (dumped from the engine): all three tiles around each intersection (also water and
+# non-playable ones), the two tiles and the two intersections of each edge, the fixed port slots of the map generator and
+# every possible port position (water tile x, y and the direction of its land tile) with the two intersections it serves
+CLASSIC_INTERSECTION_ALL_TILES = [(8, 9, 15), (1, 8, 9), (1, 2, 9), (2, 9, 10), (9, 10, 16), (9, 15, 16), (2, 3, 10), (3, 10, 11), (10, 11, 17), (10, 16, 17), (3, 4, 11), (4, 11, 12), (11, 12, 18), (11, 17, 18), (14, 15, 22), (8, 14, 15), (15, 16, 23), (15, 22, 23), (16, 17, 24), (16, 23, 24), (17, 18, 25), (17, 24, 25), (12, 18, 19), (18, 19, 26), (18, 25, 26), (21, 22, 28), (14, 21, 22), (22, 23, 29), (22, 28, 29), (23, 24, 30), (23, 29, 30), (24, 25, 31), (24, 30, 31), (25, 26, 32), (25, 31, 32), (19, 26, 27), (26, 27, 33), (26, 32, 33), (28, 29, 36), (29, 30, 37), (29, 36, 37), (30, 31, 38), (30, 37, 38), (31, 32, 39), (31, 38, 39), (32, 33, 40), (32, 39, 40), (36, 37, 43), (37, 38, 44), (37, 43, 44), (38, 39, 45), (38, 44, 45), (39, 40, 46), (39, 45, 46)]
+CLASSIC_EDGE_TILES = [(8, 9), (1, 9), (2, 9), (9, 10), (9, 16), (9, 15), (2, 10), (3, 10), (10, 11), (10, 17), (10, 16), (3, 11), (4, 11), (11, 12), (11, 18), (11, 17), (14, 15), (8, 15), (15, 16), (15, 23), (15, 22), (16, 17), (16, 24), (16, 23), (17, 18), (17, 25), (17, 24), (12, 18), (18, 19), (18, 26), (18, 25), (21, 22), (14, 22), (22, 23), (22, 29), (22, 28), (23, 24), (23, 30), (23, 29), (24, 25), (24, 31), (24, 30), (25, 26), (25, 32), (25, 31), (19, 26), (26, 27), (26, 33), (26, 32), (28, 29), (29, 30), (29, 37), (29, 36), (30, 31), (30, 38), (30, 37), (31, 32), (31, 39), (31, 38), (32, 33), (32, 40), (32, 39), (36, 37), (37, 38), (37, 44), (37, 43), (38, 39), (38, 45), (38, 44), (39, 40), (39, 46), (39, 45)]
+CLASSIC_EDGE_INTERSECTIONS = [(1, 0), (2, 1), (2, 3), (3, 4), (4, 5), (0, 5), (6, 3), (6, 7), (7, 8), (8, 9), (4, 9), (10, 7), (10, 11), (11, 12), (12, 13), (8, 13), (15, 14), (0, 15), (5, 16), (16, 17), (14, 17), (9, 18), (18, 19), (16, 19), (13, 20), (20, 21), (18, 21), (12, 22), (22, 23), (23, 24), (20, 24), (26, 25), (14, 26), (17, 27), (27, 28), (25, 28), (19, 29), (29, 30), (27, 30), (21, 31), (31, 32), (29, 32), (24, 33), (33, 34), (31, 34), (23, 35), (35, 36), (36, 37), (33, 37), (28, 38), (30, 39), (39, 40), (38, 40), (32, 41), (41, 42), (39, 42), (34, 43), (43, 44), (41, 44), (37, 45), (45, 46), (43, 46), (40, 47), (42, 48), (48, 49), (47, 49), (44, 50), (50, 51), (48, 51), (46, 52), (52, 53), (50, 53)]
+CLASSIC_PORT_SLOTS = [(0, 2, "East"), (1, 0, "SouthEast"), (3, 0, "SouthWest"), (5, 1, "SouthWest"), (6, 3, "West"), (5, 5, "NorthWest"), (3, 6, "NorthWest"), (1, 6, "NorthEast"), (0, 4, "East")]
+CLASSIC_PORT_POSITIONS = {(1, 0, "SouthEast"): (2, 1), (2, 0, "SouthEast"): (6, 3), (2, 0, "SouthWest"): (2, 3), (3, 0, "SouthEast"): (10, 7), (3, 0, "SouthWest"): (6, 7), (4, 0, "SouthWest"): (10, 11), (1, 1, "East"): (1, 0), (1, 1, "SouthEast"): (0, 15), (5, 1, "West"): (11, 12), (5, 1, "SouthWest"): (12, 22), (0, 2, "East"): (15, 14), (0, 2, "SouthEast"): (14, 26), (5, 2, "West"): (22, 23), (5, 2, "SouthWest"): (23, 35), (0, 3, "East"): (26, 25), (6, 3, "West"): (35, 36), (0, 4, "NorthEast"): (25, 28), (0, 4, "East"): (28, 38), (5, 4, "West"): (37, 45), (5, 4, "NorthWest"): (36, 37), (1, 5, "NorthEast"): (38, 40), (1, 5, "East"): (40, 47), (5, 5, "West"): (46, 52), (5, 5, "NorthWest"): (45, 46), (1, 6, "NorthEast"): (47, 49), (2, 6, "NorthWest"): (48, 49), (2, 6, "NorthEast"): (48, 51), (3, 6, "NorthWest"): (50, 51), (3, 6, "NorthEast"): (50, 53), (4, 6, "NorthWest"): (52, 53)}
+
+# Coastal intersections (fewer than three land tiles) in index order, the ports are encoded per coastal intersection
+COASTAL_INTERSECTIONS = [i for i, tiles in enumerate(CLASSIC_INTERSECTION_TILES) if len(tiles) < 3]
+PORT_TYPES = ["Generic", "Lumber", "Brick", "Wool", "Grain", "Ore"]
+
 # Layout of the base vector
 _TILE_START, _TILE_SIZE, _TILE_COUNT = 30, 10, 49        # 8 type one-hot (HEX_TYPES), normalized number, present flag
 _INTERSECTION_START, _INTERSECTION_SIZE = 520, 8         # building one-hot, owner one-hot over [-1, 0..3]
+_EDGE_START, _EDGE_SIZE = 952, 7                         # road one-hot, owner one-hot over [-1, 0..3]
 _DEVELOPMENT_BANK = slice(1463, 1468)                   # without Unknown
 
 # The player blocks close the base features. Each holds the victory point trackers (VICTORY_POINT_FIELDS, their sum is
@@ -391,6 +414,13 @@ BUILD_COSTS = np.array([[1, 1, 0, 0, 0], [1, 1, 1, 1, 0], [0, 0, 0, 2, 3], [0, 0
 _INTERSECTION_TILE_MATRIX = np.zeros((len(CLASSIC_INTERSECTION_TILES), _TILE_COUNT), dtype=np.int64)
 for _i, _tiles in enumerate(CLASSIC_INTERSECTION_TILES):
     _INTERSECTION_TILE_MATRIX[_i, list(_tiles)] = 1
+
+# Edge-intersection incidence and the neighbors of each intersection
+_EDGE_INTERSECTION_MATRIX = np.zeros((len(CLASSIC_EDGE_INTERSECTIONS), len(CLASSIC_INTERSECTION_TILES)), dtype=np.int64)
+for _e, _ends in enumerate(CLASSIC_EDGE_INTERSECTIONS):
+    _EDGE_INTERSECTION_MATRIX[_e, list(_ends)] = 1
+_NEIGHBOR_MATRIX = (_EDGE_INTERSECTION_MATRIX.T @ _EDGE_INTERSECTION_MATRIX > 0).astype(np.int64)
+np.fill_diagonal(_NEIGHBOR_MATRIX, 0)
 
 
 def derived_features(base: np.ndarray) -> np.ndarray:
@@ -469,6 +499,107 @@ def derived_features(base: np.ndarray) -> np.ndarray:
     ], axis=1)
 
 
+_COASTAL_INDEX = {intersection: i for i, intersection in enumerate(COASTAL_INTERSECTIONS)}
+_PORT_TYPE_INDEX = {name: i for i, name in enumerate(PORT_TYPES)}
+
+
+def port_features(ports: Iterable[tuple]) -> np.ndarray:
+    """
+    Port features (PORT_FEATURE_DIM, float32) of a board's ports, given as (water tile x, y, direction of the land tile,
+    type): per coastal intersection (COASTAL_INTERSECTIONS, in index order) the one-hot type of the port serving it
+    (PORT_TYPES), all 0 without a port. Independent of the generator's fixed slots, so a port can lie at any coastal edge.
+    """
+    features = np.zeros((len(COASTAL_INTERSECTIONS), len(PORT_TYPES)), dtype=np.float32)
+    for x, y, direction, port_type in ports:
+        for intersection in CLASSIC_PORT_POSITIONS[(int(x), int(y), str(direction))]:
+            features[_COASTAL_INDEX[intersection], _PORT_TYPE_INDEX[str(port_type)]] = 1
+    return features.reshape(-1)
+
+
+def slot_port_features(slot_types: np.ndarray) -> np.ndarray:
+    """Port features (n, PORT_FEATURE_DIM) of classic maps from the type index (PORT_TYPES) of each fixed slot (n, 9),
+    e.g. for maps regenerated from their seeds"""
+    slot_types = np.asarray(slot_types, dtype=np.int64)
+    features = np.zeros((slot_types.shape[0], len(COASTAL_INTERSECTIONS), len(PORT_TYPES)), dtype=np.float32)
+    rows = np.arange(slot_types.shape[0])
+    for slot, position in enumerate(CLASSIC_PORT_SLOTS):
+        for intersection in CLASSIC_PORT_POSITIONS[position]:
+            features[rows, _COASTAL_INDEX[intersection], slot_types[:, slot]] = 1
+    return features.reshape(slot_types.shape[0], -1)
+
+
+def encode_ports(board: Dict[str, Any]) -> List[float]:
+    return port_features((port["AnchorTileX"], port["AnchorTileY"], port["AnchorDirection"], port["Type"])
+                         for port in board["Ports"]).tolist()
+
+
+# Costs of the builds that give victory points: a settlement and a city (resource order as in BUILD_COSTS)
+_SETTLEMENT_COST, _CITY_COST = BUILD_COSTS[1], BUILD_COSTS[2]
+
+
+def endgame_features(base: np.ndarray) -> np.ndarray:
+    """
+    Endgame features of base vectors (n, BASE_FEATURE_DIM), as float32 (n, ENDGAME_FEATURE_DIM). Per player, stored player
+    by player (5 each):
+    - settlement spots: free intersections at the end of one of the player's roads that satisfy the distance rule
+    - road spots: free edges touching one of the player's buildings, or one of the player's roads at an intersection
+      without an opponent's building (the same rules as Board.GetSettlementSites and GetRoadSites)
+    - victory points gained this turn at most: settlements s and cities c the player can pay with its cards, trading
+      surplus at its rates (as for "missing after trading"), with s at most the settlement spots and the settlements in
+      stock, c at most the cities in stock and the player's settlements plus s
+    - whether that wins (victory points plus the gain reach the points to win)
+    - knight lead with the hand: played knights plus knight cards in the hand (not bought this turn) minus the best other
+      player's played knights
+    Then the share of victory point cards among the development cards left in the bank (0 if it is empty).
+    """
+    x = np.asarray(base, dtype=np.float32)
+    n = x.shape[0]
+    players = PLAYER_COUNT
+
+    inters = np.rint(x[:, _INTERSECTION_START:_INTERSECTION_START + 54 * _INTERSECTION_SIZE]).astype(np.int64).reshape(n, 54, _INTERSECTION_SIZE)
+    building = inters[:, :, 1] + inters[:, :, 2] > 0                                         # (n, intersections)
+    own_building = (inters[:, :, 4:8] > 0).transpose(0, 2, 1) & building[:, None, :]          # (n, players, intersections)
+    edges = np.rint(x[:, _EDGE_START:_EDGE_START + 72 * _EDGE_SIZE]).astype(np.int64).reshape(n, 72, _EDGE_SIZE)
+    road = edges[:, :, 1] > 0
+    own_road = (edges[:, :, 3:7] > 0).transpose(0, 2, 1) & road[:, None, :]                   # (n, players, edges)
+
+    road_end = np.matmul(own_road.astype(np.int64), _EDGE_INTERSECTION_MATRIX) > 0
+    free = ~(building | (np.matmul(building.astype(np.int64), _NEIGHBOR_MATRIX) > 0))
+    settlement_spots = (road_end & free[:, None, :]).sum(axis=2)
+    opponent_building = building[:, None, :] & ~own_building
+    anchors = own_building | (road_end & ~opponent_building)
+    road_spots = ((np.matmul(anchors.astype(np.int64), _EDGE_INTERSECTION_MATRIX.T) > 0) & ~road[:, None, :]).sum(axis=2)
+
+    player = np.rint(x[:, _PLAYER_START:_PLAYER_START + players * _PLAYER_SIZE]).astype(np.int64).reshape(n, players, _PLAYER_SIZE)
+    hand = player[:, :, 8:13]
+    ports = player[:, :, 29:35]
+    rate = np.where(ports[:, :, 1:6] > 0, 2, np.where(ports[:, :, 0:1] > 0, 3, 4))
+    settlements = (inters[:, :, 1:2] * inters[:, :, 4:8]).sum(axis=1)
+    max_settlements = np.minimum(settlement_spots, player[:, :, 26])
+
+    gain = np.zeros((n, players), dtype=np.int64)
+    for s in range(6):
+        for c in range(5):
+            cost = s * _SETTLEMENT_COST + c * _CITY_COST
+            missing = np.maximum(cost - hand, 0).sum(axis=2)
+            tradeable = (np.maximum(hand - cost, 0) // rate).sum(axis=2)
+            possible = (missing <= tradeable) & (s <= max_settlements) & (c <= np.minimum(player[:, :, 27], settlements + s))
+            gain = np.where(possible, np.maximum(gain, s + c), gain)
+
+    vp = player[:, :, 0:5].sum(axis=2)
+    wins = vp + gain >= np.rint(x[:, 1:2]).astype(np.int64)
+    knights = player[:, :, 5]
+    best_other_knights = np.stack([np.delete(knights, p, axis=1).max(axis=1) for p in range(players)], axis=1)
+    knight_lead = knights + player[:, :, 14] - best_other_knights
+
+    development = np.rint(x[:, _DEVELOPMENT_BANK]).astype(np.int64)
+    development_left = development.sum(axis=1)
+    victory_point_share = np.where(development_left > 0, development[:, 4].astype(np.float32) / np.maximum(development_left, 1).astype(np.float32), np.float32(0))
+
+    per_player = np.stack([settlement_spots, road_spots, gain, wins, knight_lead], axis=2).astype(np.float32)
+    return np.concatenate([per_player.reshape(n, -1), victory_point_share[:, None].astype(np.float32)], axis=1)
+
+
 def state_to_feature_vector(
     state: Dict[str, Any],
     num_players: int = 4,
@@ -494,7 +625,11 @@ def state_to_feature_vector(
     feats.extend(encode_resource_bank(state["ResourceBank"]))
     feats.extend(encode_development_bank(state["DevelopmentBank"]))
     feats.extend(encode_players(state["Players"]))
-    feats.extend(derived_features(np.array([feats]))[0].tolist())
+    base = np.array([feats])
+    feats.extend(derived_features(base)[0].tolist())
+    feats.extend(encode_ports(state["Board"]))
+    feats.extend(endgame_features(base)[0].tolist())
+    assert len(feats) == FEATURE_DIM
     return feats
 
 

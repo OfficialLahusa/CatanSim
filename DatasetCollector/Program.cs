@@ -27,6 +27,9 @@
             }
 
             CollectorSettings settings = commandLine.Settings;
+            if (commandLine.RegenerateMaps is (string seeds, string output))
+                return MapRegeneration.Run(seeds, output, settings, Console.Out);
+
             if (commandLine.CalibrateThreads)
             {
                 int threads = ThreadCalibration.FindBestThreadCount(settings, commandLine.CalibrationTime, Console.Out);

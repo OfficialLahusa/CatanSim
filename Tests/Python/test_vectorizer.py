@@ -20,7 +20,13 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(REPO, "DatasetProcessing"))
 
 from state_to_vector import (  # noqa: E402
+    BASE_FEATURE_DIM,
+    CLASSIC_PORT_SLOTS,
     FEATURE_DIM,
+    LEGACY_FEATURE_DIM,
+    PORT_TYPES,
+    endgame_features,
+    slot_port_features,
     load_state_yaml,
     load_state_yaml_fast,
     state_to_feature_vector,
@@ -104,6 +110,22 @@ class SaveFileLoadingTest(unittest.TestCase):
             self.assertEqual(len(full.get("PlayedActions") or []), played_count, path)
             self.assertEqual(len(full.get("UndoHistory") or []), undo_count, path)
             self.assertEqual(state_to_feature_vector(full["GameState"]), state_to_feature_vector(fast_state), path)
+
+
+class LegacyMigrationTest(unittest.TestCase):
+    """Datasets of the legacy layout are extended with the ports of their maps (regenerated from the seeds, per generator
+    slot) and the endgame features computed from the base vector"""
+
+    def test_a_legacy_vector_extends_to_the_full_vector(self):
+        for path in fixture_files():
+            vector = yaml_to_numpy(path).astype(np.float32)
+            ports = load_state_yaml(path)["GameState"]["Board"]["Ports"]
+            self.assertEqual(CLASSIC_PORT_SLOTS, [(p["AnchorTileX"], p["AnchorTileY"], p["AnchorDirection"]) for p in ports])
+            slot_types = np.array([[PORT_TYPES.index(p["Type"]) for p in ports]])
+
+            extended = np.concatenate([vector[:LEGACY_FEATURE_DIM], slot_port_features(slot_types)[0],
+                                       endgame_features(vector[None, :BASE_FEATURE_DIM])[0]])
+            np.testing.assert_array_equal(vector, extended.astype(np.float16).astype(np.float32), os.path.basename(path))
 
 
 class BaselineLayoutTest(unittest.TestCase):

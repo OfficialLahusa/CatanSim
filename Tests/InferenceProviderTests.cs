@@ -11,13 +11,14 @@ namespace Tests
     /// </summary>
     public class InferenceProviderTests
     {
-        private static readonly StateVectorizer Vectorizer = new();
         private static string TinyModelPath => TestUtil.FixturePath("ValueNet", "placements_tiny.onnx");
 
-        private static DenseTensor<float> RandomGameBatch(int size, int seed)
+        private static DenseTensor<float> RandomGameBatch(int size, int seed, StateVectorizer? vectorizer = null)
         {
+            vectorizer ??= StateVectorizer.Current;
+            int dim = vectorizer.Dimension;
             TestUtil.Seed(seed);
-            DenseTensor<float> batch = new([size, StateVectorizer.FeatureDim]);
+            DenseTensor<float> batch = new([size, dim]);
             int row = 0;
             while (row < size)
             {
@@ -25,7 +26,7 @@ namespace Tests
                 TestUtil.PlayRandomGame(state, afterApply: (s, _) =>
                 {
                     if (row < size && Random.Shared.Next(4) == 0)
-                        Vectorizer.VectorizeInto(s, batch.Buffer.Span.Slice(row++ * StateVectorizer.FeatureDim, StateVectorizer.FeatureDim));
+                        vectorizer.VectorizeInto(s, batch.Buffer.Span.Slice(row++ * dim, dim));
                 }, maxActions: 400);
             }
             return batch;
@@ -79,7 +80,7 @@ namespace Tests
             StateValueNet gpu = DirectMLOrSkip(TestUtil.ModelPath);
             StateValueNet cpu = new(TestUtil.ModelPath, provider: InferenceProvider.Cpu);
 
-            DenseTensor<float> batch = RandomGameBatch(50, 190);
+            DenseTensor<float> batch = RandomGameBatch(50, 190, StateVectorizer.For(cpu));
             float[] expected = cpu.Run(batch), actual = gpu.Run(batch);
             for (int i = 0; i < expected.Length; i++)
                 Assert.True(Math.Abs(expected[i] - actual[i]) < 1e-3, $"value {i}: CPU {expected[i]}, DirectML {actual[i]}");

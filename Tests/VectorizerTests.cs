@@ -26,6 +26,40 @@ namespace Tests
         }
 
         [Fact]
+        public void TheLegacyLayoutIsTheStartOfTheCurrentOne()
+        {
+            TestUtil.Seed(95);
+            GameState state = TestUtil.NewGame();
+            TestUtil.PlayRandomGame(state, afterApply: (s, _) =>
+            {
+                float[] legacy = StateVectorizer.Legacy.Vectorize(s).ToArray();
+                Assert.Equal(StateVectorizer.LegacyFeatureDim, legacy.Length);
+                Assert.Equal(legacy, Vectorize(s)[..StateVectorizer.LegacyFeatureDim]);
+            }, maxActions: 300);
+
+            Assert.Throws<ArgumentException>(() => new StateVectorizer(StateVectorizer.BaseFeatureDim));
+        }
+
+        [Fact]
+        public void EveryPortMarksItsTwoCoastalIntersections()
+        {
+            TestUtil.Seed(96);
+            for (int game = 0; game < 20; game++)
+            {
+                float[] ports = Vectorize(TestUtil.NewGame()).AsSpan(StateVectorizer.LegacyFeatureDim, StateVectorizer.PortFeatureDim).ToArray();
+                int types = Enum.GetValues<Port.TradeType>().Length;
+
+                // 9 ports with 2 intersections each, at most one type per intersection: 4 generic ports, one of each 2:1 port
+                Assert.Equal(18, ports.Count(value => value == 1f));
+                Assert.Equal(ports.Length, ports.Count(value => value is 0f or 1f));
+                for (int intersection = 0; intersection < ports.Length / types; intersection++)
+                    Assert.True(ports.AsSpan(intersection * types, types).ToArray().Sum() <= 1f);
+                for (int type = 0; type < types; type++)
+                    Assert.Equal(type == (int)Port.TradeType.Generic ? 8 : 2, Enumerable.Range(0, ports.Length / types).Count(i => ports[i * types + type] == 1f));
+            }
+        }
+
+        [Fact]
         public void EquivalentRollsProduceIdenticalVectors()
         {
             TestUtil.Seed(91);

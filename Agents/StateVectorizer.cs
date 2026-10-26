@@ -12,10 +12,21 @@ namespace Agents
     public class StateVectorizer : IStateVectorizer
     {
         // Length of the feature vector produced by Vectorize for the classic 4-player board: the encoded state, then the
-        // derived features (shared with DatasetProcessing/state_to_vector.py, see EncodeDerived)
+        // derived features, the ports and the endgame features (shared with DatasetProcessing/state_to_vector.py, see
+        // EncodeDerived, EncodePorts and EncodeEndgame)
         public const int BaseFeatureDim = 1608;
         public const int DerivedFeatureDim = 156;
-        public const int FeatureDim = BaseFeatureDim + DerivedFeatureDim;
+        public const int PortFeatureDim = 180;
+        public const int EndgameFeatureDim = 21;
+
+        // Layout of the value nets up to zjahe050: the base and derived features. The later blocks are appended, so it is the
+        // start of the current layout.
+        public const int LegacyFeatureDim = BaseFeatureDim + DerivedFeatureDim;
+        public const int FeatureDim = LegacyFeatureDim + PortFeatureDim + EndgameFeatureDim;
+
+        // Shared instances per layout (vectorizers hold no state while vectorizing)
+        public static readonly StateVectorizer Current = new(FeatureDim);
+        public static readonly StateVectorizer Legacy = new(LegacyFeatureDim);
 
         // The setup rounds count the round counter up to 2, so the first normal round is 2
         private const int FirstNormalRound = 2;
@@ -30,34 +41,58 @@ namespace Agents
         protected EnumVocab<Intersection.BuildingType> _intersectionBuildingTypeVocab;
         protected EnumVocab<Edge.BuildingType> _edgeBuildingTypeVocab;
 
-        public StateVectorizer()
+        private readonly int _featureDim;
+
+        /// <summary>
+        /// Number of features this vectorizer writes: FeatureDim, or LegacyFeatureDim for the older value nets
+        /// </summary>
+        public int Dimension => _featureDim;
+
+        public StateVectorizer() : this(FeatureDim)
         {
+        }
+
+        public StateVectorizer(int featureDim)
+        {
+            if (featureDim != FeatureDim && featureDim != LegacyFeatureDim)
+                throw new ArgumentException($"Supported layouts have {FeatureDim} or {LegacyFeatureDim} features, not {featureDim}.", nameof(featureDim));
+            _featureDim = featureDim;
             _roundTypeVocab = new EnumVocab<TurnState.RoundType>(nameof(TurnState.RoundType));
             _tileTypeVocab = new EnumVocab<Tile.TileType>(nameof(Tile.TileType));
             _intersectionBuildingTypeVocab = new EnumVocab<Intersection.BuildingType>(nameof(Intersection.BuildingType));
             _edgeBuildingTypeVocab = new EnumVocab<Edge.BuildingType>(nameof(Edge.BuildingType));
         }
 
-        int IStateVectorizer.FeatureDim => FeatureDim;
+        /// <summary>
+        /// The vectorizer for the layout the net was trained on (its input size)
+        /// </summary>
+        public static StateVectorizer For(Inference.StateValueNet net) => net.InputDim switch
+        {
+            FeatureDim => Current,
+            LegacyFeatureDim => Legacy,
+            _ => throw new ArgumentException($"The value net takes {net.InputDim} features, which no StateVectorizer layout has.", nameof(net))
+        };
+
+        int IStateVectorizer.FeatureDim => _featureDim;
 
         public DenseTensor<float> Vectorize(GameState state)
         {
-            float[] features = new float[FeatureDim];
+            float[] features = new float[_featureDim];
             VectorizeInto(state, features);
 
-            return new DenseTensor<float>(features, [1, FeatureDim]);
+            return new DenseTensor<float>(features, [1, _featureDim]);
         }
 
         /// <summary>
         /// Writes the feature vector of the state into the destination (e.g. a row of a batch tensor) without allocating.
-        /// The destination must hold exactly FeatureDim values.
+        /// The destination must hold exactly Dimension values.
         /// </summary>
         public void VectorizeInto(GameState state, Span<float> destination)
         {
             if (state.Players.Length != 4)
                 throw new NotImplementedException("Only 4 players are supported for now.");
-            if (destination.Length != FeatureDim)
-                throw new ArgumentException($"The destination must hold exactly {FeatureDim} values.", nameof(destination));
+            if (destination.Length != _featureDim)
+                throw new ArgumentException($"The destination must hold exactly {_featureDim} values.", nameof(destination));
 
             // One-hot and multi-hot features only set their active entries
             destination.Clear();
@@ -70,9 +105,14 @@ namespace Agents
             EncodeDevelopmentCardSet(state.DevelopmentBank, ref writer);
             EncodePlayers(state, ref writer);
             EncodeDerived(state, ref writer);
+            if (_featureDim == FeatureDim)
+            {
+                EncodePorts(state, ref writer);
+                EncodeEndgame(state, ref writer);
+            }
 
-            if (writer.Position != FeatureDim)
-                throw new InvalidOperationException($"The board produced {writer.Position} features instead of {FeatureDim}.");
+            if (writer.Position != _featureDim)
+                throw new InvalidOperationException($"The board produced {writer.Position} features instead of {_featureDim}.");
         }
 
         private static void EncodeSettings(GameState state, ref FeatureWriter writer)
@@ -318,6 +358,106 @@ namespace Agents
                 writer.Add(handSize);
                 writer.Add(handSize > state.Settings.RobberCardLimit);
             }
+        }
+
+        private static readonly int PortTypeCount = Enum.GetValues<Port.TradeType>().Length;
+
+        /// <summary>
+        /// Per coastal intersection (fewer than three land tiles, in index order) the one-hot type of the port serving it
+        /// (Port.TradeType), all 0 without a port. Same as port_features in state_to_vector.py.
+        /// </summary>
+        private static void EncodePorts(GameState state, ref FeatureWriter writer)
+        {
+            Board board = state.Board;
+            Span<int> coastalIndex = stackalloc int[board.IntersectionCount];
+            Span<int> tiles = stackalloc int[6];
+            int coastal = 0;
+            for (int i = 0; i < board.IntersectionCount; i++)
+                coastalIndex[i] = board.Adjacency.GetTileIndices(i, tiles) < 3 ? coastal++ : -1;
+            if (coastal * PortTypeCount != PortFeatureDim)
+                throw new InvalidOperationException($"The board has {coastal} coastal intersections instead of {PortFeatureDim / PortTypeCount}.");
+
+            Span<float> features = writer.Reserve(PortFeatureDim);
+            foreach (Port port in board.Ports)
+            {
+                // The port's edge between its water tile and the land, as for the port privileges (see SettlementAction)
+                Tile sea = board.Map.GetTile(port.AnchorTileX, port.AnchorTileY);
+                Tile land = board.Adjacency.GetTile(sea, port.AnchorDirection)!;
+                Edge edge = board.Adjacency.GetEdge(land, port.AnchorDirection.Mirror())!;
+                (int top, int bottom) = board.Adjacency.GetIntersectionIndices(edge.Index);
+                features[coastalIndex[top] * PortTypeCount + (int)port.Type] = 1f;
+                features[coastalIndex[bottom] * PortTypeCount + (int)port.Type] = 1f;
+            }
+        }
+
+        /// <summary>
+        /// Per player: settlement spots and road spots (Board.GetSettlementSites, GetRoadSites), the victory points the player
+        /// can gain this turn at most with settlements and cities paid from its cards (trading surplus at its rates), whether
+        /// that wins, and the knight lead counting the knight cards in the hand; then the share of victory point cards among
+        /// the development cards in the bank. Integer arithmetic and float32 as in endgame_features in state_to_vector.py.
+        /// </summary>
+        private static void EncodeEndgame(GameState state, ref FeatureWriter writer)
+        {
+            const int players = 4, resources = 5;
+            Board board = state.Board;
+
+            Span<int> settlements = stackalloc int[players];
+            for (int i = 0; i < board.IntersectionCount; i++)
+                if (board.GetBuilding(i) == Intersection.BuildingType.Settlement) settlements[board.GetBuildingOwner(i)]++;
+
+            Span<int> hand = stackalloc int[resources];
+            Span<int> rates = stackalloc int[resources];
+            for (int p = 0; p < players; p++)
+            {
+                PlayerState player = state.Players[p];
+                int settlementSpots = (int)UInt128.PopCount(board.GetSettlementSites(p));
+                int roadSpots = (int)UInt128.PopCount(board.GetRoadSites(p));
+
+                for (int r = 0; r < resources; r++)
+                {
+                    hand[r] = (int)player.ResourceCards.Get((ResourceCardType)(r + 1));
+                    PortPrivileges resourcePort = (PortPrivileges)(1 << (r + 1));
+                    rates[r] = player.PortPrivileges.HasFlag(resourcePort) ? 2 : player.PortPrivileges.HasFlag(PortPrivileges.GenericThreeToOne) ? 3 : 4;
+                }
+
+                // Settlements s and cities c the cards pay for, trading surplus as for "missing after trading"
+                int maxSettlements = Math.Min(settlementSpots, (int)player.BuildingStock.RemainingSettlements);
+                int maxCitiesStock = (int)player.BuildingStock.RemainingCities;
+                int gain = 0;
+                for (int s = 0; s <= 5; s++)
+                {
+                    for (int c = 0; c <= 4; c++)
+                    {
+                        if (s > maxSettlements || c > Math.Min(maxCitiesStock, settlements[p] + s)) continue;
+
+                        int lacking = 0, tradeable = 0;
+                        for (int r = 0; r < resources; r++)
+                        {
+                            int cost = s * BuildCosts[1, r] + c * BuildCosts[2, r];
+                            lacking += Math.Max(cost - hand[r], 0);
+                            tradeable += Math.Max(hand[r] - cost, 0) / rates[r];
+                        }
+                        if (lacking <= tradeable) gain = Math.Max(gain, s + c);
+                    }
+                }
+
+                var points = player.VictoryPoints;
+                int victoryPoints = (int)(points.SettlementPoints + points.CityPoints + points.DevelopmentCardPoints + points.LongestRoadPoints + points.LargestArmyPoints);
+                int bestOtherKnights = int.MinValue;
+                for (int other = 0; other < players; other++)
+                    if (other != p) bestOtherKnights = Math.Max(bestOtherKnights, (int)state.Players[other].PlayedKnights);
+
+                writer.Add(settlementSpots);
+                writer.Add(roadSpots);
+                writer.Add(gain);
+                writer.Add(victoryPoints + gain >= state.Settings.VictoryPoints);
+                writer.Add((int)player.PlayedKnights + (int)player.DevelopmentCards.Get(DevelopmentCardType.Knight) - bestOtherKnights);
+            }
+
+            uint developmentLeft = 0;
+            foreach (DevelopmentCardType development in DevelopmentTypes)
+                if (development != DevelopmentCardType.Unknown) developmentLeft += state.DevelopmentBank.Get(development);
+            writer.Add(developmentLeft > 0 ? (float)state.DevelopmentBank.Get(DevelopmentCardType.VictoryPoint) / developmentLeft : 0f);
         }
 
         private static int Lead(ReadOnlySpan<int> values, int player)

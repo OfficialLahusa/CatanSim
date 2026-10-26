@@ -6,9 +6,10 @@ order, so after the setup phase the rotated state is the same game situation and
 phase it isn't (the snake order always starts with player 0), so setup states are never rotated. Only cyclic rotations
 are equivalences; any other permutation of the players would change the turn order.
 
-On the feature vector (1764 layout) the rotation is a pure index permutation: the player to act and the awaited
-discards in the turn state, the owner one-hots of intersections and edges, the player blocks and the derived features
-per player move with their player; everything else stays.
+On the feature vector the rotation is a pure index permutation: the player to act and the awaited discards in the turn
+state, the owner one-hots of intersections and edges, the player blocks and the derived and endgame features per player
+move with their player; everything else stays (also the ports). Vectors of the legacy layout (the start of the current
+one) are rotated by the start of the permutation.
 
 Number token pairs: 2/12, 3/11, 4/10, 5/9 and 6/8 are rolled equally often, and a number token matters only through how
 often it is rolled (the 7 has no token). Swapping the tokens of any pairs on the board (and the last roll along) gives
@@ -24,9 +25,9 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "DatasetProcessing"))
-from state_to_vector import (BASE_FEATURE_DIM, FEATURE_DIM, PLAYER_BLOCK_SIZE, PLAYER_BLOCK_STARTS,  # noqa: E402
-                             PLAYER_COUNT, ROUND_VOCAB, _INTERSECTION_SIZE, _INTERSECTION_START, _TILE_COUNT, _TILE_SIZE,
-                             _TILE_START)
+from state_to_vector import (BASE_FEATURE_DIM, FEATURE_DIM, LEGACY_FEATURE_DIM, PLAYER_BLOCK_SIZE,  # noqa: E402
+                             PLAYER_BLOCK_STARTS, PLAYER_COUNT, PORT_FEATURE_DIM, ROUND_VOCAB, _INTERSECTION_SIZE,
+                             _INTERSECTION_START, _TILE_COUNT, _TILE_SIZE, _TILE_START)
 
 _TURN_PLAYER = 3                                    # one-hot of the player to act, after the settings (2) and the last roll
 _TURN_ROUND = _TURN_PLAYER + PLAYER_COUNT           # TypeOfRound one-hot
@@ -36,6 +37,8 @@ _EDGE_START, _EDGES, _EDGE_SIZE, _EDGE_OWNER = _INTERSECTION_START + 54 * _INTER
 # Features per player in each group of derived features, in their order (each group is stored player by player):
 # production, blocked production, total production, trade rates, can build, missing, missing after trading, rounds, race
 _DERIVED_GROUPS = (5, 5, 1, 5, 4, 4, 4, 4, 7)
+# The endgame features per player (settlement spots, road spots, gain this turn, wins, knight lead), then one for all
+_ENDGAME_PER_PLAYER = 5
 
 _ROTATABLE_ROUNDS = [ROUND_VOCAB.index["Normal"], ROUND_VOCAB.index["MatchEnded"]]
 
@@ -65,7 +68,12 @@ def rotation_index(k: int) -> np.ndarray:
             for j in range(size):
                 move(start + new * size + j, start + old * size + j)
             start += PLAYER_COUNT * size
-    assert start == FEATURE_DIM
+        assert start == LEGACY_FEATURE_DIM
+
+        start += PORT_FEATURE_DIM
+        for j in range(_ENDGAME_PER_PLAYER):
+            move(start + new * _ENDGAME_PER_PLAYER + j, start + old * _ENDGAME_PER_PLAYER + j)
+        assert start + PLAYER_COUNT * _ENDGAME_PER_PLAYER + 1 == FEATURE_DIM
     return source
 
 
@@ -79,7 +87,9 @@ def is_rotatable(features: np.ndarray) -> np.ndarray:
 
 
 def rotate_features(features: np.ndarray, k: int) -> np.ndarray:
-    return np.asarray(features)[..., ROTATION_INDEX[k % PLAYER_COUNT]]
+    features = np.asarray(features)
+    # The legacy layout is the start of the current one, and the permutation keeps the start within itself
+    return features[..., ROTATION_INDEX[k % PLAYER_COUNT, :features.shape[-1]]]
 
 
 def rotate_players(values: np.ndarray, k: int, axis: int = -1) -> np.ndarray:

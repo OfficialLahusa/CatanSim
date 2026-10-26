@@ -19,9 +19,11 @@ class ExportedValueNet(nn.Module):
         return outputs["logits"], outputs["placements"]
 
 
-def export(ckpt_path: str, out_path: str, in_dim: int):
-    # Lightning-Module aus Checkpoint laden
-    module = StateValueModule.load_from_checkpoint(ckpt_path, in_dim=in_dim, map_location="cpu")
+def export(ckpt_path: str, out_path: str, in_dim: int = None):
+    # Lightning-Module aus Checkpoint laden, die Inputgröße steht in seinen Hyperparametern
+    overrides = {"in_dim": in_dim} if in_dim else {}
+    module = StateValueModule.load_from_checkpoint(ckpt_path, map_location="cpu", **overrides)
+    in_dim = module.hparams.in_dim
 
     # Dropout deaktivieren und freezen
     module.eval()
@@ -77,6 +79,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", required=True)
     parser.add_argument("--out", default="state_value_net.onnx")
-    parser.add_argument("--in-dim", type=int, default=1764)
+    # Nur für Checkpoints ohne gespeicherte Inputgröße nötig
+    parser.add_argument("--in-dim", type=int, default=None)
     args = parser.parse_args()
     export(args.ckpt, args.out, args.in_dim)
