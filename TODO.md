@@ -93,7 +93,10 @@
 			- E2 02l97say (E1 plus Brett-Symmetrien): val KL 0.0147, Präzisions-KL 0.0106 (-2% gegen E1, signifikant), Endspiel-KL 0.0098, bester Zug 61,3%, Regret 0,38pp
 				- Brett-Symmetrien bringen wenig (anders als Rotation -26%): 1M Karten decken die Brettvielfalt schon ab
 			- Lücke train/val geschlossen: xnebmrjf 0.0126/0.0215, mit Rotation train ~ val (C 0.0175/0.0170, E2 0.0165/0.0147, train mit Dropout und Augmentation) => größeres Net (Schritt 7) jetzt sinnvoll
-			- Gespiegeltes Duell E2 gegen C läuft
+			- Gespiegeltes Duell E2 gegen C (MaxN, 60k Iterationen, 12 parallel, 1,5 h, 42 Kartenpaare): 47:37 (56%, ~+42 Elo, 95%-KI -33 bis +120)
+				- Doppelt gewonnene Paare E2 10, C 5 (p ≈ 0,15 einseitig), 27 Paare vom Sitz entschieden => Tendenz klar, aber nicht signifikant
+				- Sitzvorteil auf diesen Karten umgekehrt: hintere Sitze gewannen 56% (C gegen xnebmrjf: vordere 62%) => von den Karten abhängig, die Paare heben ihn auf
+				- Für ein klares Urteil ~2-3 h mehr oder über Nacht; Leaderboard mit OpenSkill Plackett-Luce (wie Beyond All Reason, Anzeige μ - σ) nutzt alle Plätze statt nur des Siegers
 		- Nächste Schritte daraus, nach erwartetem Gewinn pro Aufwand:
 			- 1. (erledigt, Aux ja, Ranking nein) Sibling-Ranking-Loss und Aux Heads zuschalten (in train.py fertig, ~20 min Training pro Variante): Ranking trainiert direkt die Zugreihenfolge, wo v2 am meisten gewonnen hat; Aux Heads regularisieren
 			- 2. (erledigt, -26% KL) Augmentation per Spielerrotation: in train.py (--augment-rotation, augmentation.py), Paritätstest gegen echte rotierte Spielzustände
