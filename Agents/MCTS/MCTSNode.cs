@@ -133,11 +133,24 @@ namespace Agents.MCTS
             if (visitCountSnapshot == 0)
                 return 1e9;
 
-            double meanValue = PlayerScore(player) / visitCountSnapshot;
-            if (valueRange != null)
-                meanValue = valueRange.Value.Normalize(meanValue);
+            double meanValue;
             if (invert)
-                meanValue = 1 - meanValue;
+            {
+                // Pending visits (no result yet) must count as a loss for the player deciding here, like the 0 they add to
+                // the mean otherwise. Turned around, a 0 for the owner would be a win for them and draw the whole batch to
+                // the child already in flight, so they count as 0 after inverting instead.
+                uint resolved = Math.Min(ResolvedVisitCount, visitCountSnapshot);
+                double resolvedMean = resolved == 0 ? 0 : PlayerScore(player) / resolved;
+                if (valueRange != null)
+                    resolvedMean = valueRange.Value.Normalize(resolvedMean);
+                meanValue = resolved == 0 ? 0 : (1 - resolvedMean) * resolved / visitCountSnapshot;
+            }
+            else
+            {
+                meanValue = PlayerScore(player) / visitCountSnapshot;
+                if (valueRange != null)
+                    meanValue = valueRange.Value.Normalize(meanValue);
+            }
 
             return meanValue + explorationParameter * Math.Sqrt(logParentVisits / visitCountSnapshot);
         }

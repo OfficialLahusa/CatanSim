@@ -92,7 +92,7 @@
 		- MinMax-Bereich ohne ausstehende Visits (korrekt): im Duell neu gegen alt 45:55 (p ≈ 0,35), kein Gewinn; der alte Fehler zog das Minimum gegen 0 und explorierte dadurch stärker
 			- Explorationskonstante neu getestet (MaxN, 0,25s bzw. 60k Iterationen, 91 Spiele): c=2 gegen 1,414 25:21, c=2,8 gegen 1,414 21:24 => kein Unterschied, 1,414 bleibt
 			- Suchparameter sind damit nicht der Hebel, die nächsten Sprünge kommen vom v2-Net und Self-Play
-		- Offen: Paranoid erst nach Fix testen (ausstehende Visits machen bei invertiertem Wert Kinder attraktiver statt unattraktiver), Subtree-Reuse nach Gegnerzügen neu messen (war ~13%), später Gegnerzüge nach Policy-Prior gewichten
+		- Offen: Paranoid gegen MaxN testen (Virtual-Loss-Fehler bei invertiertem Wert behoben), Subtree-Reuse nach Gegnerzügen neu messen (war ~13%), später Gegnerzüge nach Policy-Prior gewichten
 	- 3. GPU-Inference: erledigt mit DirectML (Windows, kein Installieren nötig), Linux bleibt auf der CPU; Auswahl automatisch, CATANSIM_INFERENCE=cpu|dml erzwingt
 		- Net allein bei Batch 256: CPU 89k States/s, DirectML mit fester Batchgröße 566k (6,4x), mit dynamischer nur 136k
 		- MCTS: 66k => 181k Iterationen/s (2,7x), jetzt bremst die Selektion auf der CPU (44% der Zeit, die GPU wartet die Hälfte)

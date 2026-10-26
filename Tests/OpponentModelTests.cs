@@ -68,6 +68,43 @@ namespace Tests
             Assert.Same(ownChildren[0], ownTree.SelectChild(ownTree.RootNode));
         }
 
+        [Theory]
+        [InlineData(OpponentModel.MaxN)]
+        [InlineData(OpponentModel.Paranoid)]
+        public void ABatchOfPendingVisitsSpreadsOverEquallyGoodMoves(OpponentModel model)
+        {
+            TestUtil.Seed(204);
+            GameState state = TestUtil.EmptyNormalTurn(1);
+            TestUtil.GiveCards(state, 1, ResourceCardType.Grain, 4);
+            TestUtil.GiveCards(state, 1, ResourceCardType.Ore, 4);
+            MCTSTree tree = new(state, ownerIdx: 0, explorationParameter: 1.414, model: model);
+            tree.ExpandNode(tree.RootNode, new GameState(state));
+            MCTSNode[] children = tree.RootNode.Children.ToArray();
+            Assert.True(children.Length >= 2);
+
+            foreach (MCTSNode child in children)
+            {
+                for (int i = 0; i < 100; i++)
+                {
+                    child.IncrementVisitCount();
+                    tree.RootNode.IncrementVisitCount();
+                    child.AddResults([0.5, 0.5, 0, 0]);
+                }
+            }
+
+            // One batch: each selection marks its path as pending before the next one, as the batched search does
+            var picks = new Dictionary<MCTSNode, int>();
+            for (int i = 0; i < 256; i++)
+            {
+                MCTSNode chosen = tree.SelectChild(tree.RootNode);
+                tree.MarkPendingPath(chosen);
+                picks[chosen] = picks.GetValueOrDefault(chosen) + 1;
+            }
+
+            Assert.Equal(children.Length, picks.Count);
+            Assert.True(picks.Values.Max() <= 2 * 256 / children.Length, $"one move got {picks.Values.Max()} of 256 selections");
+        }
+
         [Fact]
         public void DiscardsAreDecidedByTheDiscardingPlayer()
         {
