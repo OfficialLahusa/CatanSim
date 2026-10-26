@@ -105,6 +105,11 @@
 			- Exploration: Dirichlet-Noise an der Root, Sampling nach Visits im Setup und den ersten Runden, ~400-800 Iterationen pro Zug, Playout Cap Randomization (nur volle Suchen aufzeichnen)
 			- Aufzeichnen: State, Root-Wertvektor q (4 Spieler), Visit-Verteilung, am Ende Sieger und Platzierungen
 			- Grob ~80-100k Spiele/Tag auf der RTX 5080, der Server nur auf der CPU (oder CUDA-EP)
+		- Server-GPU einbauen (GTX 1070 Ti) für Self-Play rund um die Uhr: Server generiert, Desktop trainiert
+			- Netzteil reicht (650 W, Last ~300-440 W), 8-Pin-PCIe-Kabel, oberer x16-Slot ist frei (7800X3D hat iGPU)
+			- Pascal: CUDA 12.x und Treiber-Branch 580 (CUDA 13 kann kein Pascal mehr), ONNX Runtime GPU mit CUDA 12 pinnen, PyTorch nur cu126
+			- CUDA-Provider in StateValueNet für Linux ergänzen (wie DirectML mit fester Batchgröße)
+			- Erwartung ~150-250k States/s auf der GPU, Selektion auf 8 Kernen limitiert => ~15-25k Spiele/Tag, ~3-5x gegenüber CPU-Inference
 		- Value-Target = λ·z + (1-λ)·q mit λ ~0,3-0,5: Spielergebnis z allein ist in Catan zu verrauscht, Playout-Labels sind zu stark an schwache Agents gebunden
 		- Anfangs alte Playout-Daten beimischen (50/50, dann weniger), weitertrainieren statt neu, Input-Normalisierung einfrieren
 		- Stufen: 1. Value-only Self-Play (geht jetzt, ~1-2 Wochen) => 2. Policy Head + PUCT, Visit-Verteilungen als Policy-Targets => 3. Liga aus alten Nets und Buildern, KataGo-Tricks
