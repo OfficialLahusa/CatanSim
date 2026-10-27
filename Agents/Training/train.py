@@ -29,12 +29,14 @@ def read_policy_layout(directory):
 
 class StateDataset(Dataset):
     def __init__(self, states_path, labels_path, aux_dir=None, augment_rotation=False, augment_numbers=False, augment_board=False,
-                 target_lambda=None):
+                 target_lambda=None, policy_temperature=1.0):
         self.states_path = states_path
         self.labels_path = labels_path
         # Self-Play-Daten (selfplay_to_dataset.py): Target λ·onehot(Sieger) + (1-λ)·Root-q statt der gespeicherten Labels,
         # wenn root_q.npy und winners.npy im aux_dir liegen; andere Daten behalten ihre Labels
         self.target_lambda = None
+        # Visit-Anteile als Policy-Target hoch 1/T (T < 1 schärft die flachen Verteilungen der UCT-Suche), pro Position normiert
+        self.policy_temperature = policy_temperature
         self.target_paths = {}
         if target_lambda is not None and aux_dir is not None:
             paths = {name: os.path.join(aux_dir, f"{name}.npy") for name in ("root_q", "winners")}
@@ -192,7 +194,13 @@ class StateDataset(Dataset):
         moved[valid] = self.token_symmetries[symmetry[valid], moved[valid]]
         tokens[row_of, slot] = moved
         weights[row_of, slot] = take("policy_weights", np.float32)
-        targets[row_of, slot] = take("policy_targets", np.float32)
+        shares = take("policy_targets", np.float32)
+        if self.policy_temperature != 1.0:
+            shares = shares ** (1.0 / self.policy_temperature)
+            sums = np.zeros(n, dtype=np.float32)
+            np.add.at(sums, row_of, shares)
+            shares = shares / np.maximum(sums[row_of], 1e-12)
+        targets[row_of, slot] = shares
         mask[row_of, slot] = True
         return {"policy_tokens": torch.from_numpy(tokens), "policy_weights": torch.from_numpy(weights),
                 "policy_targets": torch.from_numpy(targets), "policy_mask": torch.from_numpy(mask)}
@@ -352,6 +360,8 @@ def main():
     # Policy Head auf die Visit-Verteilung der Self-Play-Daten (policy_*.npy aus selfplay_to_dataset.py); Daten ohne zählen nicht
     parser.add_argument("--policy-weight", type=float, default=0.0)
     parser.add_argument("--policy-dim", type=int, default=64)
+    # Temperatur der Policy-Targets: Visit-Anteile hoch 1/T, T < 1 schärft
+    parser.add_argument("--policy-temperature", type=float, default=1.0)
     args = parser.parse_args()
 
     sources = [parse_source(spec) for spec in args.data] if args.data else []
@@ -362,7 +372,7 @@ def main():
         if args.ranking_weight > 0 and len(sources) > 1:
             raise SystemExit("--ranking-weight works with a single data source only")
 
-    full_ds = StateDataset(args.states, args.labels, args.aux_dir, target_lambda=args.target_lambda)
+    full_ds = StateDataset(args.states, args.labels, args.aux_dir, target_lambda=args.target_lambda, policy_temperature=args.policy_temperature)
     for name, weight in [("placements", args.placement_weight), ("vp_shares", args.vp_share_weight),
                          ("rounds_left", args.rounds_weight), ("sibling_groups", args.ranking_weight),
                          ("placements", args.ranking_placement_weight)]:
@@ -379,12 +389,13 @@ def main():
     augment = args.augment_rotation or args.augment_numbers or args.augment_board
     train_ds = StateDataset(args.states, args.labels, args.aux_dir, augment_rotation=args.augment_rotation,
                             augment_numbers=args.augment_numbers, augment_board=args.augment_board,
-                            target_lambda=args.target_lambda) if augment else full_ds
+                            target_lambda=args.target_lambda, policy_temperature=args.policy_temperature) if augment else full_ds
     loader_args = dict(num_workers=args.num_workers, pin_memory=True, persistent_workers=True, collate_fn=keep_batch)
     if len(sources) > 1:
         datasets = [train_ds] + [StateDataset(os.path.join(directory, "states.npy"), os.path.join(directory, "win_rates.npy"), directory,
                                               augment_rotation=args.augment_rotation, augment_numbers=args.augment_numbers,
-                                              augment_board=args.augment_board, target_lambda=args.target_lambda)
+                                              augment_board=args.augment_board, target_lambda=args.target_lambda,
+                                              policy_temperature=args.policy_temperature)
                                  for directory, _ in sources[1:]]
         if len({dataset.states.shape[1] for dataset in datasets}) != 1:
             raise SystemExit("The --data sources have different feature layouts")

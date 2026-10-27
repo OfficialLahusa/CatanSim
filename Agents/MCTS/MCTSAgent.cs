@@ -48,6 +48,15 @@ namespace Agents.MCTS
         private readonly MCTSSearch _search;
 
 
+        /// <summary>
+        /// Search by PUCT with uniform priors instead of the policy head's (see MCTSSearch.UniformPriors)
+        /// </summary>
+        public bool UniformPriors
+        {
+            get => _search.UniformPriors;
+            set => _search.UniformPriors = value;
+        }
+
         /// <param name="valueNet">Value net for the leaves, the default model if null</param>
         /// <param name="vectorizer">Encoding the value net was trained on, the StateVectorizer for the net's input size if null</param>
         /// <summary>

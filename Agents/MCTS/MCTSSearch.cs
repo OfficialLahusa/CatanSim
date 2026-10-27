@@ -73,7 +73,14 @@ namespace Agents.MCTS
         /// </summary>
         public Random NoiseRandom { get; set; } = Random.Shared;
 
-        private bool UsesPolicy => _evaluator.Policy != null;
+        /// <summary>
+        /// Search by PUCT with uniform priors instead of the policy head's (also for a value-only net): separates the effect
+        /// of PUCT from that of the learned policy
+        /// </summary>
+        public bool UniformPriors { get; set; }
+
+        // Priors from the policy head
+        private bool UsesPolicy => _evaluator.Policy != null && !UniformPriors;
 
         /// <summary>
         /// Weight of the placement score in the search value (see MCTSAgent.PlacementWeight)
@@ -114,7 +121,7 @@ namespace Agents.MCTS
             _backpropagationTime.Reset();
             _evaluationWaitTime.Reset();
 
-            tree.UsesPolicy = UsesPolicy;
+            tree.UsesPolicy = UsesPolicy || UniformPriors;
             if (UsesPolicy && !tree.RootState.HasEnded && (!tree.RootNode.HasPolicyPriors || RootNoiseWeight > 0))
                 await EvaluateRootPriorsAsync(tree).ConfigureAwait(false);
 
