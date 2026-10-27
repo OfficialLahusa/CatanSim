@@ -49,8 +49,10 @@
 	- 4. Setup-Phase spezialisieren: eigene Zeit, Best-Response-Gegner, Sibling-Gruppen an Setup-Entscheidungen
 	- 5. Policy Head + PUCT: Suchfokus, Gegnermodell nach Policy, besserer Subtree-Reuse
 	- 6. Self-Play: Labels schwacher Agents binden das Net an deren Niveau
-		- Generator: viele Spiele parallel, ~400-1000 Iterationen pro Zug, Playout Cap Randomization, Dirichlet-Noise; aufzeichnen State, Root-q, Visits, Ergebnis (~40-100k Spiele/Tag auf der 5080)
-		- Target λ·z + (1-λ)·q, von E2 weitertrainieren, v2-Daten anfangs beimischen, Gate per gespiegeltem Duell
+		- SelfPlayCollector fertig (800/150 Iterationen, p = 0,25, Temperatur in den ersten 30 Zügen; Dirichlet erst mit Policy Head): ~25k Spiele/h, ~43 Positionen/Spiel => ~1M Positionen/h auf der 5080
+		- Test mit E2: Sitze ausgeglichen, Ø 28 Runden; q unterschätzt Führungen (q 0,5 => 63% Siege, q 0,1 => 4%), genau das soll Self-Play lernen
+		- Pro Iteration ~1M neue Positionen, trainieren auf Fenster der letzten 3-5 Iterationen plus v2 (50% => 0), erste Iteration 3-5M
+		- Target λ·z + (1-λ)·q, von E2 weitertrainieren, Gate per gespiegeltem Duell
 		- Server-GPU (GTX 1070 Ti) einbauen: Netzteil reicht (650 W), 8-Pin-Kabel, oberer x16-Slot frei; CUDA 12.x, Treiber 580, PyTorch cu126; CUDA-Provider für Linux, ~15-25k Spiele/Tag
 			- Vorher: Staub entfernen, Kontakte und Platine auf Korrosion prüfen (ggf. Isopropanol), Lüfter prüfen, Wärmeleitpaste erneuern
 			- Nach dem Einbau: ~1 h VRAM-Test (cuda_memtest oder OCCT) und Stresstest, Temperatur unter ~80 °C, keine Treiberfehler
