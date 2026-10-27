@@ -34,8 +34,8 @@
 		- Lücke train/val mit Rotation geschlossen => nicht mehr datenlimitiert
 		- Rotation nur zyklisch und nach dem Setup; Holz/Lehm-Tausch bewusst nicht (verschiebt die Verteilung)
 	- Gespiegeltes Duell E2 gegen C (137 Karten): 154:120, +43 Elo (95%-KI +8 bis +80), doppelt gewonnene Paare 35:18 (p ≈ 0,014); Sitzvorteil ist kartenabhängig
+	- Größeres Net (--hidden): 3072 breit KL -4%, 4096 breit -6%, bester Zug kaum besser, MCTS 6-18% langsamer => kein Duell, E2 bleibt; Breite ist nicht der Hebel
 	- Nächste Schritte
-		- Größeres Net (z.B. 4096 breit, länger trainieren)
 		- Platzierung als Tie-Breaker: β per gespiegeltem Duell tunen (0 / 0,03 / 0,1), Plumbing fertig
 		- Umgewichten nach Position im Match und beendeten Playouts, Chance-Siblings ggf. aus dem Ranking
 		- Endspiel-Features nutzen Perfect Information: mit Hidden Information auf den sichtbaren Teil umstellen
@@ -59,7 +59,7 @@
 	- 7. Netzarchitektur v2 (siehe Graph Transformer)
 	- Kleinere Suchverbesserungen: Pondering, Transpositionen über State Hashes, Trade-Varianten bündeln
 	- Für Menschen: Hidden Information und Spielerhandel mit Verhandlung
-	- Reihenfolge: größeres Net => Messen => Server-GPU und Self-Play => Policy Head => Setup => Netzarchitektur => Hidden Information und Handel; Simulator-Server parallel
+	- Reihenfolge: Messen => Server-GPU und Self-Play => Policy Head => Setup => Netzarchitektur => Hidden Information und Handel; Simulator-Server parallel
 		- Netzarchitektur ggf. vor den Policy Head ziehen (Policy-Logits pro Knoten/Kante statt Head auf dem MLP)
 - Leaderboard (MCTS mit verschiedenen Nets und Zeiten, BuilderAgent, später Catanatron)
 	- Maßgeblich: Batch-Fit Plackett-Luce über alle Spiele (reihenfolgeunabhängig), ganze Platzierung statt nur Sieg, Intervalle per Bootstrap
