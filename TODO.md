@@ -1,6 +1,5 @@
 ## Simulator
-- Client-UI für echtes interaktives Spielen durch Menschen fertigstellen
-- UI für manuelles Spielen überarbeiten
+- Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
 - Hidden Information (Agents sehen derzeit alle Hände, VP-Karten und die Dev Bank, das Net ist darauf trainiert)
