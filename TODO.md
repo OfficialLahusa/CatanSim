@@ -67,7 +67,7 @@
 	- Anker BuilderAgent = 0 als feste Version (nicht RandomAgent: verliert immer, schlecht bestimmt), RandomAgent nur als Referenz
 	- Etablierte Ratings bleiben stabil (Updates ~σ², Neue nehmen die Änderung auf), Nicht-Transitivität bildet eine Zahl nicht ab
 	- Zwei Sitze desselben Agents zählen als ein Team, jedes Spiel speichern (Agents, VP, Karten-Seed)
-	- Turnier-Runner: zufällige 4er-Besetzungen, Sitze rotieren, feste Denkzeit pro Eintrag
+	- Turnier-Runner als eigenes Projekt "Arena": zufällige 4er-Besetzungen, Sitze rotieren, feste Denkzeit pro Eintrag
 	- A/B-Tests per gespiegeltem Duell: nur doppelt gewonnene Paare zählen, Intervall pro Paar, SPRT als Abbruch
 	- Plackett-Luce misst die Unsicherheit des Spielausgangs, nicht die des Nets (dafür Ensemble oder Varianz-Head); Platzierungs-Head als Plackett-Luce wäre konsistent
 - Agents/env: OpenMP-Konflikt (conda-MKL und torch), torch nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren
