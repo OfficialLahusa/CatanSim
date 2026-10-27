@@ -52,6 +52,9 @@
 		- Generator: viele Spiele parallel, ~400-1000 Iterationen pro Zug, Playout Cap Randomization, Dirichlet-Noise; aufzeichnen State, Root-q, Visits, Ergebnis (~40-100k Spiele/Tag auf der 5080)
 		- Target λ·z + (1-λ)·q, von E2 weitertrainieren, v2-Daten anfangs beimischen, Gate per gespiegeltem Duell
 		- Server-GPU (GTX 1070 Ti) einbauen: Netzteil reicht (650 W), 8-Pin-Kabel, oberer x16-Slot frei; CUDA 12.x, Treiber 580, PyTorch cu126; CUDA-Provider für Linux, ~15-25k Spiele/Tag
+			- Vorher: Staub entfernen, Kontakte und Platine auf Korrosion prüfen (ggf. Isopropanol), Lüfter prüfen, Wärmeleitpaste erneuern
+			- Nach dem Einbau: ~1 h VRAM-Test (cuda_memtest oder OCCT) und Stresstest, Temperatur unter ~80 °C, keine Treiberfehler
+			- Im Self-Play regelmäßig Stichproben GPU gegen CPU vergleichen (stille Speicherfehler verfälschen sonst die Daten), Luftfeuchte am Server unter 60%
 		- Risiken: Bootstrapping (q vom eigenen Net), Kollaps in einen ausnutzbaren Stil
 	- 7. Netzarchitektur v2 (siehe Graph Transformer)
 	- Kleinere Suchverbesserungen: Pondering, Transpositionen über State Hashes, Trade-Varianten bündeln
