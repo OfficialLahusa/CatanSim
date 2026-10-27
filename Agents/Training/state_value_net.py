@@ -62,11 +62,11 @@ class StateValueNet(nn.Module):
 class StateValueModule(L.LightningModule):
     def __init__(self, in_dim, lr=1e-3, weight_decay=1e-4,
                  placement_weight=0.0, vp_share_weight=0.0, rounds_weight=0.0, ranking_weight=0.0, normalize_inputs=False,
-                 ranking_placement_weight=0.0):
+                 ranking_placement_weight=0.0, hidden=2048):
         super().__init__()
         self.save_hyperparameters()
         aux_heads = placement_weight > 0 or vp_share_weight > 0 or rounds_weight > 0 or ranking_placement_weight > 0
-        self.model = StateValueNet(in_dim, aux_heads=aux_heads, normalize_inputs=normalize_inputs)
+        self.model = StateValueNet(in_dim, hidden=hidden, aux_heads=aux_heads, normalize_inputs=normalize_inputs)
         self.model.placements_trained = placement_weight > 0
 
     def set_input_normalization(self, states):

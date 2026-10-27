@@ -189,6 +189,8 @@ def main():
     parser.add_argument("--augment-numbers", action="store_true")
     # Zusätzlich das Brett zufällig drehen und spiegeln (12 Sichten, nur mit dem aktuellen Layout mit Häfen)
     parser.add_argument("--augment-board", action="store_true")
+    # Breite der ersten beiden Hidden Layer (die dritte hat die Hälfte)
+    parser.add_argument("--hidden", type=int, default=2048)
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--max-epochs", type=int, default=60)
@@ -228,7 +230,7 @@ def main():
     in_dim = full_ds.states.shape[1]
     model = StateValueModule(in_dim=in_dim, lr=args.lr, placement_weight=args.placement_weight, vp_share_weight=args.vp_share_weight,
                              rounds_weight=args.rounds_weight, ranking_weight=args.ranking_weight, normalize_inputs=args.normalize_inputs,
-                             ranking_placement_weight=args.ranking_placement_weight)
+                             ranking_placement_weight=args.ranking_placement_weight, hidden=args.hidden)
     if args.normalize_inputs:
         sample = np.sort(np.random.default_rng(0).choice(train_idx, min(len(train_idx), 200_000), replace=False))
         states = np.asarray(full_ds.states[sample], dtype=np.float32)
