@@ -75,6 +75,47 @@ namespace Tests
         }
 
         [Fact]
+        public void RootValuesVisitsAndSampledMovesFollowTheSearch()
+        {
+            TestUtil.Seed(148);
+            GameState state = TestUtil.EmptyNormalTurn(1);
+            TestUtil.GiveCards(state, 1, ResourceCardType.Grain, 4);
+            TestUtil.GiveCards(state, 1, ResourceCardType.Ore, 4);
+            MCTSTree tree = new(state, ownerIdx: 0, explorationParameter: 1.414, model: OpponentModel.MaxN);
+            tree.ExpandNode(tree.RootNode, new GameState(state));
+            MCTSNode[] children = tree.RootNode.Children.ToArray();
+            Assert.True(children.Length >= 3);
+
+            // Three visits of the first child, one of the second, none of the others
+            for (int i = 0; i < 3; i++) tree.Backpropagate(children[0], [1, 0, 0, 0]);
+            tree.Backpropagate(children[1], [0, 1, 0, 0]);
+
+            Assert.Equal([0.75, 0.25, 0, 0], tree.RootValues());
+
+            var visits = tree.RootVisits();
+            Assert.Equal(children.Length, visits.Count);
+            Assert.True(children[0].LastAction!.IsSameDecision(visits[0].move));
+            Assert.Equal([3u, 1u], visits.Take(2).Select(v => v.visits));
+            Assert.All(visits.Skip(2), v => Assert.Equal(0u, v.visits));
+
+            // Temperature 0 is the most visited move, 1 samples by visits (3:1), 0.5 by squared visits (9:1)
+            Random random = new(5);
+            Assert.True(children[0].LastAction!.IsSameDecision(tree.SampleMove(0, random)));
+            foreach ((double temperature, double expected) in new[] { (1.0, 0.75), (0.5, 0.9) })
+            {
+                const int Samples = 4000;
+                int first = 0;
+                for (int i = 0; i < Samples; i++)
+                {
+                    Action move = tree.SampleMove(temperature, random);
+                    Assert.True(children[0].LastAction!.IsSameDecision(move) || children[1].LastAction!.IsSameDecision(move));
+                    if (children[0].LastAction!.IsSameDecision(move)) first++;
+                }
+                Assert.InRange(first / (double)Samples, expected - 0.03, expected + 0.03);
+            }
+        }
+
+        [Fact]
         public void PlayedActionsAreMatchedToTheirChildIncludingEquivalentRolls()
         {
             TestUtil.Seed(141);

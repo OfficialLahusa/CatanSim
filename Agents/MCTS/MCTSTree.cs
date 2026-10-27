@@ -54,14 +54,65 @@ namespace Agents.MCTS
             return Enumerable.Range(0, MCTSNode.PlayerCount).Select(_ => new MinMaxStats()).ToArray();
         }
 
+        /// <summary>
+        /// Player the tree searches for (whose result is TotalScore)
+        /// </summary>
+        public sbyte OwnerIndex => _ownerIdx;
+
         public Action GetMostPromisingMove()
         {
             // Return the child with the highest visit count
             MCTSNode bestChild = RootNode.Children.OrderByDescending(c => c.VisitCount).First();
+            return HandOut(bestChild.LastAction!);
+        }
 
-            // Hand out a copy without history: the caller applies it to the real game (resolving output randomness anew),
-            // while the tree's own instance stays untouched
-            Action move = bestChild.LastAction!.Clone();
+        /// <summary>
+        /// Samples a root move with probability proportional to visits^(1/temperature); temperature 0 is the most visited move
+        /// </summary>
+        public Action SampleMove(double temperature, Random random)
+        {
+            if (temperature <= 0) return GetMostPromisingMove();
+
+            MCTSNode[] children = RootNode.ChildArray;
+            uint maxVisits = children.Max(child => child.VisitCount);
+            if (maxVisits == 0) return GetMostPromisingMove();
+
+            // Relative to the most visited move, so the powers stay in range for low temperatures
+            double[] weights = children.Select(child => Math.Pow((double)child.VisitCount / maxVisits, 1 / temperature)).ToArray();
+            double remaining = random.NextDouble() * weights.Sum();
+            for (int i = 0; i < children.Length; i++)
+            {
+                remaining -= weights[i];
+                if (remaining < 0) return HandOut(children[i].LastAction!);
+            }
+            return HandOut(children.Where(child => child.VisitCount > 0).Last().LastAction!);
+        }
+
+        /// <summary>
+        /// The root moves with their visit counts (copies without history, like GetMostPromisingMove)
+        /// </summary>
+        public IReadOnlyList<(Action move, uint visits)> RootVisits()
+        {
+            return RootNode.ChildArray.Select(child => (HandOut(child.LastAction!), child.VisitCount)).ToArray();
+        }
+
+        /// <summary>
+        /// Every player's mean result over the root's visits whose results are in, the search's value of the root state.
+        /// Only the opponent models that use every player's values (MaxN, Paranoid) record them; 0 for an unvisited root.
+        /// </summary>
+        public double[] RootValues()
+        {
+            uint visits = RootNode.ResolvedVisitCount;
+            return Enumerable.Range(0, MCTSNode.PlayerCount).Select(player => visits == 0 ? 0 : RootNode.PlayerScore(player) / visits).ToArray();
+        }
+
+        /// <summary>
+        /// A copy of a tree action without history: the caller applies it to the real game (resolving output randomness anew),
+        /// while the tree's own instance stays untouched
+        /// </summary>
+        private static Action HandOut(Action action)
+        {
+            Action move = action.Clone();
             if (move is IReplayAction replayMove)
                 replayMove.ClearHistory();
 
