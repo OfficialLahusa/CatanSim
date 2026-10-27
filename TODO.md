@@ -103,6 +103,12 @@
 	- State Encoding: Trunk des StateValueNets einmal pro State, mit Transformer Action Tokens per Cross-Attention
 	- Value- und Policy-Head in einem Modell, Outputs einzeln abrufbar (ONNX dynamic_axis)
 	- Target: Visit-Verteilung der MCTS, iterativ (Expert Iteration)
+	- Umsetzung v1 (Pairwise wie DRRN/Pointer-Netze, ohne Cross-Attention)
+		- Zug = Typ-Token + Parameter-Tokens aus geteiltem Vokabular (213: 19 Typen, Intersection, Edge, Tile, Opfer relativ zum Ziehenden, Ressource gegeben/erhalten/abgeworfen mit Anzahl als Gewicht); Zufallszüge ein Kandidat
+		- Ein Query pro Zugtyp aus dem letzten Hidden Layer (19 x 64), Logit = Query · Summe der Token-Embeddings, Softmax nur über die legalen Züge
+		- ONNX gibt Queries und die Embedding-Tabelle aus, C# rechnet die Logits pro Knoten (feste Batch-Form für DirectML, Value-Pfad unverändert)
+		- Targets aus den gespeicherten Root Visits: SelfPlayCollector policy-targets spielt alte Runs nach, neue Runs schreiben die Züge direkt; Brett-Augmentation permutiert die Tokens mit
+		- Suche: PUCT mit Priors an jeder Entscheidung (auch Gegner unter MaxN), Dirichlet-Rauschen an der Root im Self-Play
 - RandomAgent
 	- Illegale Instanzen örtlich begrenzter Actions besser abgrenzen
 - MCTSAgent
