@@ -41,7 +41,7 @@
 		- Endspiel-Features nutzen Perfect Information: mit Hidden Information auf den sichtbaren Teil umstellen
 	- Beispielpartie (xnebmrjf): ganzes Dev-Deck nach 20 Runden gekauft, eingeschlossene Spieler bauten nichts mehr, 7x 4:1 trotz 2:1-Hafen => vermutlich Perfect Information und schwache Playout-Labels, mit Self-Play beobachten
 	- Phase 3: Netzarchitektur v2, Phase 4: Policy Head => Self-Play (Expert Iteration) => Belief-aware Net
-	- Nebenbei: alte State-Matrizen löschen (Agents/Training/dataset ~60 GB, prepared_v2/states_1764.npy 35 GB, rekonstruierbar aus den ersten 1764 Spalten von states.npy)
+	- Nebenbei: alte v1-State-Matrizen löschen (Agents/Training/dataset ~75 GB, nur states.npy/1609/1610 sind nicht rekonstruierbar)
 - Weg zum starken Agent, nach Hebel sortiert
 	- 1. Messen: Catanatron-Bridge (~3-5 Tage) plus Leaderboard
 	- 2. max^n: erledigt (~+70 Elo), Explorationskonstante egal; offen: Paranoid testen, Gegnerzüge nach Policy-Prior
