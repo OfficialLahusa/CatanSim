@@ -1,4 +1,5 @@
 ## Simulator
+- Client-UI für echtes interaktives Spielen durch Menschen fertigstellen
 - UI für manuelles Spielen überarbeiten
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
