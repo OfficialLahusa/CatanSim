@@ -23,11 +23,22 @@ try:
     import torch
     from export_onnx import export_model
     from state_value_net import StateValueModule, masked_kl, sibling_ranking
-    from train import GroupBatchSampler
+    from train import GroupBatchSampler, MixedDataset, MixSampler, StateDataset
 except ImportError as error:  # pragma: no cover - depends on the environment
     IMPORT_ERROR = error
 else:
     IMPORT_ERROR = None
+
+
+def write_source(directory, rows, features, label_dtype, self_play):
+    """A prepared data directory with random states and labels, plus root_q.npy and winners.npy for self-play data."""
+    os.makedirs(directory, exist_ok=True)
+    rng = np.random.default_rng(rows)
+    np.save(os.path.join(directory, "states.npy"), rng.random((rows, features)).astype(np.float16))
+    np.save(os.path.join(directory, "win_rates.npy"), rng.dirichlet(np.ones(4), rows).astype(label_dtype))
+    if self_play:
+        np.save(os.path.join(directory, "root_q.npy"), rng.dirichlet(np.ones(4), rows).astype(np.float32))
+        np.save(os.path.join(directory, "winners.npy"), np.array([3, 2, 1] * (rows // 3 + 1), dtype=np.int8)[:rows])
 
 
 @unittest.skipIf(IMPORT_ERROR is not None, f"training dependencies missing: {IMPORT_ERROR}")
@@ -128,6 +139,42 @@ class TrainingTest(unittest.TestCase):
         plain = StateValueModule(in_dim=32)
         self.assertIsNone(plain.model.aux)
         self.assertTrue(all(name.startswith("model.net.") for name in plain.state_dict()))
+
+    def test_self_play_targets_mix_the_result_and_the_root_values(self):
+        # The datasets keep their arrays memory-mapped, which Windows doesn't let the cleanup delete
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            write_source(directory, rows=3, features=8, label_dtype=np.float32, self_play=True)
+            dataset = StateDataset(os.path.join(directory, "states.npy"), os.path.join(directory, "win_rates.npy"), directory, target_lambda=0.25)
+            batch = dataset.__getitems__([2, 0])
+            root_q = np.load(os.path.join(directory, "root_q.npy"))
+            expected = 0.75 * root_q[[2, 0]] + 0.25 * np.eye(4)[[1, 3]]
+            np.testing.assert_allclose(batch["y"].numpy(), expected, rtol=1e-6)
+
+            # Without λ, or without the self-play arrays, the stored labels stay
+            stored = StateDataset(os.path.join(directory, "states.npy"), os.path.join(directory, "win_rates.npy"), directory)
+            np.testing.assert_array_equal(stored.__getitems__([2])["y"].numpy(), np.load(os.path.join(directory, "win_rates.npy"))[[2]])
+
+    def test_mixed_sources_are_drawn_by_their_shares(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            first, second = os.path.join(directory, "a"), os.path.join(directory, "b")
+            write_source(first, rows=10, features=8, label_dtype=np.float32, self_play=True)
+            write_source(second, rows=50, features=8, label_dtype=np.float16, self_play=False)
+            datasets = [StateDataset(os.path.join(d, "states.npy"), os.path.join(d, "win_rates.npy"), d, target_lambda=0.5) for d in (first, second)]
+            mixed = MixedDataset(datasets)
+            self.assertEqual(60, len(mixed))
+
+            # The first source's 10 rows at share 1, the second's 50 at share 3: 40 per epoch, 10 and 30
+            sampler = MixSampler([np.arange(10), np.arange(50) + 10], [1, 3], epoch_samples=40)
+            drawn = np.array(list(sampler))
+            self.assertEqual(40, len(drawn))
+            self.assertEqual(10, int((drawn < 10).sum()))
+            self.assertEqual(10, len(set(drawn[drawn < 10].tolist())), "a source with enough rows is drawn without replacement")
+
+            batch = mixed.__getitems__([0, 15, 59, 3])
+            self.assertEqual(torch.float32, batch["y"].dtype)
+            self.assertEqual((4, 8), tuple(batch["x"].shape))
+            # Rows come back per source; the second source's rows are its stored states
+            np.testing.assert_array_equal(batch["x"][2:].numpy(), np.load(os.path.join(second, "states.npy"))[[5, 49]])
 
 
 if __name__ == "__main__":

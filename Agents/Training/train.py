@@ -17,9 +17,19 @@ AUX_ARRAYS = ("placements", "vp_shares", "rounds_left", "sibling_groups", "actor
 
 
 class StateDataset(Dataset):
-    def __init__(self, states_path, labels_path, aux_dir=None, augment_rotation=False, augment_numbers=False, augment_board=False):
+    def __init__(self, states_path, labels_path, aux_dir=None, augment_rotation=False, augment_numbers=False, augment_board=False,
+                 target_lambda=None):
         self.states_path = states_path
         self.labels_path = labels_path
+        # Self-Play-Daten (selfplay_to_dataset.py): Target λ·onehot(Sieger) + (1-λ)·Root-q statt der gespeicherten Labels,
+        # wenn root_q.npy und winners.npy im aux_dir liegen; andere Daten behalten ihre Labels
+        self.target_lambda = None
+        self.target_paths = {}
+        if target_lambda is not None and aux_dir is not None:
+            paths = {name: os.path.join(aux_dir, f"{name}.npy") for name in ("root_q", "winners")}
+            if all(os.path.exists(path) for path in paths.values()):
+                self.target_lambda = target_lambda
+                self.target_paths = paths
         # Spieler zufällig zyklisch umbenennen (nur nach der Setup-Phase, siehe augmentation.py), für die Trainingsdaten
         self.augment_rotation = augment_rotation
         # Zahlenchip-Paare (2/12 bis 6/8) zufällig tauschen, in jeder Phase (siehe augmentation.py)
@@ -40,6 +50,7 @@ class StateDataset(Dataset):
         self.states = np.load(self.states_path, mmap_mode='r')
         self.labels = np.load(self.labels_path, mmap_mode='r')
         self.aux = {name: np.load(path, mmap_mode='r') for name, path in self.aux_paths.items()}
+        self.targets = {name: np.load(path, mmap_mode='r') for name, path in self.target_paths.items()}
 
     def __getstate__(self):
         # Wird beim Picklen des Datasets vor dem Senden an Worker aufgerufen
@@ -48,6 +59,7 @@ class StateDataset(Dataset):
         state["states"] = None
         state["labels"] = None
         state["aux"] = None
+        state["targets"] = None
         return state
 
     def __setstate__(self, state):
@@ -76,7 +88,11 @@ class StateDataset(Dataset):
 
         # Im gespeicherten Typ (meist float16), das Modell rechnet sie in float32 um
         x = take(self.states, self.states.dtype)
-        y = take(self.labels, self.labels.dtype)
+        if self.target_lambda is None:
+            y = take(self.labels, self.labels.dtype)
+        else:
+            one_hot = np.eye(PLAYER_COUNT, dtype=np.float32)[take(self.targets["winners"], np.int64)]
+            y = (self.target_lambda * one_hot + (1 - self.target_lambda) * take(self.targets["root_q"], np.float32)).astype(np.float32)
         # Fehlende Labels als NaN bzw. -1, die Losses lassen solche Samples aus
         aux = self.aux
         placements = take(aux["placements"], np.float32) if "placements" in aux             else np.full((n, PLAYER_COUNT, PLAYER_COUNT), np.nan, dtype=np.float32)
@@ -116,6 +132,60 @@ class StateDataset(Dataset):
             "sibling_groups": torch.from_numpy(sibling_groups),
             "actors": torch.from_numpy(np.maximum(actors, 0)),
         }
+
+
+class MixedDataset(Dataset):
+    """Mehrere StateDatasets hintereinander (globaler Index = Offset der Quelle + Zeile), batchweise gelesen"""
+    def __init__(self, datasets):
+        self.datasets = datasets
+        self.offsets = np.cumsum([0] + [len(dataset) for dataset in datasets])
+
+    def __len__(self):
+        return int(self.offsets[-1])
+
+    def __getitem__(self, idx):
+        return {key: value[0] for key, value in self.__getitems__([idx]).items()}
+
+    def __getitems__(self, indices):
+        indices = np.asarray(indices, dtype=np.int64)
+        source = np.searchsorted(self.offsets, indices, side="right") - 1
+        parts = [self.datasets[s].__getitems__(indices[source == s] - self.offsets[s]) for s in np.unique(source)]
+        # Die Quellen können Labels in verschiedenen Typen speichern (v2 float16, Self-Play float32)
+        batch = {}
+        for key in parts[0]:
+            dtype = parts[0][key].dtype
+            for part in parts[1:]:
+                dtype = torch.promote_types(dtype, part[key].dtype)
+            batch[key] = torch.cat([part[key].to(dtype) for part in parts])
+        return batch
+
+
+class MixSampler(Sampler):
+    """
+    Pro Epoche epoch_samples Trainings-Indizes, aus jeder Quelle ihr Anteil: ohne Zurücklegen, solange ihre Trainingsmenge
+    reicht, sonst mit. Alles gemischt, damit jeder Batch die Quellen im Verhältnis enthält.
+    """
+    def __init__(self, indices, shares, epoch_samples):
+        self.indices = [np.asarray(idx, dtype=np.int64) for idx in indices]
+        shares = np.asarray(shares, dtype=np.float64)
+        self.counts = np.round(shares / shares.sum() * epoch_samples).astype(np.int64)
+
+    def __len__(self):
+        return int(self.counts.sum())
+
+    def __iter__(self):
+        rng = np.random.default_rng(int(torch.randint(2 ** 31, (1,))))
+        drawn = [rng.choice(idx, count, replace=count > len(idx)) for idx, count in zip(self.indices, self.counts) if count > 0]
+        return iter(rng.permutation(np.concatenate(drawn)).tolist())
+
+
+def parse_source(spec):
+    """'DIR' oder 'DIR@ANTEIL': ein vorbereitetes Verzeichnis (states.npy, win_rates.npy, idx_*.npy, Aux-Arrays)"""
+    directory, share = spec, 1.0
+    if "@" in spec:
+        directory, share_text = spec.rsplit("@", 1)
+        share = float(share_text)
+    return directory, share
 
 
 def keep_batch(batch):
@@ -198,9 +268,26 @@ def main():
     # bf16-mixed auf Ampere oder neuer, sonst 16-mixed
     parser.add_argument("--precision", default="bf16-mixed")
     parser.add_argument("--num-workers", type=int, default=16)
+    # Statt --states/--labels/--train-idx/--val-idx/--aux-dir: vorbereitete Verzeichnisse mit Anteil, z.B. Self-Play und v2
+    # gemischt (--data selfplay_iter1@0.5 --data prepared_v2@0.5); validiert wird auf der ersten Quelle
+    parser.add_argument("--data", action="append", default=None)
+    # Trainings-Samples pro Epoche mit --data (Default: die Trainingsmenge der ersten Quelle geteilt durch ihren Anteil)
+    parser.add_argument("--epoch-samples", type=int, default=None)
+    # Target der Self-Play-Daten: λ·onehot(Sieger) + (1-λ)·Root-q (aus root_q.npy und winners.npy), Default: win_rates.npy
+    parser.add_argument("--target-lambda", type=float, default=None)
+    # Gewichte (und Input-Normalisierung) aus einem Checkpoint übernehmen und weitertrainieren, z.B. von E2 aus
+    parser.add_argument("--init-from", default=None)
     args = parser.parse_args()
 
-    full_ds = StateDataset(args.states, args.labels, args.aux_dir)
+    sources = [parse_source(spec) for spec in args.data] if args.data else []
+    if sources:
+        first = sources[0][0]
+        args.states, args.labels = os.path.join(first, "states.npy"), os.path.join(first, "win_rates.npy")
+        args.train_idx, args.val_idx, args.aux_dir = os.path.join(first, "idx_train.npy"), os.path.join(first, "idx_val.npy"), first
+        if args.ranking_weight > 0 and len(sources) > 1:
+            raise SystemExit("--ranking-weight works with a single data source only")
+
+    full_ds = StateDataset(args.states, args.labels, args.aux_dir, target_lambda=args.target_lambda)
     for name, weight in [("placements", args.placement_weight), ("vp_shares", args.vp_share_weight),
                          ("rounds_left", args.rounds_weight), ("sibling_groups", args.ranking_weight),
                          ("placements", args.ranking_placement_weight)]:
@@ -216,9 +303,27 @@ def main():
     train_idx, val_idx = np.load(args.train_idx), np.load(args.val_idx)
     augment = args.augment_rotation or args.augment_numbers or args.augment_board
     train_ds = StateDataset(args.states, args.labels, args.aux_dir, augment_rotation=args.augment_rotation,
-                            augment_numbers=args.augment_numbers, augment_board=args.augment_board) if augment else full_ds
+                            augment_numbers=args.augment_numbers, augment_board=args.augment_board,
+                            target_lambda=args.target_lambda) if augment else full_ds
     loader_args = dict(num_workers=args.num_workers, pin_memory=True, persistent_workers=True, collate_fn=keep_batch)
-    if args.ranking_weight > 0:
+    if len(sources) > 1:
+        datasets = [train_ds] + [StateDataset(os.path.join(directory, "states.npy"), os.path.join(directory, "win_rates.npy"), directory,
+                                              augment_rotation=args.augment_rotation, augment_numbers=args.augment_numbers,
+                                              augment_board=args.augment_board, target_lambda=args.target_lambda)
+                                 for directory, _ in sources[1:]]
+        if len({dataset.states.shape[1] for dataset in datasets}) != 1:
+            raise SystemExit("The --data sources have different feature layouts")
+        mixed = MixedDataset(datasets)
+        indices = [train_idx] + [np.load(os.path.join(directory, "idx_train.npy")) for directory, _ in sources[1:]]
+        indices = [idx + offset for idx, offset in zip(indices, mixed.offsets)]
+        shares = [share for _, share in sources]
+        epoch_samples = args.epoch_samples or int(len(train_idx) * sum(shares) / shares[0])
+        sampler = MixSampler(indices, shares, epoch_samples)
+        print("Training mix per epoch: " + ", ".join(f"{os.path.basename(os.path.normpath(directory))} {count}"
+                                                     for (directory, _), count in zip(sources, sampler.counts)))
+        train_loader = DataLoader(mixed, batch_size=args.batch_size, sampler=sampler, **loader_args)
+        val_loader = DataLoader(torch.utils.data.Subset(full_ds, val_idx), batch_size=args.batch_size, shuffle=False, **loader_args)
+    elif args.ranking_weight > 0:
         # Sibling-Gruppen zusammenhalten, auch in der Validation (für die Ranking-Metriken)
         groups = full_ds.aux["sibling_groups"]
         train_loader = DataLoader(train_ds, batch_sampler=GroupBatchSampler(train_idx, groups, args.batch_size, shuffle=True), **loader_args)
@@ -231,7 +336,12 @@ def main():
     model = StateValueModule(in_dim=in_dim, lr=args.lr, placement_weight=args.placement_weight, vp_share_weight=args.vp_share_weight,
                              rounds_weight=args.rounds_weight, ranking_weight=args.ranking_weight, normalize_inputs=args.normalize_inputs,
                              ranking_placement_weight=args.ranking_placement_weight, hidden=args.hidden)
-    if args.normalize_inputs:
+    if args.init_from:
+        # Gleiche Architektur und Normalisierung wie der Checkpoint, sonst schlägt das Laden fehl; nur der Optimizer startet neu
+        checkpoint = torch.load(args.init_from, map_location="cpu", weights_only=False)
+        model.load_state_dict(checkpoint["state_dict"])
+        print(f"Weights and input normalization from {args.init_from}")
+    elif args.normalize_inputs:
         sample = np.sort(np.random.default_rng(0).choice(train_idx, min(len(train_idx), 200_000), replace=False))
         states = np.asarray(full_ds.states[sample], dtype=np.float32)
         if args.augment_rotation:
