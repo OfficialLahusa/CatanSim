@@ -45,7 +45,7 @@
 - Weg zum starken Agent, nach Hebel sortiert
 	- 1. Messen: Catanatron-Bridge (~3-5 Tage) plus Leaderboard
 	- 2. max^n: erledigt (~+70 Elo), Explorationskonstante egal; offen: Paranoid testen, Gegnerzüge nach Policy-Prior
-	- 3. GPU-Inference: erledigt (DirectML 566k States/s, MCTS 181k Iterationen/s), jetzt bremst die Selektion; CUDA-EP braucht CUDA 13
+	- 3. GPU-Inference: erledigt (DirectML 566k States/s, MCTS ~320k Iterationen/s, Self-Play ~400k über BatchingEvaluator; nur mit Server-GC, Workstation-GC bremst ~3x), jetzt bremst die Net-Auswertung; CUDA-EP braucht CUDA 13
 	- 4. Setup-Phase spezialisieren: eigene Zeit, Best-Response-Gegner, Sibling-Gruppen an Setup-Entscheidungen
 	- 5. Policy Head + PUCT: Suchfokus, Gegnermodell nach Policy, besserer Subtree-Reuse
 	- 6. Self-Play: Labels schwacher Agents binden das Net an deren Niveau
