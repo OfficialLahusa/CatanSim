@@ -54,6 +54,7 @@
 		- Pro Iteration ~1M neue Positionen, trainieren auf Fenster der letzten 3-5 Iterationen plus v2 (50% => 0), erste Iteration 3-5M
 		- Target λ·z + (1-λ)·q, von E2 weitertrainieren (Iteration 1 3mx1fhoq: λ 0,5, 50/50 mit v2, lr 3e-4, 4 Epochen in 5 min; Präzisions-KL 0,0128 statt 0,0106), Gate per gespiegeltem Duell
 		- Iteration 1 3mx1fhoq gegen E2: 5k-Duell ±0 Elo [−29, +29] (269 Paare), 60k +29 [−40, +100] (36 Paare) => kein messbarer Gewinn, Rezept oder Suche ist der Engpass; 5k-Duell als Gate (~±30 Elo in 1,5 h)
+		- Offline auf zurückgehaltenen Self-Play-Spielen: I1 sagt den Sieger besser vorher (Log Loss 0,803 statt 0,851), zur Hälfte nur Schärfung (E2^1,41 => 0,836); q aus 800 Iterationen kaum besser als E2 (0,848) => q als Target fast wertlos, Engpass ist das Zug-Ranking => Policy Head aus den gespeicherten Root Visits trainieren
 		- Server-GPU (GTX 1070 Ti) einbauen: Netzteil reicht (650 W), 8-Pin-Kabel, oberer x16-Slot frei; CUDA 12.x, Treiber 580, PyTorch cu126; CUDA-Provider für Linux, ~15-25k Spiele/Tag
 			- Vorher: Staub entfernen, Kontakte und Platine auf Korrosion prüfen (ggf. Isopropanol), Lüfter prüfen, Wärmeleitpaste erneuern
 			- Nach dem Einbau: ~1 h VRAM-Test (cuda_memtest oder OCCT) und Stresstest, Temperatur unter ~80 °C, keine Treiberfehler
