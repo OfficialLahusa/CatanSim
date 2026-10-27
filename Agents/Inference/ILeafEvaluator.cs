@@ -4,9 +4,17 @@ namespace Agents.Inference
 {
     /// <summary>
     /// Value net outputs of a batch of leaves: win probabilities [rows * players] and, if requested, placement distributions
-    /// [rows * players * places]
+    /// [rows * players * places] and policy queries [rows * move types * dim]
     /// </summary>
-    public readonly record struct LeafValues(float[] WinProbabilities, float[]? Placements);
+    public readonly record struct LeafValues(float[] WinProbabilities, float[]? Placements, float[]? PolicyQueries = null);
+
+    /// <summary>
+    /// The constant part of a policy head: the token embeddings [VocabularySize * Dim] (see ActionEncoding)
+    /// </summary>
+    public sealed record PolicyHead(float[] Embeddings, int Dim)
+    {
+        public int QueryLength => ActionEncoding.MoveTypeCount * Dim;
+    }
 
     /// <summary>
     /// Runs the value net on the leaf features of a search. DirectEvaluator runs every batch on its own, BatchingEvaluator
@@ -20,10 +28,15 @@ namespace Agents.Inference
         bool HasPlacements { get; }
 
         /// <summary>
+        /// The net's policy head, or null for a value-only net
+        /// </summary>
+        PolicyHead? Policy { get; }
+
+        /// <summary>
         /// Evaluates the rows of features [rows, featureDim]. The tensor is only read until the returned task completes, so the
         /// caller can reuse it afterwards.
         /// </summary>
-        Task<LeafValues> EvaluateAsync(DenseTensor<float> features, bool withPlacements);
+        Task<LeafValues> EvaluateAsync(DenseTensor<float> features, bool withPlacements, bool withPolicy = false);
     }
 
     /// <summary>
@@ -40,14 +53,11 @@ namespace Agents.Inference
 
         public bool HasPlacements => _net.HasPlacements;
 
-        public Task<LeafValues> EvaluateAsync(DenseTensor<float> features, bool withPlacements)
+        public PolicyHead? Policy => _net.Policy;
+
+        public Task<LeafValues> EvaluateAsync(DenseTensor<float> features, bool withPlacements, bool withPolicy = false)
         {
-            return Task.Run(() =>
-            {
-                if (!withPlacements) return new LeafValues(_net.Run(features), null);
-                (float[] winProbabilities, float[] placements) = _net.RunWithPlacements(features);
-                return new LeafValues(winProbabilities, placements);
-            });
+            return Task.Run(() => _net.Evaluate(features, withPlacements, withPolicy));
         }
     }
 }

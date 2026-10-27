@@ -11,7 +11,7 @@ namespace Agents.Inference
     /// </summary>
     public sealed class BatchingEvaluator : ILeafEvaluator, IDisposable
     {
-        private sealed record Request(DenseTensor<float> Features, int Rows, bool WithPlacements, TaskCompletionSource<LeafValues> Completion);
+        private sealed record Request(DenseTensor<float> Features, int Rows, bool WithPlacements, bool WithPolicy, TaskCompletionSource<LeafValues> Completion);
 
         private readonly BlockingCollection<Request> _queue = new(new ConcurrentQueue<Request>());
         private readonly Thread[] _workers;
@@ -26,18 +26,21 @@ namespace Agents.Inference
             if (nets.Count == 0) throw new ArgumentException("At least one net is needed.", nameof(nets));
             if (nets.Any(net => net.FixedBatchSize < maxRows))
                 throw new ArgumentException($"The nets' fixed batch size is below {maxRows} rows.", nameof(nets));
-            if (nets.Any(net => net.InputDim != nets[0].InputDim || net.HasPlacements != nets[0].HasPlacements))
+            if (nets.Any(net => net.InputDim != nets[0].InputDim || net.HasPlacements != nets[0].HasPlacements || (net.Policy == null) != (nets[0].Policy == null)))
                 throw new ArgumentException("The nets must be of the same model.", nameof(nets));
 
             _maxRows = maxRows;
             _featureDim = nets[0].InputDim;
             HasPlacements = nets[0].HasPlacements;
+            Policy = nets[0].Policy;
             _workers = nets.Select((net, i) => new Thread(() => Work(net)) { IsBackground = true, Name = $"Value net worker {i}" }).ToArray();
             foreach (Thread worker in _workers)
                 worker.Start();
         }
 
         public bool HasPlacements { get; }
+
+        public PolicyHead? Policy { get; }
 
         /// <summary>
         /// Net batches run so far
@@ -49,17 +52,19 @@ namespace Agents.Inference
         /// </summary>
         public long Rows => Interlocked.Read(ref _rows);
 
-        public Task<LeafValues> EvaluateAsync(DenseTensor<float> features, bool withPlacements)
+        public Task<LeafValues> EvaluateAsync(DenseTensor<float> features, bool withPlacements, bool withPolicy = false)
         {
             int rows = features.Dimensions[0];
             if (rows > _maxRows) throw new ArgumentException($"{rows} rows don't fit into a batch of {_maxRows}.", nameof(features));
             if (features.Dimensions[1] != _featureDim) throw new ArgumentException($"The net takes {_featureDim} features, not {features.Dimensions[1]}.", nameof(features));
             if (withPlacements && !HasPlacements)
                 throw new InvalidOperationException("The value net has no placements output (it was trained without auxiliary heads).");
+            if (withPolicy && Policy == null)
+                throw new InvalidOperationException("The value net has no policy head.");
 
             // The search continues on the thread pool, not on the worker, which goes on with the next batch
             var completion = new TaskCompletionSource<LeafValues>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _queue.Add(new Request(features, rows, withPlacements, completion));
+            _queue.Add(new Request(features, rows, withPlacements, withPolicy, completion));
             return completion.Task;
         }
 
@@ -101,18 +106,18 @@ namespace Agents.Inference
                 {
                     int runRows = net.FixedBatchSize ?? rows;
                     var input = new DenseTensor<float>(buffer.AsMemory(0, runRows * _featureDim), [runRows, _featureDim]);
-                    float[] winProbabilities, placements = [];
-                    if (batch.Any(request => request.WithPlacements)) (winProbabilities, placements) = net.RunWithPlacements(input);
-                    else winProbabilities = net.Run(input);
+                    LeafValues values = net.Evaluate(input, batch.Any(request => request.WithPlacements), batch.Any(request => request.WithPolicy));
 
                     int row = 0;
+                    int queryLength = Policy?.QueryLength ?? 0;
                     foreach (Request request in batch)
                     {
-                        float[] wins = winProbabilities.AsSpan(row * StateValueNet.PlayerCount, request.Rows * StateValueNet.PlayerCount).ToArray();
+                        float[] wins = values.WinProbabilities.AsSpan(row * StateValueNet.PlayerCount, request.Rows * StateValueNet.PlayerCount).ToArray();
                         float[]? places = request.WithPlacements
-                            ? placements.AsSpan(row * StateValueNet.PlayerCount * 4, request.Rows * StateValueNet.PlayerCount * 4).ToArray()
+                            ? values.Placements!.AsSpan(row * StateValueNet.PlayerCount * 4, request.Rows * StateValueNet.PlayerCount * 4).ToArray()
                             : null;
-                        request.Completion.SetResult(new LeafValues(wins, places));
+                        float[]? queries = request.WithPolicy ? values.PolicyQueries!.AsSpan(row * queryLength, request.Rows * queryLength).ToArray() : null;
+                        request.Completion.SetResult(new LeafValues(wins, places, queries));
                         row += request.Rows;
                     }
 

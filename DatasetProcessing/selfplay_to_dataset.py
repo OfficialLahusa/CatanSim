@@ -15,6 +15,12 @@ limit are left out):
 - actors.npy (n,): the player deciding at the position
 - match_seeds.npy (n,) uint64 and groups.npy (n,) int64: the game's seed, unique across runs
 - idx_train.npy, idx_val.npy, idx_test.npy: split by game
+If every run has the policy files of SelfPlayCollector (policy_counts.i32 and the rest), also the policy targets:
+- policy_offsets.npy (n + 1,) int64: the moves of position i are rows offsets[i]:offsets[i + 1] of the arrays below
+- policy_tokens.npy (moves, max_tokens) int16 and policy_weights.npy (moves, max_tokens) uint8: the encoded legal moves
+  (token -1 unused), in the order of the root's children
+- policy_targets.npy (moves,) float32: the share of the root visits per move
+- policy_layout.json: the token ranges
 
 Usage: python selfplay_to_dataset.py RUN [RUN ...] --output DIR [--target-lambda 0.5] [--val 0.1] [--test 0.0] [--seed 42]
 """
@@ -43,12 +49,14 @@ def read_run(run_dir: str):
             if game["finished"] == "1":
                 games[game["game"]] = game
 
-    columns = {name: [] for name in ("seed", "winner", "vp", "rounds_left", "actor", "q", "chunk", "row")}
+    columns = {name: [] for name in ("seed", "winner", "vp", "rounds_left", "actor", "q", "chunk", "row", "line", "visits")}
     with open(os.path.join(run_dir, "samples.csv"), newline="") as file:
-        for sample in csv.DictReader(file):
+        for line, sample in enumerate(csv.DictReader(file)):
             game = games.get(sample["game"])
             if game is None:
                 continue
+            columns["line"].append(line)
+            columns["visits"].append(sample["visits"])
             columns["seed"].append(int(game["seed"]))
             columns["winner"].append(int(game["winner"]))
             columns["vp"].append([int(game[f"vp{p}"]) for p in range(PLAYER_COUNT)])
@@ -67,8 +75,40 @@ def read_run(run_dir: str):
         "q": np.array(columns["q"], dtype=np.float32).reshape(-1, PLAYER_COUNT),
         "chunk": np.array(columns["chunk"], dtype=np.int64),
         "row": np.array(columns["row"], dtype=np.int64),
+        "line": np.array(columns["line"], dtype=np.int64),
+        "visits": columns["visits"],
     }
     return feature_dim, arrays, len(games)
+
+
+POLICY_FILES = ("policy_counts.i32", "policy_tokens.i16", "policy_weights.u8", "policy_layout.json")
+
+
+def read_policy(run_dir: str, arrays: dict, max_tokens: int):
+    """The encoded legal moves and visit shares of the run's kept positions (see the module docstring)"""
+    counts = np.fromfile(os.path.join(run_dir, "policy_counts.i32"), dtype="<i4").astype(np.int64)
+    starts = np.concatenate([[0], np.cumsum(counts)])
+    tokens = np.fromfile(os.path.join(run_dir, "policy_tokens.i16"), dtype="<i2").reshape(-1, max_tokens)
+    weights = np.fromfile(os.path.join(run_dir, "policy_weights.u8"), dtype=np.uint8).reshape(-1, max_tokens)
+    if len(tokens) != starts[-1]:
+        raise ValueError(f"{run_dir}: the policy files hold {len(tokens)} moves, the counts {starts[-1]}")
+
+    lines = arrays["line"]
+    if len(lines) and lines.max() >= len(counts):
+        raise ValueError(f"{run_dir}: samples.csv has more lines than policy_counts.i32 entries")
+    kept_counts = counts[lines]
+    rows = np.concatenate([np.arange(starts[line], starts[line + 1]) for line in lines]) if len(lines) else np.array([], dtype=np.int64)
+    targets = np.zeros(len(rows), dtype=np.float32)
+    offset = 0
+    for count, visits in zip(kept_counts, arrays["visits"]):
+        pairs = [pair.split(":") for pair in visits.split()]
+        moves = np.array([int(move) for move, _ in pairs], dtype=np.int64)
+        if moves.size and moves.max() >= count:
+            raise ValueError(f"{run_dir}: a visited move index lies beyond the position's {count} moves")
+        values = np.array([float(v) for _, v in pairs], dtype=np.float64)
+        targets[offset + moves] = values / values.sum()
+        offset += count
+    return kept_counts, tokens[rows], weights[rows], targets
 
 
 def convert(runs, output_dir: str, target_lambda: float = 0.5, val: float = 0.1, test: float = 0.0, seed: int = 42):
@@ -115,6 +155,22 @@ def convert(runs, output_dir: str, target_lambda: float = 0.5, val: float = 0.1,
     }
     for name, array in labels.items():
         np.save(os.path.join(output_dir, f"{name}.npy"), array)
+
+    if all(os.path.exists(os.path.join(run, name)) for run, *_ in parts for name in POLICY_FILES):
+        layouts = []
+        for run, *_ in parts:
+            with open(os.path.join(run, "policy_layout.json"), encoding="utf-8") as file:
+                layouts.append(json.load(file))
+        if any(layout != layouts[0] for layout in layouts):
+            raise ValueError("The runs encode the moves differently (policy_layout.json)")
+        max_tokens = layouts[0]["max_tokens"][0]
+        policy = [read_policy(run, arrays, max_tokens) for run, _, arrays, _ in parts]
+        counts = np.concatenate([part[0] for part in policy])
+        np.save(os.path.join(output_dir, "policy_offsets.npy"), np.concatenate([[0], np.cumsum(counts)]).astype(np.int64))
+        for i, name in enumerate(("policy_tokens", "policy_weights", "policy_targets"), start=1):
+            np.save(os.path.join(output_dir, f"{name}.npy"), np.concatenate([part[i] for part in policy]))
+        with open(os.path.join(output_dir, "policy_layout.json"), "w", encoding="utf-8") as file:
+            json.dump(layouts[0], file, indent=2)
 
     # Split by game; without a test share everything that isn't validation is training
     groups = labels["groups"]

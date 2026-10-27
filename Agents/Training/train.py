@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import numpy as np
 import torch
@@ -7,13 +8,23 @@ import torch.nn.functional as F
 import lightning as L
 from torch.utils.data import Dataset, DataLoader, Sampler
 from state_value_net import StateValueModule, PLAYER_COUNT
-from augmentation import (BOARD_SYMMETRY_COUNT, NUMBER_PAIR_COUNT, is_rotatable, rotate_features, rotate_player_index,
-                          rotate_players, swap_number_pairs, transform_board)
+from augmentation import (BOARD_SYMMETRY_COUNT, NUMBER_PAIR_COUNT, is_rotatable, move_token_symmetries, rotate_features,
+                          rotate_player_index, rotate_players, swap_number_pairs, transform_board)
 # augmentation legt DatasetProcessing in den Suchpfad
 from state_to_vector import FEATURE_DIM  # noqa: E402
 
 # Zusätzliche Label-Arrays aus DatasetProcessing/playout_results.py (gleiche Zeilenreihenfolge wie die States), alle optional
 AUX_ARRAYS = ("placements", "vp_shares", "rounds_left", "sibling_groups", "actors")
+# Policy-Targets aus selfplay_to_dataset.py: die legalen Züge pro Position als Tokens und ihr Anteil an den Root Visits
+POLICY_ARRAYS = ("policy_offsets", "policy_tokens", "policy_weights", "policy_targets")
+
+
+def read_policy_layout(directory):
+    """Token-Layout der Policy-Targets (policy_layout.json) oder None, wenn das Verzeichnis keine hat"""
+    if directory is None or not os.path.exists(os.path.join(directory, "policy_layout.json")):
+        return None
+    with open(os.path.join(directory, "policy_layout.json"), encoding="utf-8") as file:
+        return json.load(file)
 
 
 class StateDataset(Dataset):
@@ -43,6 +54,13 @@ class StateDataset(Dataset):
                 path = os.path.join(aux_dir, f"{name}.npy")
                 if os.path.exists(path):
                     self.aux_paths[name] = path
+        # Policy-Targets, wenn alle Arrays und das Token-Layout da sind; die Brett-Symmetrien permutieren auch die Tokens
+        self.policy_layout = read_policy_layout(aux_dir)
+        self.policy_paths = {}
+        if self.policy_layout is not None and all(os.path.exists(os.path.join(aux_dir, f"{name}.npy")) for name in POLICY_ARRAYS):
+            self.policy_paths = {name: os.path.join(aux_dir, f"{name}.npy") for name in POLICY_ARRAYS}
+            self.token_symmetries = move_token_symmetries(self.policy_layout)
+        self.max_tokens = self.policy_layout["max_tokens"][0] if self.policy_layout else 1
         self._open()
 
     def _open(self):
@@ -51,6 +69,7 @@ class StateDataset(Dataset):
         self.labels = np.load(self.labels_path, mmap_mode='r')
         self.aux = {name: np.load(path, mmap_mode='r') for name, path in self.aux_paths.items()}
         self.targets = {name: np.load(path, mmap_mode='r') for name, path in self.target_paths.items()}
+        self.policy = {name: np.load(path, mmap_mode='r') for name, path in self.policy_paths.items()}
 
     def __getstate__(self):
         # Wird beim Picklen des Datasets vor dem Senden an Worker aufgerufen
@@ -60,6 +79,7 @@ class StateDataset(Dataset):
         state["labels"] = None
         state["aux"] = None
         state["targets"] = None
+        state["policy"] = None
         return state
 
     def __setstate__(self, state):
@@ -116,6 +136,7 @@ class StateDataset(Dataset):
 
         if self.augment_numbers:
             x = swap_number_pairs(x, torch.randint(2 ** NUMBER_PAIR_COUNT, (n,)).numpy())
+        ts = np.zeros(n, dtype=np.int64)
         if self.augment_board:
             ts = torch.randint(BOARD_SYMMETRY_COUNT, (n,)).numpy()
             for t in range(1, BOARD_SYMMETRY_COUNT):
@@ -123,7 +144,7 @@ class StateDataset(Dataset):
                 if rows.size:
                     x[rows] = transform_board(x[rows], t)
 
-        return {
+        batch = {
             "x": torch.from_numpy(x),
             "y": torch.from_numpy(y),
             "placements": torch.from_numpy(placements),
@@ -132,6 +153,49 @@ class StateDataset(Dataset):
             "sibling_groups": torch.from_numpy(sibling_groups),
             "actors": torch.from_numpy(np.maximum(actors, 0)),
         }
+        batch.update(self._policy_batch(indices, ts))
+        return batch
+
+    def _policy_batch(self, indices, ts):
+        """
+        Die legalen Züge der Zeilen, aufgefüllt auf die größte Zuganzahl im Batch: Tokens (-1 = leer), ihre Gewichte, der
+        Anteil an den Root Visits und eine Maske der echten Züge. Zeilen ohne Policy-Targets haben keine Züge.
+        """
+        n = len(indices)
+        if not self.policy:
+            return {"policy_tokens": torch.full((n, 0, self.max_tokens), -1, dtype=torch.int64),
+                    "policy_weights": torch.zeros((n, 0, self.max_tokens)),
+                    "policy_targets": torch.zeros((n, 0)), "policy_mask": torch.zeros((n, 0), dtype=torch.bool)}
+        offsets = self.policy["policy_offsets"]
+        starts, counts = offsets[indices], offsets[indices + 1] - offsets[indices]
+        width = max(int(counts.max()), 1)
+        total = int(counts.sum())
+        row_of = np.repeat(np.arange(n), counts)
+        slot = np.arange(total) - np.repeat(np.cumsum(counts) - counts, counts)
+        source = np.repeat(starts, counts) + slot
+        # Sortiert aus den MemMaps lesen
+        order = np.argsort(source, kind="stable")
+        restore = np.empty_like(order)
+        restore[order] = np.arange(total)
+
+        def take(name, dtype):
+            return np.asarray(self.policy[name][source[order]], dtype=dtype)[restore]
+
+        tokens = np.full((n, width, self.max_tokens), -1, dtype=np.int64)
+        weights = np.zeros((n, width, self.max_tokens), dtype=np.float32)
+        targets = np.zeros((n, width), dtype=np.float32)
+        mask = np.zeros((n, width), dtype=bool)
+        moved = take("policy_tokens", np.int64)
+        # Die Brett-Symmetrie der Zeile auch auf ihre Züge anwenden
+        symmetry = np.broadcast_to(ts[row_of][:, None], moved.shape)
+        valid = moved >= 0
+        moved[valid] = self.token_symmetries[symmetry[valid], moved[valid]]
+        tokens[row_of, slot] = moved
+        weights[row_of, slot] = take("policy_weights", np.float32)
+        targets[row_of, slot] = take("policy_targets", np.float32)
+        mask[row_of, slot] = True
+        return {"policy_tokens": torch.from_numpy(tokens), "policy_weights": torch.from_numpy(weights),
+                "policy_targets": torch.from_numpy(targets), "policy_mask": torch.from_numpy(mask)}
 
 
 class MixedDataset(Dataset):
@@ -156,7 +220,15 @@ class MixedDataset(Dataset):
             dtype = parts[0][key].dtype
             for part in parts[1:]:
                 dtype = torch.promote_types(dtype, part[key].dtype)
-            batch[key] = torch.cat([part[key].to(dtype) for part in parts])
+            tensors = [part[key].to(dtype) for part in parts]
+            if key.startswith("policy_"):
+                # Die Quellen füllen auf verschieden viele Züge auf (Daten ohne Policy auf keinen)
+                # und auf verschieden viele Tokens pro Zug (Daten ohne Layout auf einen)
+                width = max(t.shape[1] for t in tensors)
+                tokens = max(t.shape[2] for t in tensors) if tensors[0].dim() == 3 else 0
+                tensors = [F.pad(t, ([0, tokens - t.shape[2]] if t.dim() == 3 else []) + [0, width - t.shape[1]],
+                                 value=-1 if key == "policy_tokens" else 0) for t in tensors]
+            batch[key] = torch.cat(tensors)
         return batch
 
 
@@ -277,6 +349,9 @@ def main():
     parser.add_argument("--target-lambda", type=float, default=None)
     # Gewichte (und Input-Normalisierung) aus einem Checkpoint übernehmen und weitertrainieren, z.B. von E2 aus
     parser.add_argument("--init-from", default=None)
+    # Policy Head auf die Visit-Verteilung der Self-Play-Daten (policy_*.npy aus selfplay_to_dataset.py); Daten ohne zählen nicht
+    parser.add_argument("--policy-weight", type=float, default=0.0)
+    parser.add_argument("--policy-dim", type=int, default=64)
     args = parser.parse_args()
 
     sources = [parse_source(spec) for spec in args.data] if args.data else []
@@ -333,14 +408,24 @@ def main():
         val_loader = DataLoader(torch.utils.data.Subset(full_ds, val_idx), batch_size=args.batch_size, shuffle=False, **loader_args)
 
     in_dim = full_ds.states.shape[1]
+    policy = {}
+    if args.policy_weight > 0:
+        if not full_ds.policy_paths:
+            raise SystemExit("--policy-weight needs policy targets in the first --data source (selfplay_to_dataset.py of a run with policy files)")
+        layout = full_ds.policy_layout
+        policy = dict(policy_weight=args.policy_weight, policy_types=layout["move_types"][1], policy_vocabulary=layout["vocabulary"][1],
+                      policy_dim=args.policy_dim)
     model = StateValueModule(in_dim=in_dim, lr=args.lr, placement_weight=args.placement_weight, vp_share_weight=args.vp_share_weight,
                              rounds_weight=args.rounds_weight, ranking_weight=args.ranking_weight, normalize_inputs=args.normalize_inputs,
-                             ranking_placement_weight=args.ranking_placement_weight, hidden=args.hidden)
+                             ranking_placement_weight=args.ranking_placement_weight, hidden=args.hidden, **policy)
     if args.init_from:
-        # Gleiche Architektur und Normalisierung wie der Checkpoint, sonst schlägt das Laden fehl; nur der Optimizer startet neu
+        # Gleiche Architektur und Normalisierung wie der Checkpoint, sonst schlägt das Laden fehl; nur der Optimizer startet neu.
+        # Ein neuer Policy Head fehlt im Checkpoint und startet zufällig
         checkpoint = torch.load(args.init_from, map_location="cpu", weights_only=False)
-        model.load_state_dict(checkpoint["state_dict"])
-        print(f"Weights and input normalization from {args.init_from}")
+        missing, unexpected = model.load_state_dict(checkpoint["state_dict"], strict=False)
+        if unexpected or any(not name.startswith("model.policy_") for name in missing):
+            raise SystemExit(f"Checkpoint does not fit the model: missing {missing}, unexpected {unexpected}")
+        print(f"Weights and input normalization from {args.init_from}" + (f" (new: {', '.join(missing)})" if missing else ""))
     elif args.normalize_inputs:
         sample = np.sort(np.random.default_rng(0).choice(train_idx, min(len(train_idx), 200_000), replace=False))
         states = np.asarray(full_ds.states[sample], dtype=np.float32)

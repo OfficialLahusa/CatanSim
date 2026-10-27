@@ -9,10 +9,10 @@ namespace SelfPlayCollector
     /// <summary>
     /// A position recorded after a full search: the state vector, the player deciding there, the search's mean result of
     /// every player at the root, and the visits of the root moves by their index in MCTSTree.GetValidActions (the order of
-    /// the root's children), only those with visits
+    /// the root's children), only those with visits; Moves are the root's moves in that order
     /// </summary>
     internal sealed record RecordedPosition(int ActionIndex, int Round, int Actor, Half[] Features, double[] RootValues, uint RootVisits,
-        long Iterations, (int move, uint visits)[] Visits);
+        long Iterations, (int move, uint visits)[] Visits, Action[] Moves);
 
     /// <summary>
     /// A played game: its ID and seed, the final state with all actions (a save file replays them from the seed's initial
@@ -78,6 +78,10 @@ namespace SelfPlayCollector
 
                     bool full = random.NextDouble() < settings.FullSearchProbability;
                     int iterations = full ? settings.FullIterations : settings.FastIterations;
+                    // Root noise for the full searches only, whose visits become policy targets (as in KataGo)
+                    search.RootNoiseWeight = full ? settings.RootNoise : 0;
+                    search.RootNoiseConcentration = settings.RootNoiseConcentration;
+                    search.NoiseRandom = random;
                     await search.RunAsync(tree, double.PositiveInfinity, iterations).ConfigureAwait(false);
                     countIterations(search.LastSearch!.Iterations);
 
@@ -109,7 +113,7 @@ namespace SelfPlayCollector
                 if (children[i].VisitCount > 0) visits.Add((i, children[i].VisitCount));
 
             return new RecordedPosition(actionIndex, state.Turn.RoundCounter, tree.RootNode.DeciderIndex, row, tree.RootValues(), tree.RootNode.VisitCount,
-                iterations, visits.ToArray());
+                iterations, visits.ToArray(), children.Select(child => child.LastAction!).ToArray());
         }
 
         /// <summary>

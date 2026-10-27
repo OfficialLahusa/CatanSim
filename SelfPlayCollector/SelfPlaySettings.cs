@@ -51,6 +51,13 @@ namespace SelfPlayCollector
         public double Exploration { get; init; } = 1.414;
 
         /// <summary>
+        /// Dirichlet noise mixed into the root's priors of full searches (only with a policy head): its weight and its total
+        /// concentration (alpha per move = concentration / moves)
+        /// </summary>
+        public double RootNoise { get; init; } = 0.25;
+        public double RootNoiseConcentration { get; init; } = 10;
+
+        /// <summary>
         /// Games still running after this many actions are stopped and written without a result
         /// </summary>
         public int MaxActions { get; init; } = 3000;
@@ -93,6 +100,8 @@ namespace SelfPlayCollector
             if (Temperature < 0) throw new ArgumentException("--temperature must not be negative.");
             if (TemperatureMoves < 0) throw new ArgumentException("--temperature-moves must not be negative.");
             if (Exploration < 0) throw new ArgumentException("--exploration must not be negative.");
+            if (RootNoise is < 0 or > 1) throw new ArgumentException("--root-noise must be between 0 and 1.");
+            if (RootNoiseConcentration <= 0) throw new ArgumentException("--noise-concentration must be positive.");
             if (MaxActions < 1) throw new ArgumentException("--max-actions must be at least 1.");
             if (Nets < 1) throw new ArgumentException("--nets must be at least 1.");
             if (BatchRows < LeavesPerBatch) throw new ArgumentException("--batch must be at least --leaves.");
@@ -106,9 +115,11 @@ namespace SelfPlayCollector
     {
         public const string Usage = """
             Usage: SelfPlayCollector [options]
+                   SelfPlayCollector policy-targets RUN_DIRECTORY
 
             Plays games with all four seats searching with MCTS (max^n) on one value net and records the positions of
             full searches with the search's values and visits, plus every game's result and save file.
+            policy-targets writes the encoded legal moves of every position for a run collected without them.
 
               --games N                Games to play (default 1000)
               --first-game I           Number the games from I (default 0), to extend a run with the same seed
@@ -119,7 +130,10 @@ namespace SelfPlayCollector
               --full-probability P     Probability of a full search per decision (default 0.25)
               --temperature T          Temperature of the sampled moves at the start of a game (default 1, 0 for none)
               --temperature-moves M    Searched decisions per game with sampled moves (default 30)
-              --exploration C          UCT exploration constant (default 1.414)
+              --exploration C          UCT exploration constant, PUCT with a policy head (default 1.414)
+              --root-noise W           Weight of the Dirichlet noise on the root priors of full searches, with a policy
+                                       head (default 0.25, 0 for none)
+              --noise-concentration A  Total concentration of the root noise, alpha per move = A / moves (default 10)
               --max-actions N          Stop games after N actions, written without a result (default 3000)
               --model PATH             Value net (default: the deployed model)
               --nets N                 Net sessions evaluating batches in turn (default 2)
@@ -155,6 +169,8 @@ namespace SelfPlayCollector
                     case "--temperature": settings = settings with { Temperature = DoubleValue() }; break;
                     case "--temperature-moves": settings = settings with { TemperatureMoves = IntValue() }; break;
                     case "--exploration": settings = settings with { Exploration = DoubleValue() }; break;
+                    case "--root-noise": settings = settings with { RootNoise = DoubleValue() }; break;
+                    case "--noise-concentration": settings = settings with { RootNoiseConcentration = DoubleValue() }; break;
                     case "--max-actions": settings = settings with { MaxActions = IntValue() }; break;
                     case "--model": settings = settings with { ModelPath = Value() }; break;
                     case "--nets": settings = settings with { Nets = IntValue() }; break;

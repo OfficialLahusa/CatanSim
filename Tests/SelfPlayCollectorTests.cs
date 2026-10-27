@@ -35,16 +35,19 @@ namespace Tests
             Assert.Throws<ArgumentException>(() => SelfPlayCollector.CommandLine.Parse(["--unknown"]));
         }
 
-        [Fact]
-        public void RunRecordsPositionsThatReplayFromTheSavedGames()
+        [Theory]
+        [InlineData("placements_tiny.onnx")]
+        [InlineData("policy_tiny.onnx")]
+        public void RunRecordsPositionsThatReplayFromTheSavedGames(string model)
         {
+            string modelPath = TestUtil.FixturePath("ValueNet", model);
             string root = Path.Combine(Path.GetTempPath(), "catansim-selfplay-" + Guid.NewGuid().ToString("N"));
             try
             {
                 SelfPlaySettings settings = new()
                 {
                     Games = 3, ConcurrentGames = 3, LeavesPerBatch = 8, FullIterations = 32, FastIterations = 16, FullSearchProbability = 0.5,
-                    TemperatureMoves = 10, MaxActions = 150, ModelPath = TinyModelPath, Nets = 1, BatchRows = 64, Provider = InferenceProvider.Cpu,
+                    TemperatureMoves = 10, MaxActions = 150, ModelPath = modelPath, Nets = 1, BatchRows = 64, Provider = InferenceProvider.Cpu,
                     Seed = 11, OutputDirectory = root, Name = "run",
                 };
                 SelfPlayCollector.SelfPlayCollector collector = new(settings, TextWriter.Null);
@@ -53,7 +56,7 @@ namespace Tests
                 Assert.Equal(3, result.Games);
 
                 string directory = collector.RunDirectory;
-                IStateVectorizer vectorizer = StateVectorizer.For(new StateValueNet(TinyModelPath, provider: InferenceProvider.Cpu));
+                IStateVectorizer vectorizer = StateVectorizer.For(new StateValueNet(modelPath, provider: InferenceProvider.Cpu));
                 var games = ReadCsv(Path.Combine(directory, "games.csv"));
                 var samples = ReadCsv(Path.Combine(directory, "samples.csv"));
                 Assert.Equal(new long[] { 0, 1, 2 }, games.Select(game => long.Parse(game["game"])).Order());
@@ -91,6 +94,19 @@ namespace Tests
                     }
                     Assert.True(state.Equals(saved.GameState), $"game {id}: the replayed final state differs from the saved one");
                 }
+
+                // One entry of encoded moves per position, as many as the position's legal moves; writing them afterwards
+                // by replaying the games gives the same files
+                int[] counts = ReadInts(Path.Combine(directory, PolicyTargetWriter.CountsFile));
+                Assert.Equal(samples.Count, counts.Length);
+                Assert.Equal(counts.Sum() * ActionEncoding.MaxTokens * sizeof(short), new FileInfo(Path.Combine(directory, PolicyTargetWriter.TokensFile)).Length);
+                string[] policyFiles = [PolicyTargetWriter.CountsFile, PolicyTargetWriter.TokensFile, PolicyTargetWriter.WeightsFile, PolicyTargetWriter.LayoutFile];
+                var written = policyFiles.ToDictionary(name => name, name => File.ReadAllBytes(Path.Combine(directory, name)));
+                foreach (string name in policyFiles) File.Delete(Path.Combine(directory, name));
+                Assert.Equal(samples.Count, PolicyTargetWriter.ConvertRun(directory, TextWriter.Null));
+                foreach (string name in policyFiles)
+                    Assert.Equal(written[name], File.ReadAllBytes(Path.Combine(directory, name)));
+                Assert.Throws<InvalidOperationException>(() => PolicyTargetWriter.ConvertRun(directory, TextWriter.Null));
             }
             finally
             {
@@ -121,6 +137,12 @@ namespace Tests
             var visits = sample["visits"].Split(' ').Select(pair => pair.Split(':')).Select(pair => (move: int.Parse(pair[0]), visits: uint.Parse(pair[1]))).ToArray();
             Assert.All(visits, v => Assert.InRange(v.move, 0, moves - 1));
             Assert.InRange((long)visits.Sum(v => v.visits), long.Parse(sample["root_visits"]) - 1, long.Parse(sample["root_visits"]));
+        }
+
+        private static int[] ReadInts(string path)
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            return Enumerable.Range(0, bytes.Length / sizeof(int)).Select(i => BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(i * sizeof(int)))).ToArray();
         }
 
         private static List<Dictionary<string, string>> ReadCsv(string path)

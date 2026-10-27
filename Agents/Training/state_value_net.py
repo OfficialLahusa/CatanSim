@@ -14,7 +14,7 @@ PLACEMENT_SCORES = (1.0, 2.0 / 3.0, 1.0 / 3.0, 0.0)
 
 
 class StateValueNet(nn.Module):
-    def __init__(self, in_dim, hidden=2048, aux_heads=False, normalize_inputs=False):
+    def __init__(self, in_dim, hidden=2048, aux_heads=False, normalize_inputs=False, policy_types=0, policy_vocabulary=0, policy_dim=64):
         super().__init__()
         # Optionale Standardisierung der Inputs (Mittelwert und Skala pro Feature aus den Trainingsdaten, siehe set_input_normalization),
         # Teil des Modells und damit auch des ONNX-Exports, die Vektorizer bleiben unskaliert
@@ -42,6 +42,12 @@ class StateValueNet(nn.Module):
         # Nur dann exportiert export_onnx die Platzierungen: mit Aux Heads für andere Losses wäre der Head untrainiert
         self.placements_trained = False
 
+        # Policy Head (siehe Agents/Inference/ActionEncoding.cs): ein Query pro Zugtyp aus dem letzten Hidden Layer und eine
+        # Embedding-Tabelle der Zug-Tokens; Logit eines Zugs = Query seines Typs · gewichtete Summe seiner Token-Embeddings
+        self.policy_query = nn.Linear(int(hidden/2), policy_types * policy_dim) if policy_types > 0 else None
+        self.policy_embeddings = nn.Embedding(policy_vocabulary, policy_dim) if policy_types > 0 else None
+        self.policy_types, self.policy_dim = policy_types, policy_dim
+
     def _normalize(self, x):
         return x if self.input_mean is None else (x - self.input_mean) * self.input_scale
 
@@ -56,17 +62,28 @@ class StateValueNet(nn.Module):
             outputs["placements"] = self.aux["placements"](features).view(-1, PLAYER_COUNT, PLAYER_COUNT)
             outputs["vp_shares"] = self.aux["vp_shares"](features)
             outputs["rounds_left"] = self.aux["rounds_left"](features).squeeze(-1)
+        if self.policy_query is not None:
+            outputs["policy_query"] = self.policy_query(features).view(-1, self.policy_types, self.policy_dim)
         return outputs
+
+    def policy_logits(self, query, tokens, weights):
+        """Logits der Züge [batch, Züge] aus den Queries [batch, Typen, dim] und den Zug-Tokens [batch, Züge, Tokens]
+        (-1 = leer) mit ihren Gewichten"""
+        embedded = (self.policy_embeddings(tokens.clamp(min=0)) * (weights * (tokens >= 0))[..., None]).sum(dim=2)
+        types = tokens[..., 0].clamp(min=0)
+        selected = query.gather(1, types[..., None].expand(-1, -1, query.shape[-1]))
+        return (selected * embedded).sum(dim=-1)
 
 
 class StateValueModule(L.LightningModule):
     def __init__(self, in_dim, lr=1e-3, weight_decay=1e-4,
                  placement_weight=0.0, vp_share_weight=0.0, rounds_weight=0.0, ranking_weight=0.0, normalize_inputs=False,
-                 ranking_placement_weight=0.0, hidden=2048):
+                 ranking_placement_weight=0.0, hidden=2048, policy_weight=0.0, policy_types=0, policy_vocabulary=0, policy_dim=64):
         super().__init__()
         self.save_hyperparameters()
         aux_heads = placement_weight > 0 or vp_share_weight > 0 or rounds_weight > 0 or ranking_placement_weight > 0
-        self.model = StateValueNet(in_dim, hidden=hidden, aux_heads=aux_heads, normalize_inputs=normalize_inputs)
+        self.model = StateValueNet(in_dim, hidden=hidden, aux_heads=aux_heads, normalize_inputs=normalize_inputs,
+                                   policy_types=policy_types if policy_weight > 0 else 0, policy_vocabulary=policy_vocabulary, policy_dim=policy_dim)
         self.model.placements_trained = placement_weight > 0
 
     def set_input_normalization(self, states):
@@ -118,6 +135,12 @@ class StateValueModule(L.LightningModule):
                 self.log(f"{stage}_ranking_accuracy", accuracy, sync_dist=True)
             total = total + hp.ranking_weight * ranking_loss
 
+        if hp.get("policy_weight", 0.0) > 0 and batch["policy_mask"].shape[1] > 0:
+            policy_loss, accuracy = policy_cross_entropy(self.model, outputs["policy_query"], batch)
+            self.log(f"{stage}_policy_loss", policy_loss, sync_dist=True)
+            self.log(f"{stage}_policy_accuracy", accuracy, sync_dist=True)
+            total = total + hp.policy_weight * policy_loss
+
         self.log(f"{stage}_total_loss", total, sync_dist=True)
         return total
 
@@ -136,6 +159,22 @@ class StateValueModule(L.LightningModule):
             opt, max_lr=self.hparams.lr, total_steps=self.trainer.estimated_stepping_batches
         )
         return {"optimizer": opt, "lr_scheduler": {"scheduler": sched, "interval": "step"}}
+
+
+def policy_cross_entropy(model, query, batch):
+    """
+    Kreuzentropie der Policy gegen den Anteil der Root Visits, Softmax nur über die legalen Züge (Maske); Zeilen ohne Züge
+    (Daten ohne Policy-Targets) zählen nicht. Dazu der Anteil der Zeilen, in denen der meistbesuchte Zug auch das höchste
+    Logit hat.
+    """
+    mask, targets = batch["policy_mask"], batch["policy_targets"].float()
+    logits = model.policy_logits(query.float(), batch["policy_tokens"], batch["policy_weights"].float())
+    logits = logits.masked_fill(~mask, float("-inf"))
+    has_moves = mask.any(dim=1)
+    log_probs = torch.where(mask, F.log_softmax(logits.masked_fill(~has_moves[:, None], 0.0), dim=-1), torch.zeros_like(logits))
+    loss = _masked_mean(-(targets * log_probs).sum(dim=-1), has_moves)
+    hits = (logits.argmax(dim=-1) == targets.argmax(dim=-1)).float()
+    return loss, _masked_mean(hits, has_moves)
 
 
 def masked_kl(logits, target):

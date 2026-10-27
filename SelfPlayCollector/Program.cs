@@ -7,6 +7,22 @@ namespace SelfPlayCollector
             Console.WriteLine("CettlersOfSatan Self-Play Collector");
             Console.WriteLine("===================================");
 
+            // Policy files for a run collected before they were written: SelfPlayCollector policy-targets RUN_DIRECTORY
+            if (args.Length == 2 && args[0] == "policy-targets")
+            {
+                try
+                {
+                    long positions = PolicyTargetWriter.ConvertRun(args[1], Console.Out);
+                    Console.WriteLine($"Policy targets of {positions} positions written to {args[1]}");
+                    return 0;
+                }
+                catch (Exception e) when (e is InvalidOperationException or IOException)
+                {
+                    Console.Error.WriteLine(e.Message);
+                    return 1;
+                }
+            }
+
             CommandLine commandLine;
             try
             {

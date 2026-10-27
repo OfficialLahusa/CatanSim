@@ -54,6 +54,19 @@ namespace Agents.MCTS
         // Whether the tree's owner picks the next action here (otherwise it is sampled), decided when the node is expanded
         public bool OwnerDecides { get; private set; }
 
+        // Policy prior of this node's move among its siblings (PUCT), set once the parent's policy is known
+        public float Prior { get; internal set; }
+
+        // Whether the children have priors (from the policy head or uniform until it arrives), then selection uses PUCT
+        public bool HasPriors { get; internal set; }
+
+        // Whether the children's priors came from the policy head (not the uniform stand-in)
+        public bool HasPolicyPriors { get; internal set; }
+
+        // Priors of the moves of a node evaluated before it was expanded, in the order of MCTSTree.GetValidActions; taken by
+        // the expansion (under ChildLock)
+        internal float[]? PendingPriors { get; set; }
+
         // Taken only to expand the node, never to read its children
         public readonly object ChildLock = new object();
 
@@ -153,6 +166,37 @@ namespace Agents.MCTS
             }
 
             return meanValue + explorationParameter * Math.Sqrt(logParentVisits / visitCountSnapshot);
+        }
+
+        /// <summary>
+        /// PUCT of a child on one player's result (normalized like GetUCT): the mean plus exploration times the prior, scaled
+        /// by the square root of the parent's visits over the child's. An unvisited child counts with firstPlayValue.
+        /// </summary>
+        internal double GetPUCT(double explorationParameter, double sqrtParentVisits, MinMaxStats.Range? valueRange, int player, bool invert, double firstPlayValue)
+        {
+            uint visitCountSnapshot = VisitCount;
+            double meanValue;
+            if (visitCountSnapshot == 0)
+            {
+                meanValue = firstPlayValue;
+            }
+            else if (invert)
+            {
+                // As in GetUCT: pending visits count as 0 after inverting
+                uint resolved = Math.Min(ResolvedVisitCount, visitCountSnapshot);
+                double resolvedMean = resolved == 0 ? 0 : PlayerScore(player) / resolved;
+                if (valueRange != null)
+                    resolvedMean = valueRange.Value.Normalize(resolvedMean);
+                meanValue = resolved == 0 ? 0 : (1 - resolvedMean) * resolved / visitCountSnapshot;
+            }
+            else
+            {
+                meanValue = PlayerScore(player) / visitCountSnapshot;
+                if (valueRange != null)
+                    meanValue = valueRange.Value.Normalize(meanValue);
+            }
+
+            return meanValue + explorationParameter * Prior * sqrtParentVisits / (1 + visitCountSnapshot);
         }
 
         /// <summary>

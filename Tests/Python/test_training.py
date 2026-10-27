@@ -5,6 +5,7 @@ Skipped when torch, lightning or onnxruntime are not installed.
 Run from the repository root:  python -m unittest discover -s Tests/Python -v
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -22,7 +23,7 @@ try:
     import onnxruntime as ort
     import torch
     from export_onnx import export_model
-    from state_value_net import StateValueModule, masked_kl, sibling_ranking
+    from state_value_net import StateValueModule, masked_kl, policy_cross_entropy, sibling_ranking
     from train import GroupBatchSampler, MixedDataset, MixSampler, StateDataset
 except ImportError as error:  # pragma: no cover - depends on the environment
     IMPORT_ERROR = error
@@ -175,6 +176,73 @@ class TrainingTest(unittest.TestCase):
             self.assertEqual((4, 8), tuple(batch["x"].shape))
             # Rows come back per source; the second source's rows are its stored states
             np.testing.assert_array_equal(batch["x"][2:].numpy(), np.load(os.path.join(second, "states.npy"))[[5, 49]])
+
+
+    def test_board_symmetries_move_the_move_tokens_like_the_features(self):
+        from augmentation import BOARD_INDEX, BOARD_SYMMETRY_COUNT, _EDGE_SIZE, _EDGE_START, move_token_symmetries
+        from state_to_vector import _INTERSECTION_SIZE, _INTERSECTION_START, _TILE_SIZE, _TILE_START
+        table = move_token_symmetries(POLICY_LAYOUT)
+        for t in range(BOARD_SYMMETRY_COUNT):
+            for name, start, size in (("intersections", _INTERSECTION_START, _INTERSECTION_SIZE), ("edges", _EDGE_START, _EDGE_SIZE),
+                                      ("tiles", _TILE_START, _TILE_SIZE)):
+                first, count = POLICY_LAYOUT[name]
+                for old in range(count):
+                    new = table[t, first + old] - first
+                    # The feature block of the element moves to the same place as its token
+                    self.assertEqual(start + old * size, BOARD_INDEX[t][start + new * size], f"{name} {old} under symmetry {t}")
+            # Move types, resources and victims stay
+            np.testing.assert_array_equal(table[t, :POLICY_LAYOUT["intersections"][0]], np.arange(POLICY_LAYOUT["intersections"][0]))
+            victims = POLICY_LAYOUT["victims"][0]
+            np.testing.assert_array_equal(table[t, victims:], np.arange(victims, POLICY_LAYOUT["vocabulary"][1]))
+
+    def test_the_policy_loss_covers_only_legal_moves_of_rows_with_moves(self):
+        torch.manual_seed(1)
+        module = StateValueModule(in_dim=8, hidden=16, policy_weight=1.0, policy_types=19, policy_vocabulary=213, policy_dim=4)
+        query = module.model.forward_all(torch.randn(2, 8))["policy_query"]
+        tokens = torch.tensor([[[0, -1], [5, 30], [-1, -1]], [[-1, -1], [-1, -1], [-1, -1]]])
+        batch = {"policy_tokens": tokens, "policy_weights": (tokens >= 0).float(),
+                 "policy_targets": torch.tensor([[0.0, 1.0, 0.0], [0.0, 0.0, 0.0]]),
+                 "policy_mask": torch.tensor([[True, True, False], [False, False, False]])}
+        loss, _ = policy_cross_entropy(module.model, query, batch)
+        logits = module.model.policy_logits(query, tokens, batch["policy_weights"])[0, :2]
+        self.assertAlmostEqual(-torch.log_softmax(logits, dim=0)[1].item(), loss.item(), places=5)
+        loss.backward()
+        self.assertTrue(torch.isfinite(module.model.policy_embeddings.weight.grad).all())
+
+    def test_mixed_sources_pad_the_moves_of_sources_without_policy(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            first, second = os.path.join(directory, "a"), os.path.join(directory, "b")
+            write_source(first, rows=3, features=8, label_dtype=np.float32, self_play=True)
+            write_source(second, rows=4, features=8, label_dtype=np.float16, self_play=False)
+            np.save(os.path.join(first, "policy_offsets.npy"), np.array([0, 2, 5, 6]))
+            np.save(os.path.join(first, "policy_tokens.npy"), np.array([[0, -1], [5, 20], [1, -1], [2, -1], [3, 21], [4, -1]], dtype=np.int16))
+            np.save(os.path.join(first, "policy_weights.npy"), np.ones((6, 2), dtype=np.uint8))
+            np.save(os.path.join(first, "policy_targets.npy"), np.array([0.5, 0.5, 1, 0, 0, 1], dtype=np.float32))
+            with open(os.path.join(first, "policy_layout.json"), "w") as file:
+                json.dump(POLICY_LAYOUT | {"max_tokens": [2]}, file)
+            mixed = MixedDataset([StateDataset(os.path.join(d, "states.npy"), os.path.join(d, "win_rates.npy"), d) for d in (first, second)])
+            batch = mixed.__getitems__([1, 4, 0])
+            self.assertEqual((3, 3, 2), tuple(batch["policy_tokens"].shape))
+            np.testing.assert_array_equal(batch["policy_mask"].sum(dim=1).numpy(), [3, 2, 0])
+            np.testing.assert_array_equal(batch["policy_tokens"][2].numpy(), -1)
+            np.testing.assert_allclose(batch["policy_targets"][0].numpy(), [1, 0, 0])
+
+    def test_a_model_with_a_policy_head_exports_queries_and_embeddings(self):
+        module = StateValueModule(in_dim=32, hidden=16, policy_weight=1.0, policy_types=19, policy_vocabulary=213, policy_dim=4)
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "policy.onnx")
+            self.assertLess(export_model(module.model.eval(), path, 32), 1e-4)
+            session = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+            self.assertEqual(["logits", "policy_query", "policy_embeddings"], [output.name for output in session.get_outputs()])
+            _, queries, embeddings = session.run(None, {"state": np.zeros((3, 32), dtype=np.float32)})
+            self.assertEqual((3, 19 * 4), queries.shape)
+            np.testing.assert_allclose(embeddings, module.model.policy_embeddings.weight.detach().numpy(), rtol=1e-6)
+
+
+# The token layout of Agents/Inference/ActionEncoding.cs (as SelfPlayCollector writes it into policy_layout.json)
+POLICY_LAYOUT = {"move_types": [0, 19], "intersections": [19, 54], "edges": [73, 72], "tiles": [145, 49], "victims": [194, 4],
+                 "given_resources": [198, 5], "received_resources": [203, 5], "discarded_resources": [208, 5], "vocabulary": [0, 213],
+                 "max_tokens": [6]}
 
 
 if __name__ == "__main__":

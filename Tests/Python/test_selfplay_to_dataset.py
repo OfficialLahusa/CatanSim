@@ -84,6 +84,30 @@ class SelfPlayToDatasetTest(unittest.TestCase):
         self.assertTrue({0, 1} <= set(train.tolist()) or {0, 1} <= set(val.tolist()))
         self.assertEqual(0, len(load("idx_test")))
 
+    def test_policy_files_become_visit_shares_per_move(self):
+        run = os.path.join(self.base, "run")
+        write_run(run, ["1,5,1,0,10,2,2,2,20,100,2,50,1.0,0,0,1", "2,6,0,-1,4,4,4,4,90,3000,1,900,99.0,0,1,1"],
+                  ["1,0,5,2,0,800,800,1,0,0,0,0,0,0:600 2:200", "2,0,7,3,1,800,800,0.25,0.25,0.25,0.25,0,1,1:800",
+                   "1,1,9,4,1,800,800,0,1,0,0,0,2,1:800"], [np.zeros((3, FEATURES))])
+        # Three positions with 3, 2 and 2 moves of up to 2 tokens; the second belongs to a game without a result
+        np.array([3, 2, 2], dtype="<i4").tofile(os.path.join(run, "policy_counts.i32"))
+        tokens = np.array([[0, -1], [5, 20], [6, 21], [1, -1], [2, -1], [0, -1], [7, 30]], dtype="<i2")
+        tokens.tofile(os.path.join(run, "policy_tokens.i16"))
+        np.where(tokens >= 0, 1, 0).astype(np.uint8).tofile(os.path.join(run, "policy_weights.u8"))
+        with open(os.path.join(run, "policy_layout.json"), "w") as file:
+            json.dump({"max_tokens": [2], "vocabulary": [0, 40]}, file)
+
+        output = os.path.join(self.base, "prepared")
+        self.assertEqual(2, convert([run], output, val=0.0))
+
+        def load(name):
+            return np.load(os.path.join(output, f"{name}.npy"))
+
+        np.testing.assert_array_equal(load("policy_offsets"), [0, 3, 5])
+        np.testing.assert_array_equal(load("policy_tokens"), tokens[[0, 1, 2, 5, 6]])
+        np.testing.assert_allclose(load("policy_targets"), [0.75, 0, 0.25, 0, 1])
+        self.assertTrue(os.path.exists(os.path.join(output, "policy_layout.json")))
+
     def test_runs_of_different_feature_layouts_are_rejected(self):
         write_run(os.path.join(self.base, "a"), ["1,5,1,0,10,2,2,2,20,100,1,50,1.0,0,0,1"],
                   ["1,0,5,2,0,800,800,1,0,0,0,0,0,0:800"], [np.zeros((1, FEATURES))])

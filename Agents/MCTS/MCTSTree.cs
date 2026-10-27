@@ -38,6 +38,17 @@ namespace Agents.MCTS
 
         public OpponentModel Model { get; }
 
+        /// <summary>
+        /// Whether the search provides policy priors (set by MCTSSearch from its value net): nodes expanded before their
+        /// priors arrive get uniform ones until then, and the opponent models that use every player's values select by PUCT
+        /// </summary>
+        public bool UsesPolicy { get; set; }
+
+        /// <summary>
+        /// How much lower than its parent's mean (normalized) an unvisited child counts in PUCT (first play urgency)
+        /// </summary>
+        public double FirstPlayReduction { get; set; } = 0.1;
+
         public MCTSTree(GameState rootState, sbyte ownerIdx, double explorationParameter, bool normalizeValues = true, OpponentModel model = OpponentModel.Random)
         {
             RootState = rootState;
@@ -277,8 +288,41 @@ namespace Agents.MCTS
                     }
                 }
 
+                // Priors from the policy head if the node was evaluated already, uniform until they arrive otherwise
+                if (node.PendingPriors is float[] priors && priors.Length == children.Count)
+                {
+                    for (int i = 0; i < children.Count; i++) children[i].Prior = priors[i];
+                    node.HasPriors = node.HasPolicyPriors = true;
+                }
+                else if (UsesPolicy && children.Count > 0)
+                {
+                    foreach (MCTSNode child in children) child.Prior = 1f / children.Count;
+                    node.HasPriors = true;
+                }
+                node.PendingPriors = null;
+
                 node.PublishChildren([.. children], HasDecidingPower(node.ActivePlayerIndex, children),
                     actions.Count > 0 ? actions[0].PlayerIndex : MCTSNode.UnknownPlayer);
+            }
+        }
+
+        /// <summary>
+        /// Sets the policy priors of a node's moves (in the order of GetValidActions): on its children if it is expanded
+        /// already, otherwise for its expansion
+        /// </summary>
+        public void ApplyPriors(MCTSNode node, float[] priors)
+        {
+            lock (node.ChildLock)
+            {
+                if (!node.IsExpanded)
+                {
+                    node.PendingPriors = priors;
+                    return;
+                }
+                MCTSNode[] children = node.ChildArray;
+                if (children.Length != priors.Length) return;
+                for (int i = 0; i < children.Length; i++) children[i].Prior = priors[i];
+                node.HasPriors = node.HasPolicyPriors = true;
             }
         }
 
@@ -403,9 +447,11 @@ namespace Agents.MCTS
             int decider = node.DeciderIndex;
             int valuePlayer = Model == OpponentModel.MaxN ? decider : _ownerIdx;
             bool invert = Model == OpponentModel.Paranoid && decider != _ownerIdx;
-            double logVisits = Math.Log(node.VisitCount);
             MinMaxStats.Range? range = PlayerBounds?[valuePlayer].GetRange();
+            if (node.HasPriors)
+                return SelectByPUCT(node, children, valuePlayer, invert, range);
 
+            double logVisits = Math.Log(node.VisitCount);
             MCTSNode chosen = children[0];
             double chosenValue = double.NegativeInfinity;
             foreach (MCTSNode child in children)
@@ -418,6 +464,33 @@ namespace Agents.MCTS
                 }
             }
 
+            return chosen;
+        }
+
+        /// <summary>
+        /// The child with the highest PUCT for the deciding player; unvisited children count as the node's own mean minus
+        /// FirstPlayReduction
+        /// </summary>
+        private MCTSNode SelectByPUCT(MCTSNode node, MCTSNode[] children, int valuePlayer, bool invert, MinMaxStats.Range? range)
+        {
+            uint resolved = node.ResolvedVisitCount;
+            double parentMean = resolved == 0 ? 0.5 : node.PlayerScore(valuePlayer) / resolved;
+            if (range != null) parentMean = range.Value.Normalize(parentMean);
+            if (invert) parentMean = 1 - parentMean;
+            double firstPlayValue = parentMean - FirstPlayReduction;
+            double sqrtVisits = Math.Sqrt(Math.Max(node.VisitCount, 1));
+
+            MCTSNode chosen = children[0];
+            double chosenValue = double.NegativeInfinity;
+            foreach (MCTSNode child in children)
+            {
+                double value = child.GetPUCT(_explorationParameter, sqrtVisits, range, valuePlayer, invert, firstPlayValue) + _random.NextDouble() * 1e-5;
+                if (value > chosenValue)
+                {
+                    chosen = child;
+                    chosenValue = value;
+                }
+            }
             return chosen;
         }
 

@@ -198,12 +198,28 @@ def board_symmetry_index(t: int):
     move_blocks(_EDGE_START, _EDGE_SIZE, edges)
     move_blocks(LEGACY_FEATURE_DIM, len(PORT_TYPES), coastal)
     assert sorted(source) == list(range(FEATURE_DIM))
-    return source, tiles
+    return source, tiles, intersections, edges
 
 
 _BOARD_SYMMETRIES = [board_symmetry_index(t) for t in range(BOARD_SYMMETRY_COUNT)]
-BOARD_INDEX = np.stack([index for index, _ in _BOARD_SYMMETRIES])
-BOARD_TILE_TARGET = np.stack([tiles for _, tiles in _BOARD_SYMMETRIES])
+BOARD_INDEX = np.stack([symmetry[0] for symmetry in _BOARD_SYMMETRIES])
+BOARD_TILE_TARGET = np.stack([symmetry[1] for symmetry in _BOARD_SYMMETRIES])
+# New index of every intersection and edge under each symmetry (for the move tokens of the policy targets)
+BOARD_INTERSECTION_TARGET = np.stack([symmetry[2] for symmetry in _BOARD_SYMMETRIES])
+BOARD_EDGE_TARGET = np.stack([symmetry[3] for symmetry in _BOARD_SYMMETRIES])
+
+
+def move_token_symmetries(layout: dict) -> np.ndarray:
+    """New token of every move token under each board symmetry (BOARD_SYMMETRY_COUNT x vocabulary), for the token layout
+    of the policy targets (policy_layout.json): intersection, edge and tile tokens move with the board, the rest stays"""
+    vocabulary = layout["vocabulary"][1]
+    table = np.tile(np.arange(vocabulary), (BOARD_SYMMETRY_COUNT, 1))
+    for name, targets in (("intersections", BOARD_INTERSECTION_TARGET), ("edges", BOARD_EDGE_TARGET), ("tiles", BOARD_TILE_TARGET)):
+        start, count = layout[name]
+        if targets.shape[1] != count:
+            raise ValueError(f"policy layout has {count} {name}, the board {targets.shape[1]}")
+        table[:, start:start + count] = start + targets
+    return table
 
 
 def transform_board(features: np.ndarray, t: int) -> np.ndarray:

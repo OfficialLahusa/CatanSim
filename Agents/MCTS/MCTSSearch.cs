@@ -2,6 +2,7 @@ using Agents.Inference;
 using Common;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using System.Diagnostics;
+using Action = Common.Actions.Action;
 
 namespace Agents.MCTS
 {
@@ -22,11 +23,17 @@ namespace Agents.MCTS
     /// and the next one selected, so selection runs one batch behind on results (the visits of the batch in evaluation are
     /// already counted). An MCTSAgent selects large batches on all cores; many searches at once (self-play) select small
     /// batches on one thread each and share a BatchingEvaluator. One search at a time per instance.
+    /// With a value net that has a policy head, every evaluated leaf also gets the priors of its moves (PUCT, see
+    /// MCTSTree.ApplyPriors); their legal moves are generated during selection, the priors computed with the evaluation and
+    /// applied with the backpropagation. The root gets its priors from an evaluation of its own before the search.
     /// </summary>
     public sealed class MCTSSearch
     {
         // Leaves of a batch with their features, written by selection so the evaluation only runs the value net
-        private sealed record LeafBatch((MCTSNode leafNode, GameState stateAtLeaf)[] Leaves, DenseTensor<float> Features);
+        private sealed record LeafBatch((MCTSNode leafNode, GameState stateAtLeaf)[] Leaves, DenseTensor<float> Features, List<Action>?[] Moves);
+
+        // Utilities per leaf and player (flat: leaf * 4 + player) and the priors of the leaves' moves (null without policy)
+        private sealed record BatchResults(double[] Utilities, float[]?[] Priors);
 
         private readonly ILeafEvaluator _evaluator;
         private readonly IStateVectorizer _vectorizer;
@@ -53,6 +60,20 @@ namespace Agents.MCTS
         }
 
         public int LeavesPerBatch { get; }
+
+        /// <summary>
+        /// Dirichlet noise mixed into the root's priors at the start of each search (self-play exploration, needs a policy
+        /// head): the noise's weight, 0 for none, and its total concentration (alpha per move = concentration / moves)
+        /// </summary>
+        public double RootNoiseWeight { get; set; }
+        public double RootNoiseConcentration { get; set; } = 10;
+
+        /// <summary>
+        /// Random numbers for the root noise
+        /// </summary>
+        public Random NoiseRandom { get; set; } = Random.Shared;
+
+        private bool UsesPolicy => _evaluator.Policy != null;
 
         /// <summary>
         /// Weight of the placement score in the search value (see MCTSAgent.PlacementWeight)
@@ -93,15 +114,19 @@ namespace Agents.MCTS
             _backpropagationTime.Reset();
             _evaluationWaitTime.Reset();
 
+            tree.UsesPolicy = UsesPolicy;
+            if (UsesPolicy && !tree.RootState.HasEnded && (!tree.RootNode.HasPolicyPriors || RootNoiseWeight > 0))
+                await EvaluateRootPriorsAsync(tree).ConfigureAwait(false);
+
             LeafBatch? evaluatedBatch = null;
-            Task<double[]>? evaluation = null; // utilities per leaf and player
+            Task<BatchResults>? evaluation = null;
 
             long iterationCounter = 0;
             do
             {
                 LeafBatch selectedBatch = SelectBatch(tree);
 
-                double[]? previousResults = null;
+                BatchResults? previousResults = null;
                 if (evaluation != null)
                 {
                     _evaluationWaitTime.Start();
@@ -122,7 +147,7 @@ namespace Agents.MCTS
                 && !cancellation.IsCancellationRequested);
 
             _evaluationWaitTime.Start();
-            double[] lastResults = await evaluation.ConfigureAwait(false);
+            BatchResults lastResults = await evaluation.ConfigureAwait(false);
             _evaluationWaitTime.Stop();
             BackpropagateBatch(tree, evaluatedBatch, lastResults);
 
@@ -131,9 +156,83 @@ namespace Agents.MCTS
                 _evaluationWaitTime.Elapsed.TotalSeconds);
         }
 
+        /// <summary>
+        /// The root's priors from a policy evaluation of its own, with the root noise mixed in
+        /// </summary>
+        private async Task EvaluateRootPriorsAsync(MCTSTree tree)
+        {
+            var features = new DenseTensor<float>([1, _vectorizer.FeatureDim]);
+            _vectorizer.VectorizeInto(tree.RootState, features.Buffer.Span);
+            LeafValues values = await _evaluator.EvaluateAsync(features, false, withPolicy: true).ConfigureAwait(false);
+            List<Action> moves = MCTSTree.GetValidActions(tree.RootState);
+            float[] priors = Priors(values.PolicyQueries!, 0, moves);
+
+            if (RootNoiseWeight > 0 && priors.Length > 1)
+            {
+                double[] noise = Dirichlet(RootNoiseConcentration / priors.Length, priors.Length, NoiseRandom);
+                for (int i = 0; i < priors.Length; i++)
+                    priors[i] = (float)((1 - RootNoiseWeight) * priors[i] + RootNoiseWeight * noise[i]);
+            }
+            tree.ApplyPriors(tree.RootNode, priors);
+        }
+
+        /// <summary>
+        /// The policy's distribution over the moves from the queries of row `row`
+        /// </summary>
+        private float[] Priors(float[] queries, int row, IReadOnlyList<Action> moves)
+        {
+            PolicyHead policy = _evaluator.Policy!;
+            float[] priors = new float[moves.Count];
+            ActionEncoding.Logits(queries.AsSpan(row * policy.QueryLength, policy.QueryLength), policy.Embeddings, policy.Dim, moves, priors);
+            ActionEncoding.Softmax(priors);
+            return priors;
+        }
+
+        /// <summary>
+        /// A sample of the symmetric Dirichlet distribution (normalized Gamma(alpha) variates)
+        /// </summary>
+        public static double[] Dirichlet(double alpha, int count, Random random)
+        {
+            double[] sample = new double[count];
+            double sum = 0;
+            for (int i = 0; i < count; i++)
+            {
+                sample[i] = Gamma(alpha, random);
+                sum += sample[i];
+            }
+            for (int i = 0; i < count; i++)
+                sample[i] = sum > 0 ? sample[i] / sum : 1.0 / count;
+            return sample;
+        }
+
+        private static double Gamma(double alpha, Random random)
+        {
+            // Marsaglia and Tsang; for alpha < 1 boosted with U^(1/alpha)
+            if (alpha < 1)
+                return Gamma(alpha + 1, random) * Math.Pow(1 - random.NextDouble(), 1 / alpha);
+            double d = alpha - 1.0 / 3, c = 1 / Math.Sqrt(9 * d);
+            while (true)
+            {
+                double x, v;
+                do
+                {
+                    // Standard normal by Box-Muller
+                    x = Math.Sqrt(-2 * Math.Log(1 - random.NextDouble())) * Math.Cos(2 * Math.PI * random.NextDouble());
+                    v = 1 + c * x;
+                }
+                while (v <= 0);
+                v = v * v * v;
+                double u = 1 - random.NextDouble();
+                if (Math.Log(u) < 0.5 * x * x + d - d * v + d * Math.Log(v))
+                    return d * v;
+            }
+        }
+
         private LeafBatch SelectBatch(MCTSTree tree)
         {
             var leaves = new (MCTSNode leafNode, GameState stateAtLeaf)[LeavesPerBatch];
+            var moves = new List<Action>?[LeavesPerBatch];
+            bool usesPolicy = UsesPolicy;
             DenseTensor<float> features = _featureBuffers[_nextBuffer];
             _nextBuffer ^= 1;
             Memory<float> featureBuffer = features.Buffer;
@@ -159,7 +258,12 @@ namespace Agents.MCTS
 
                 // Featurize right away, on the same thread (ended matches don't need the value net, their row is left as it is)
                 if (!stateAtLeaf.HasEnded)
+                {
                     _vectorizer.VectorizeInto(stateAtLeaf, featureBuffer.Span.Slice(i * featureDim, featureDim));
+                    // The leaf's moves for its priors, unless it has them already (a leaf can be selected again before)
+                    if (usesPolicy && !leafNode.HasPolicyPriors)
+                        moves[i] = MCTSTree.GetValidActions(stateAtLeaf);
+                }
             }
 
             _selectionTime.Start();
@@ -170,14 +274,14 @@ namespace Agents.MCTS
             _selectionTime.Stop();
             _distinctLeaves += leaves.Select(leaf => leaf.leafNode).Distinct().Count();
 
-            return new LeafBatch(leaves, features);
+            return new LeafBatch(leaves, features, moves);
         }
 
         /// <summary>
-        /// Utilities of the leaves of a batch, one per player (flat: leaf * 4 + player). Only reads the batch, so it can run
-        /// while the tree is in use.
+        /// Utilities of the leaves of a batch, one per player (flat: leaf * 4 + player), and the priors of their moves. Only
+        /// reads the batch, so it can run while the tree is in use.
         /// </summary>
-        private async Task<double[]> EvaluateBatchAsync(LeafBatch batch)
+        private async Task<BatchResults> EvaluateBatchAsync(LeafBatch batch)
         {
             // Simulation
             // Ended matches have a known result, everything else is estimated by the value net in one batched run
@@ -187,8 +291,15 @@ namespace Agents.MCTS
             double placementWeight = _placementWeight;
 
             LeafValues? values = null;
+            bool withPolicy = batch.Moves.Any(moves => moves != null);
             if (leaves.Any(leaf => !leaf.stateAtLeaf.HasEnded))
-                values = await _evaluator.EvaluateAsync(batch.Features, placementWeight > 0).ConfigureAwait(false);
+                values = await _evaluator.EvaluateAsync(batch.Features, placementWeight > 0, withPolicy).ConfigureAwait(false);
+
+            var priors = new float[]?[leaves.Length];
+            if (withPolicy)
+                for (int i = 0; i < leaves.Length; i++)
+                    if (batch.Moves[i] is List<Action> moves)
+                        priors[i] = Priors(values!.Value.PolicyQueries!, i, moves);
 
             for (int i = 0; i < leaves.Length; i++)
             {
@@ -201,16 +312,20 @@ namespace Agents.MCTS
             }
             _evaluationTime.Stop();
 
-            return utilities;
+            return new BatchResults(utilities, priors);
         }
 
-        private void BackpropagateBatch(MCTSTree tree, LeafBatch batch, double[] utilities)
+        private void BackpropagateBatch(MCTSTree tree, LeafBatch batch, BatchResults results)
         {
             var leaves = batch.Leaves;
             sbyte owner = tree.OwnerIndex;
+            double[] utilities = results.Utilities;
 
             void Backpropagate(int i)
             {
+                if (results.Priors[i] is float[] priors)
+                    tree.ApplyPriors(leaves[i].leafNode, priors);
+
                 // Backpropagation
                 // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root;
                 // the opponent models that use every player's values get all four utilities, Random only the owner's

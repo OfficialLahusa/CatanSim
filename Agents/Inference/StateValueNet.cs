@@ -65,6 +65,12 @@ namespace Agents.Inference
         /// </summary>
         public int InputDim { get; }
 
+        /// <summary>
+        /// The policy head of a model trained with one (outputs "policy_query" and "policy_embeddings", see ActionEncoding),
+        /// or null
+        /// </summary>
+        public PolicyHead? Policy { get; }
+
         public StateValueNet(string modelPath, int intraOpThreads = 0, InferenceProvider provider = InferenceProvider.Auto, int fixedBatchSize = DefaultFixedBatchSize)
         {
             string resolvedPath = ResolveModelPath(modelPath);
@@ -99,6 +105,16 @@ namespace Agents.Inference
             Provider = provider;
             HasPlacements = _session!.OutputMetadata.ContainsKey("placements");
             InputDim = _session.InputMetadata["state"].Dimensions[1];
+
+            if (_session.OutputMetadata.ContainsKey("policy_query") && _session.OutputMetadata.TryGetValue("policy_embeddings", out NodeMetadata? embeddings))
+            {
+                // The embedding table is the same for every batch: read it once from an empty batch
+                int dim = embeddings.Dimensions[1];
+                float[] table = RunSession(new DenseTensor<float>([FixedBatchSize ?? 1, InputDim]), ["policy_embeddings"])[0];
+                if (table.Length != ActionEncoding.VocabularySize * dim)
+                    throw new InvalidDataException($"The policy embeddings have {table.Length / dim} tokens, ActionEncoding {ActionEncoding.VocabularySize}.");
+                Policy = new PolicyHead(table, dim);
+            }
         }
 
         private static InferenceProvider ResolveProvider(InferenceProvider provider)
@@ -203,6 +219,28 @@ namespace Agents.Inference
 
             int batchSize = logits.Length / PlayerCount;
             return (SoftmaxPerRow(logits, batchSize, PlayerCount), SoftmaxPerRow(placementLogits, batchSize * PlayerCount, PlayerCount));
+        }
+
+        /// <summary>
+        /// Win probabilities [batch * players] and, if requested, the placement distributions [batch * players * places] and
+        /// the policy queries [batch * move types * dim] in one run
+        /// </summary>
+        public LeafValues Evaluate(DenseTensor<float> inputTensor, bool withPlacements, bool withPolicy)
+        {
+            if (withPlacements && !HasPlacements)
+                throw new InvalidOperationException("The value net has no placements output (it was trained without auxiliary heads).");
+            if (withPolicy && Policy == null)
+                throw new InvalidOperationException("The value net has no policy head.");
+
+            List<string> names = ["logits"];
+            if (withPlacements) names.Add("placements");
+            if (withPolicy) names.Add("policy_query");
+            float[][] outputs = RunOutputs(inputTensor, [.. names]);
+
+            int batchSize = outputs[0].Length / PlayerCount;
+            float[] winProbabilities = SoftmaxPerRow(outputs[0], batchSize, PlayerCount);
+            float[]? placements = withPlacements ? SoftmaxPerRow(outputs[1], batchSize * PlayerCount, PlayerCount) : null;
+            return new LeafValues(winProbabilities, placements, withPolicy ? outputs[^1] : null);
         }
 
         /// <summary>

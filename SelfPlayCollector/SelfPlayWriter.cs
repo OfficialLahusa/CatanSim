@@ -15,7 +15,8 @@ namespace SelfPlayCollector
     /// games.csv one line per game with its seed and result, and where its save file is: games_c{chunk}.yaml.gz holds one
     /// gzip member per game (at record_offset, record_length bytes), the final state with all played actions.
     /// A game's line is written last, after its rows, positions and save file are flushed, so a crash never leaves a game
-    /// line without its data. DatasetProcessing/selfplay_to_dataset.py reads the run.
+    /// line without its data. The legal moves of each position go to the policy files of PolicyTargetWriter.
+    /// DatasetProcessing/selfplay_to_dataset.py reads the run.
     /// </summary>
     internal sealed class SelfPlayWriter : IDisposable
     {
@@ -30,6 +31,7 @@ namespace SelfPlayCollector
         private readonly int _featureDim;
         private readonly int _rowsPerChunk, _gamesPerChunk;
         private readonly StreamWriter _samples, _games;
+        private readonly PolicyTargetWriter _policy;
         private readonly byte[] _row;
 
         private FileStream? _states, _records;
@@ -48,6 +50,7 @@ namespace SelfPlayCollector
             _samples.WriteLine(SampleHeader);
             _games = new StreamWriter(Path.Combine(directory, "games.csv"), append: false);
             _games.WriteLine(GameHeader);
+            _policy = new PolicyTargetWriter(directory);
         }
 
         public void Write(GameRecord game)
@@ -84,8 +87,10 @@ namespace SelfPlayCollector
                 line.Append(CultureInfo.InvariantCulture, $",{rows[i].chunk},{rows[i].row},");
                 line.AppendJoin(' ', position.Visits.Select(v => $"{v.move}:{v.visits}"));
                 _samples.WriteLine(line.ToString());
+                _policy.Write(position.Moves);
             }
             _samples.Flush();
+            _policy.Flush();
 
             // Save file
             if (_records == null || _gamesInChunk == _gamesPerChunk)
@@ -138,6 +143,7 @@ namespace SelfPlayCollector
             _records?.Dispose();
             _samples.Dispose();
             _games.Dispose();
+            _policy.Dispose();
         }
     }
 }
