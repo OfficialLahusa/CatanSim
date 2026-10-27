@@ -25,6 +25,7 @@
     <ProjectReference Include="..\Common\Common.csproj" />
     <ProjectReference Include="..\Agents\Agents.csproj" />
     <ProjectReference Include="..\DatasetCollector\DatasetCollector.csproj" />
+    <ProjectReference Include="..\SelfPlayCollector\SelfPlayCollector.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -10,6 +10,7 @@ The codebase is divided into several projects:
 - **Common:** Simulator library containing game data structures, transactional action system (undo/redo), move legality validation, YAML serialization, and map generation.
 - **DatasetCollector:** High-performance dataset generator CLI for large-scale Catan simulation datasets.
 - **DatasetProcessing:** Formatting tool for the conversion of simulator save files into feature vectors and grouped train/val/test splitting.
+- **SelfPlayCollector:** Self-play data generator CLI: many games played at once by MCTS on one value net, recording positions with the search's values and visits, and every game as a save file.
 - **Server:** Simulator server for online multiplayer (future work).
 
 ## Value Net

@@ -1,4 +1,4 @@
-namespace DatasetCollector
+namespace Common
 {
     /// <summary>
     /// Seeds derived from the run seed: one per match (it reproduces the match and is the sample's group ID), one per sample
