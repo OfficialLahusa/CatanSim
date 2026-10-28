@@ -1,6 +1,8 @@
 ## Simulator
 - PRIORITÄT: Eval-Bar zeigt bei beendetem Spiel nicht 100% für den Sieger (das Net bewertet den Endzustand) => bei HasEnded das echte Ergebnis anzeigen
 - Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
+	- Danach, erst wenn die UI im C#-Client fertig ist: Web-Client fürs Spielen (gleiche Farben, Icons und Proportionen; Brett als SVG, UI in HTML/CSS); Spiellogik und Agents bleiben in C# auf dem Simulation Server (SignalR/WebSocket), keine KI im Browser
+	- Der C#-Client bleibt die Obermenge (Analyse, Eval-Bar, Edit Mode, Playouts), der Web-Client deckt nur das Spielen ab
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
 - Hidden Information (Agents sehen derzeit alle Hände, VP-Karten und die Dev Bank, das Net ist darauf trainiert)
