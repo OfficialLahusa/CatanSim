@@ -28,7 +28,7 @@
 ## Agents
 - Roadmap v2
 	- Datensatz v2: 1M Matches, 10M Samples (Seed 20261025, 300 Playouts), Präzisions-Set 6000 Matches mit 2000 Playouts (Seed 777); erweitern mit --first-match; auf 1965 Features migriert über regenerierte Karten (--regenerate-maps)
-	- Präzisions-KL (evaluate_precision.py): xnebmrjf 0.0170 => Aux 0.0158 => Rotation (C) 0.0126 => Häfen und Endspiel-Features (E1) 0.0108 => Brett-Symmetrien (E2 02l97say, Default) 0.0106, bester Zug 55,6% => 61,3%
+	- Präzisions-KL (evaluate_precision.py): xnebmrjf 0.0170 => Aux 0.0158 => Rotation (C) 0.0126 => Häfen und Endspiel-Features (E1) 0.0108 => Brett-Symmetrien (E2 02l97say) 0.0106, bester Zug 55,6% => 61,3%
 		- Kein Effekt: Sibling-Ranking (doppelte Trainingszeit), Zahlenchip-Paare (abgeleitete Features rechnen schon in Pips)
 		- Endspiel-Features: Endspiel-KL -33%, Fehler steigen nicht mehr zum Spielende hin an
 		- Lücke train/val mit Rotation geschlossen => nicht mehr datenlimitiert
@@ -47,7 +47,7 @@
 	- 2. max^n: erledigt (~+70 Elo), Explorationskonstante egal; offen: Paranoid testen, Gegnerzüge nach Policy-Prior
 	- 3. GPU-Inference: erledigt (DirectML 566k States/s, MCTS ~320k Iterationen/s, Self-Play ~400k über BatchingEvaluator; nur mit Server-GC, Workstation-GC bremst ~3x), jetzt bremst die Net-Auswertung; CUDA-EP braucht CUDA 13
 	- 4. Setup-Phase spezialisieren: eigene Zeit, Best-Response-Gegner, Sibling-Gruppen an Setup-Entscheidungen
-	- 5. Policy Head + PUCT: erledigt (siehe PolicyNet), P1 mhn8ihqb gegen E2 im 5k-Duell +122 Elo [+78, +169] (104 Paare), Wiederholung +82 [+29, +138] (65 Paare); PUCT mit uniformen Priors ±0 [−47, +47] => der Gewinn kommt von der gelernten Policy
+	- 5. Policy Head + PUCT: erledigt (siehe PolicyNet), P1 mhn8ihqb ist Default (auf HF), gegen E2 im 5k-Duell +122 Elo [+78, +169] (104 Paare), Wiederholung +82 [+29, +138] (65 Paare); PUCT mit uniformen Priors ±0 [−47, +47] => der Gewinn kommt von der gelernten Policy
 		- Tempo: Queries als float16, Priors in der Backpropagation => P1 223k statt 170k Iterationen/s (E2 ~310k); Query-Dim 32 gibt 257k bei gleichem Loss, spielte aber nur +13 [−34, +61] gegen E2 => bei 64 bleiben, Streuung zwischen Trainingsläufen desselben Rezepts prüfen
 		- Vor Default-Wechsel und HF-Upload: Duell mit gleicher Denkzeit und bei 60k Iterationen gegen E2
 		- Offen: c_puct und First Play Urgency tunen, dominierte Züge prunen (4:1 trotz 3:1- oder 2:1-Hafen)
