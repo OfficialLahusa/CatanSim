@@ -47,7 +47,10 @@
 	- 2. max^n: erledigt (~+70 Elo), Explorationskonstante egal; offen: Paranoid testen, Gegnerzüge nach Policy-Prior
 	- 3. GPU-Inference: erledigt (DirectML 566k States/s, MCTS ~320k Iterationen/s, Self-Play ~400k über BatchingEvaluator; nur mit Server-GC, Workstation-GC bremst ~3x), jetzt bremst die Net-Auswertung; CUDA-EP braucht CUDA 13
 	- 4. Setup-Phase spezialisieren: eigene Zeit, Best-Response-Gegner, Sibling-Gruppen an Setup-Entscheidungen
-	- 5. Policy Head + PUCT: Suchfokus, Gegnermodell nach Policy, besserer Subtree-Reuse
+	- 5. Policy Head + PUCT: erledigt (siehe PolicyNet), P1 mhn8ihqb gegen E2 im 5k-Duell +122 Elo [+78, +169] (104 Paare); PUCT mit uniformen Priors ±0 [−47, +47] => der Gewinn kommt von der gelernten Policy
+		- Tempo: P1 sucht mit 170k statt 325k Iterationen/s (Net-Batch +50% durch die Policy-Outputs, Rest Priors seriell auf der CPU) => float16 oder kleinere Queries, Priors parallel berechnen
+		- Vor Default-Wechsel und HF-Upload: Duell mit gleicher Denkzeit und bei 60k Iterationen gegen E2
+		- Offen: c_puct und First Play Urgency tunen, dominierte Züge prunen (4:1 trotz 3:1- oder 2:1-Hafen)
 	- 6. Self-Play: Labels schwacher Agents binden das Net an deren Niveau
 		- SelfPlayCollector fertig (800/150 Iterationen, p = 0,25, Temperatur in den ersten 30 Zügen; Dirichlet erst mit Policy Head): ~25k Spiele/h, ~43 Positionen/Spiel => ~1M Positionen/h auf der 5080
 		- Iteration 1 mit E2 (95k Spiele, 4,2M Positionen, 4,4 h): Ø 28,6 Runden, Sitz 4 gewinnt seltener (23,9% statt 25%); q unterschätzt Führungen (q 0,5 => 63% Siege, q 0,1 => 4%), genau das soll Self-Play lernen
@@ -55,6 +58,9 @@
 		- Target λ·z + (1-λ)·q, von E2 weitertrainieren (Iteration 1 3mx1fhoq: λ 0,5, 50/50 mit v2, lr 3e-4, 4 Epochen in 5 min; Präzisions-KL 0,0128 statt 0,0106), Gate per gespiegeltem Duell
 		- Iteration 1 3mx1fhoq gegen E2: 5k-Duell ±0 Elo [−29, +29] (269 Paare), 60k +29 [−40, +100] (36 Paare) => kein messbarer Gewinn, Rezept oder Suche ist der Engpass; 5k-Duell als Gate (~±30 Elo in 1,5 h)
 		- Offline auf zurückgehaltenen Self-Play-Spielen: I1 sagt den Sieger besser vorher (Log Loss 0,803 statt 0,851), zur Hälfte nur Schärfung (E2^1,41 => 0,836); q aus 800 Iterationen kaum besser als E2 (0,848) => q als Target fast wertlos, Engpass ist das Zug-Ranking => Policy Head aus den gespeicherten Root Visits trainieren
+		- Z1 tjx70889 (λ 1, nur Self-Play): bester Log Loss (0,778), aber Präzisions-Bester-Zug 54,7% statt 61,3% und 5k-Duell −34 Elo [−68, 0] => das Sibling-Ranking auf dem Präzisions-Set sagt die Spielstärke voraus, der Self-Play-Log-Loss nicht; v2 beimischen
+		- Visit-Verteilungen der UCT-Suche fast flach (Entropie 1,87 gegen uniform 1,95, Top-Zug 31%); schärfere Policy-Targets (T 0,25, P2 f20h8glh) eher schlechter als P1: −33 [−78, +12]
+		- Nächster Schritt: Iteration 2 mit P1 sammeln (PUCT, Root-Rauschen 0,25, ~95k Spiele), Value und Policy von P1 weitertrainieren, Gate gegen P1 => zeigt, ob sich die Iterationen jetzt aufaddieren
 		- Server-GPU (GTX 1070 Ti) einbauen: Netzteil reicht (650 W), 8-Pin-Kabel, oberer x16-Slot frei; CUDA 12.x, Treiber 580, PyTorch cu126; CUDA-Provider für Linux, ~15-25k Spiele/Tag
 			- Vorher: Staub entfernen, Kontakte und Platine auf Korrosion prüfen (ggf. Isopropanol), Lüfter prüfen, Wärmeleitpaste erneuern
 			- Nach dem Einbau: ~1 h VRAM-Test (cuda_memtest oder OCCT) und Stresstest, Temperatur unter ~80 °C, keine Treiberfehler
