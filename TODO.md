@@ -85,6 +85,8 @@
 	- Zwei Sitze desselben Agents zählen als ein Team, jedes Spiel speichern (Agents, VP, Karten-Seed)
 	- Turnier-Runner als eigenes Projekt "Arena": zufällige 4er-Besetzungen, Sitze rotieren, feste Denkzeit pro Eintrag
 	- A/B-Tests per gespiegeltem Duell: nur doppelt gewonnene Paare zählen, Intervall pro Paar, SPRT als Abbruch
+		- BALD (wie Fishtest bei Stockfish): SPRT im Bench, z.B. H0 ≤ 0 gegen H1 ≥ 20 Elo, α = β = 0,05, Paar als Einheit => stoppt selbst, Live-Abbruch verfälscht dann nichts mehr
+		- Zweistufig wie STC/LTC: 5k-Duell als Filter, nur Bestandenes bei 60k oder gleicher Denkzeit; mehr Paare über mehr Parallelität (Server-GPU)
 	- Plackett-Luce misst die Unsicherheit des Spielausgangs, nicht die des Nets (dafür Ensemble oder Varianz-Head); Platzierungs-Head als Plackett-Luce wäre konsistent
 - Agents/env: OpenMP-Konflikt (conda-MKL und torch), torch nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren
 - Spezialisierten Datensatz für Initial Placements anlegen
