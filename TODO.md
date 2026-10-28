@@ -63,7 +63,9 @@
 		- Visit-Verteilungen der UCT-Suche fast flach (Entropie 1,87 gegen uniform 1,95, Top-Zug 31%); schärfere Policy-Targets (T 0,25, P2 f20h8glh) eher schlechter als P1: −33 [−78, +12]
 		- Self-Play mit Policy: 1024 Spiele gleichzeitig und 3 Nets nötig (sonst Latenz-gebunden), ~11k Spiele/h, ~45 Positionen/Spiel
 		- Iteration 2 mit P1 (40k Spiele, 1,8M Positionen, 3,6 h): Visits schärfer (Top-Zug 46% statt 31%), Ø 23,5 statt 28,6 Runden, jetzt gewinnt Sitz 1 seltener (21,9%)
-		- Iteration 2 505oscbr (von P1, 40% It. 2 / 30% It. 1 / 30% v2, λ 0,5): offline besser (Policy-Top-Zug 48,9% statt 46,4%, Log Loss 0,953 statt 0,973), Gate gegen P1 +31 Elo [−12, +74] (102 Paare) => sammelt Iteration 3
+		- Iteration 2 505oscbr (von P1, 40% It. 2 / 30% It. 1 / 30% v2, λ 0,5): offline besser (Policy-Top-Zug 48,9% statt 46,4%, Log Loss 0,953 statt 0,973), Gate gegen P1 +31 Elo [−12, +74] (102 Paare) => sammelt Iteration 3, bestes Net
+		- Iteration 3 mit 505oscbr (30k Spiele, 1,4M Positionen): Visits noch schärfer (Top-Zug 50%), offline wieder besser, aber hdikc5ka gegen 505oscbr −58 [−112, −6] und mit mehr v2 (z15n2pmb, 40%) −49 [−99, −2] => Schleife gestoppt
+		- Präzisions-Bester-Zug sinkt pro Iteration (P1 58,3%, 505oscbr 56,2%, hdikc5ka 55,3%; E2 61,3%) => Value driftet von breiten Positionen weg; vermutlich engt die schärfere Policy die Suche zu stark ein => Policy-Targets weicher (Temperatur > 1 oder KL-Regularisierung zum Vorgänger), c_puct höher, mehr Root-Rauschen testen
 		- Server-GPU (GTX 1070 Ti) einbauen: Netzteil reicht (650 W), 8-Pin-Kabel, oberer x16-Slot frei; CUDA 12.x, Treiber 580, PyTorch cu126; CUDA-Provider für Linux, ~15-25k Spiele/Tag
 			- Vorher: Staub entfernen, Kontakte und Platine auf Korrosion prüfen (ggf. Isopropanol), Lüfter prüfen, Wärmeleitpaste erneuern
 			- Nach dem Einbau: ~1 h VRAM-Test (cuda_memtest oder OCCT) und Stresstest, Temperatur unter ~80 °C, keine Treiberfehler
