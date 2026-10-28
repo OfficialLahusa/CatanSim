@@ -85,6 +85,7 @@
 	- Anker BuilderAgent = 0 als feste Version (nicht RandomAgent: verliert immer, schlecht bestimmt), RandomAgent nur als Referenz
 	- Etablierte Ratings bleiben stabil (Updates ~σ², Neue nehmen die Änderung auf), Nicht-Transitivität bildet eine Zahl nicht ab
 	- Zwei Sitze desselben Agents zählen als ein Team, jedes Spiel speichern (Agents, VP, Karten-Seed)
+	- Web-Oberfläche des Leaderboard-Servers: Leaderboards pro Regelsatz, komplette Match-Historie (filterbar nach Agent und Regelsatz), Klick auf ein Match öffnet das Replay im Web-Client (Save File mit allen Actions); kommt mit dem Web-Client
 	- Turnier-Runner als eigenes Projekt "Arena": zufällige 4er-Besetzungen, Sitze rotieren, feste Denkzeit pro Eintrag
 		- Eigenes Leaderboard pro Regelsatz (Perfect/Hidden Information × Handel aus/an, ggf. Zeitklasse), Ratings nicht übergreifend vergleichbar; Agents deklarieren unterstützte Regelsätze, Anker BuilderAgent auf jedem Board; Regelsatz-Feld von Anfang an
 		- Mit Handel nur ein Sitz pro Agent und Spiel (gleiche Kopien bewerten gleich => nehmen gegenseitige Angebote leichter an, Kingmaking): Leaderboard über verschiedene Agents, A/B-Tests als Gauntlet gegen dieselben drei Referenz-Agents statt gespiegeltem Duell; ohne Handel bleibt das 2-gegen-2-Duell
