@@ -49,6 +49,7 @@
 	- 1. Messen: Catanatron-Bridge (~3-5 Tage) plus Leaderboard
 	- 2. max^n: erledigt (~+70 Elo), Explorationskonstante egal; offen: Paranoid testen, Gegnerzüge nach Policy-Prior
 	- 3. GPU-Inference: erledigt (DirectML 566k States/s, MCTS ~320k Iterationen/s, Self-Play ~400k über BatchingEvaluator; nur mit Server-GC, Workstation-GC bremst ~3x), jetzt bremst die Net-Auswertung; CUDA-EP braucht CUDA 13
+		- FP16-Inference testen: Net läuft in FP32, auf den Tensor Cores der 5080 vermutlich 1,5-2x schneller (Export als float16, Parität und Präzisions-Set prüfen); vor zweiter GPU, die wäre auf dem Server eher CPU- und PCIe-begrenzt
 	- 4. Setup-Phase spezialisieren: eigene Zeit, Best-Response-Gegner, Sibling-Gruppen an Setup-Entscheidungen
 	- 5. Policy Head + PUCT: erledigt (siehe PolicyNet), P1 mhn8ihqb ist Default (auf HF), gegen E2 im 5k-Duell +122 Elo [+78, +169] (104 Paare), Wiederholung +73 [+33, +115] (125 Paare); PUCT mit uniformen Priors ±0 [−47, +47] => der Gewinn kommt von der gelernten Policy
 		- Tempo: Queries als float16, Priors in der Backpropagation => P1 223k statt 170k Iterationen/s (E2 ~310k); Query-Dim 32 gibt 257k bei gleichem Loss, spielte aber nur +13 [−34, +61] gegen E2 => bei 64 bleiben, Streuung zwischen Trainingsläufen desselben Rezepts prüfen
