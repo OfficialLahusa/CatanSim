@@ -30,7 +30,9 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
-COLLECTOR = os.path.join(REPO, "SelfPlayCollector", "bin", "Release", "net10.0", "SelfPlayCollector.exe")
+# The collector's Release build: an .exe on Windows, a plain executable elsewhere
+COLLECTOR = os.path.join(REPO, "SelfPlayCollector", "bin", "Release", "net10.0",
+                         "SelfPlayCollector.exe" if os.name == "nt" else "SelfPlayCollector")
 
 
 def log(loop_dir, text):

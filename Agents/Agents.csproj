@@ -58,12 +58,14 @@
   </Target>
 
   <!-- On Windows the DirectML package runs the value net on the GPU (any DirectX 12 GPU, nothing to install) and includes
-       the CPU provider; elsewhere the CPU package. StateValueNet picks the provider (see InferenceProvider). -->
+       the CPU provider; elsewhere the Linux GPU package, which runs it on an NVIDIA GPU through CUDA (needs the NVIDIA
+       driver plus the CUDA and cuDNN libraries this ONNX Runtime version was built against) and on the CPU without them.
+       StateValueNet picks the provider (see InferenceProvider). -->
   <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
     <PackageReference Include="Microsoft.ML.OnnxRuntime.DirectML" Version="1.24.4" />
   </ItemGroup>
   <ItemGroup Condition="!$([MSBuild]::IsOSPlatform('Windows'))">
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Linux" Version="1.28.0" />
   </ItemGroup>
 
   <ItemGroup>

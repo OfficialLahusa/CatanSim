@@ -145,7 +145,7 @@ namespace SelfPlayCollector
               --model PATH             Value net (default: the deployed model)
               --nets N                 Net sessions evaluating batches in turn (default 2)
               --batch N                Most rows per net batch (default 1024)
-              --provider cpu|dml       Where the net runs (default: DirectML if available)
+              --provider cpu|dml|cuda  Where the net runs (default: the GPU if available, DirectML on Windows, CUDA on Linux)
               --seed S                 Run seed (default: random), every game seed is derived from it
               --center-desert          Generate maps with the desert in the center
               --output DIR             Directory to create the run in (default selfplay)
@@ -190,7 +190,8 @@ namespace SelfPlayCollector
                             {
                                 "cpu" => InferenceProvider.Cpu,
                                 "dml" => InferenceProvider.DirectML,
-                                string other => throw new ArgumentException($"Unknown provider \"{other}\" (cpu or dml)."),
+                                "cuda" => InferenceProvider.Cuda,
+                                string other => throw new ArgumentException($"Unknown provider \"{other}\" (cpu, dml or cuda)."),
                             }
                         };
                         break;

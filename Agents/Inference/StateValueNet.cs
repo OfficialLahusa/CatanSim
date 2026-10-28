@@ -10,10 +10,10 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 namespace Agents.Inference
 {
     /// <summary>
-    /// Where the value net runs. Auto takes DirectML (the GPU, Windows only) if it is available and the CPU otherwise;
-    /// the environment variable CATANSIM_INFERENCE (cpu or dml) overrides it.
+    /// Where the value net runs. Auto takes the GPU if it is available, through DirectML on Windows and CUDA on Linux, and
+    /// the CPU otherwise; the environment variable CATANSIM_INFERENCE (cpu, dml or cuda) overrides it.
     /// </summary>
-    public enum InferenceProvider { Auto, Cpu, DirectML }
+    public enum InferenceProvider { Auto, Cpu, DirectML, Cuda }
 
     public class StateValueNet
     {
@@ -49,8 +49,8 @@ namespace Agents.Inference
         public InferenceProvider Provider { get; }
 
         /// <summary>
-        /// Batch size the session runs with (DirectML), null if any size runs as it is (CPU). Other batch sizes still work:
-        /// smaller batches are padded, larger ones split.
+        /// Batch size the session runs with (DirectML), null if any size runs as it is (CPU, CUDA). Other batch sizes still
+        /// work: smaller batches are padded, larger ones split.
         /// </summary>
         public int? FixedBatchSize { get; }
 
@@ -93,6 +93,19 @@ namespace Agents.Inference
                     provider = InferenceProvider.Cpu;
                 }
             }
+            else if (provider == InferenceProvider.Cuda)
+            {
+                try
+                {
+                    _session = CreateCudaSession(resolvedPath);
+                }
+                catch (Exception e) when (e is OnnxRuntimeException or EntryPointNotFoundException or DllNotFoundException)
+                {
+                    // No NVIDIA GPU, or the CUDA or cuDNN libraries are missing: fall back to the CPU
+                    if (Environment.GetEnvironmentVariable("CATANSIM_INFERENCE") == "cuda") throw;
+                    provider = InferenceProvider.Cpu;
+                }
+            }
 
             if (provider == InferenceProvider.Cpu)
             {
@@ -124,7 +137,8 @@ namespace Agents.Inference
             {
                 "cpu" => InferenceProvider.Cpu,
                 "dml" => InferenceProvider.DirectML,
-                _ => OperatingSystem.IsWindows() ? InferenceProvider.DirectML : InferenceProvider.Cpu,
+                "cuda" => InferenceProvider.Cuda,
+                _ => OperatingSystem.IsWindows() ? InferenceProvider.DirectML : OperatingSystem.IsLinux() ? InferenceProvider.Cuda : InferenceProvider.Cpu,
             };
         }
 
@@ -138,6 +152,15 @@ namespace Agents.Inference
             };
             options.AddFreeDimensionOverrideByName("batch", fixedBatchSize);
             options.AppendExecutionProvider_DML(0);
+            return new InferenceSession(modelPath, options);
+        }
+
+        private static InferenceSession CreateCudaSession(string modelPath)
+        {
+            // CUDA runs any batch size as it is and allows parallel Run calls on one session; it needs the CUDA and cuDNN
+            // libraries the ONNX Runtime GPU package was built against
+            var options = new SessionOptions();
+            options.AppendExecutionProvider_CUDA(0);
             return new InferenceSession(modelPath, options);
         }
 
