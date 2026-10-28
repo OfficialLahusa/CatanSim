@@ -3,6 +3,7 @@
 - Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
 	- Danach, erst wenn die UI im C#-Client fertig ist: Web-Client fürs Spielen (gleiche Farben, Icons und Proportionen; Brett als SVG, UI in HTML/CSS); Spiellogik und Agents bleiben in C# auf dem Simulation Server (SignalR/WebSocket), keine KI im Browser
 	- Der C#-Client bleibt die Obermenge (Analyse, Eval-Bar, Edit Mode, Playouts), der Web-Client deckt nur das Spielen ab
+	- Web-Client auch als Discord Activity (Embedded App SDK im iframe, z.B. im Voice-Channel): ein Spielraum pro Activity-Instanz, Spieler per Discord-OAuth, leere Sitze übernehmen Agents; Server per HTTPS erreichbar (URL-Mapping über Discords Proxy, für privates Spielen reicht ein Tunnel zum lokalen Server); dafür relative URLs, alles mitgeliefert (CSP), Layout fürs Handy
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
 - Hidden Information (Agents sehen derzeit alle Hände, VP-Karten und die Dev Bank, das Net ist darauf trainiert)
