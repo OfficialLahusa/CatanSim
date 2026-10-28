@@ -54,6 +54,8 @@
 		- Tempo: Queries als float16, Priors in der Backpropagation => P1 223k statt 170k Iterationen/s (E2 ~310k); Query-Dim 32 gibt 257k bei gleichem Loss, spielte aber nur +13 [−34, +61] gegen E2 => bei 64 bleiben, Streuung zwischen Trainingsläufen desselben Rezepts prüfen
 		- Gleiche Denkzeit (0,25 s pro Zug) gegen E2: +132 Elo [+44, +242] (33 Paare, 16:4 doppelt gewonnen) => Policy lohnt sich trotz ~30% weniger Iterationen; offen: 60k-Duell
 		- c_puct (505oscbr gegen sich bei 1,414, 5k): 0,7 −44 [−92, +3], 1,0 +19 [−12, +50], 2,0 −78 [−147, −14], 3,0 −28 [−76, +19] => Optimum um 1,0-1,4, mehr Exploration schadet; Default bleibt vorerst 1,414
+		- 64 statt 256 Blätter pro Batch bei gleichen Iterationen +10 [−43, +64] (68 Paare), pro Zug ~3x langsamer => 256 bleibt
+		- Duelle mit SPRT [0, +40] (scratch sprt_duel.sh): alte Duelle wären nach 36-103 statt 50-269 Paaren entschieden gewesen
 		- Offen: First Play Urgency tunen; bei sofortigem Sieg nur den Siegzug suchen; fast dominierte Züge (4:1 trotz Hafen, Opfer ohne Karten) bleiben, haben Nischenfälle, die Policy drückt sie, nur messen wie oft sie noch gewählt werden
 	- 6. Self-Play: Labels schwacher Agents binden das Net an deren Niveau
 		- SelfPlayCollector fertig (800/150 Iterationen, p = 0,25, Temperatur in den ersten 30 Zügen; Dirichlet erst mit Policy Head): ~25k Spiele/h, ~43 Positionen/Spiel => ~1M Positionen/h auf der 5080

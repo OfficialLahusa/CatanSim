@@ -50,6 +50,11 @@ namespace Agents.MCTS
 
 
         /// <summary>
+        /// How much lower than its parent an unvisited move counts in PUCT (see MCTSTree.FirstPlayReduction)
+        /// </summary>
+        public double FirstPlayReduction { get; set; } = 0.1;
+
+        /// <summary>
         /// Search by PUCT with uniform priors instead of the policy head's (see MCTSSearch.UniformPriors)
         /// </summary>
         public bool UniformPriors
@@ -146,6 +151,7 @@ namespace Agents.MCTS
             {
                 _tree = new MCTSTree(new GameState(state), PlayerIndex, _explorationParameter, model: _opponentModel);
             }
+            _tree.FirstPlayReduction = FirstPlayReduction;
 
             if (_iterationLimit > 0) RunBatchedIterations(_iterationLimit, cancellation);
             else RunForTime(_timeLimitSeconds, cancellation);
