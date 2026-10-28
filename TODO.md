@@ -75,6 +75,7 @@
 		- Iteration 3 mit 505oscbr (30k Spiele, 1,4M Positionen): Visits noch schärfer (Top-Zug 50%), offline wieder besser, aber hdikc5ka gegen 505oscbr −58 [−112, −6] und mit mehr v2 (z15n2pmb, 40%) −49 [−99, −2] => Schleife gestoppt
 		- Präzisions-Bester-Zug sinkt pro Iteration (P1 58,3%, 505oscbr 56,2%, hdikc5ka 55,3%; E2 61,3%) => Value driftet von breiten Positionen weg; vermutlich engt die schärfere Policy die Suche zu stark ein => Policy-Targets weicher (Temperatur > 1 oder KL-Regularisierung zum Vorgänger), c_puct höher, mehr Root-Rauschen testen
 		- Bestätigt: dieselben Iteration-3-Daten mit weichen Policy-Targets (T 2, xlcrer0q) +12 [−31, +56] gegen 505oscbr statt −58 => zu scharfe Targets waren die Hauptursache, ab jetzt T 2; Policy Target Pruning (KataGo) im Collector für neue Runs
+		- Kontinuierliche Schleife (Agents/Training/selfplay_loop.py) ab 505oscbr: 8k Spiele (~360k Positionen, ~50 min) pro Generation, 1M Samples bei lr 1e-4 konstant, Fenster 4 Generationen + 20% Iteration 3 + 30% v2, T 2, λ 0,5; SPRT gegen den Vorgänger alle 3, gegen 505oscbr alle 9 Generationen; Generation 3 gegen 505oscbr −8 [−46, +30]
 		- Server-GPU (GTX 1070 Ti) einbauen: Netzteil reicht (650 W), 8-Pin-Kabel, oberer x16-Slot frei; CUDA 12.x, Treiber 580, PyTorch cu126; CUDA-Provider für Linux, ~15-25k Spiele/Tag
 			- Vorher: Staub entfernen, Kontakte und Platine auf Korrosion prüfen (ggf. Isopropanol), Lüfter prüfen, Wärmeleitpaste erneuern
 			- Nach dem Einbau: ~1 h VRAM-Test (cuda_memtest oder OCCT) und Stresstest, Temperatur unter ~80 °C, keine Treiberfehler
