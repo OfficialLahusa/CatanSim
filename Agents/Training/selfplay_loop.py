@@ -9,8 +9,10 @@ Every generation:
 4. export: export_onnx.py writes the net the next generation collects with
 
 Every --eval-every generations an evaluation command (e.g. an SPRT mirror duel) compares the newest net with the one
-evaluated last; its last output line is logged. The loop stops if that line reports the newest net as clearly worse
-(the upper end of the Elo interval below 0), and otherwise keeps going until --generations are done or it is stopped.
+evaluated last, and every --anchor-every generations also with a fixed anchor (by default the start net), so small steps
+that each look even cannot add up to a loss unnoticed; the last output line of each is logged. The loop stops if one
+reports the newest net as clearly worse (the upper end of the Elo interval below 0), and otherwise keeps going until
+--generations are done or it is stopped.
 The state is kept in loop_state.json in the loop directory, so a stopped loop continues where it left off.
 
 Usage (from Agents/Training, with the Agents/env interpreter):
@@ -87,6 +89,8 @@ def main(argv=None):
     parser.add_argument("--train-args", default="--normalize-inputs --placement-weight 0.5 --vp-share-weight 0.5 --rounds-weight 0.2 "
                                                   "--augment-rotation --augment-board --policy-weight 1.0")
     parser.add_argument("--eval-every", type=int, default=3)
+    parser.add_argument("--anchor-every", type=int, default=9, help="generations between evaluations against the anchor, 0 for none")
+    parser.add_argument("--anchor-model", default=None, help="the fixed net the anchor evaluations compare with (default: --start-model)")
     parser.add_argument("--eval-command", default=None,
                         help="command evaluating {new} (ONNX) against {old} (ONNX), {name} names the run; its last output line is logged")
     args = parser.parse_args(argv)
@@ -171,20 +175,31 @@ def main(argv=None):
             log(args.loop_dir, f"gen {g}: trained on {gen['train']['window']} generations in {gen['train']['minutes']} min, "
                                f"val_loss {gen['train']['val_loss']}, net {os.path.basename(onnx)}")
 
-        if args.eval_command and g % args.eval_every == 0 and "eval" not in gen:
-            reference = state.get("evaluated", args.start_model)
-            command = args.eval_command.format(new=gen["model"], old=reference, name=f"loop_g{g:03d}")
-            output = os.path.join(gen_dir, "eval.log")
+        def evaluate(key, reference, name):
+            """Runs the evaluation command, keeps its last line under gen[key]; whether the newest net came out clearly worse"""
+            command = args.eval_command.format(new=gen["model"], old=reference, name=name)
+            output = os.path.join(gen_dir, f"{key}.log")
             with open(output, "w", encoding="utf-8") as file:
                 subprocess.call(command, shell=True, stdout=file, stderr=subprocess.STDOUT)
             with open(output, encoding="utf-8", errors="replace") as file:
                 lines = [line.strip() for line in file if line.strip()]
-            gen["eval"] = {"against": reference, "result": lines[-1] if lines else "no output"}
+            gen[key] = {"against": reference, "result": lines[-1] if lines else "no output"}
+            save_state(args.loop_dir, state)
+            log(args.loop_dir, f"gen {g} against {os.path.basename(reference)}: {gen[key]['result']}")
+            if clearly_worse(gen[key]["result"]):
+                log(args.loop_dir, f"gen {g} is clearly worse than {os.path.basename(reference)}, the loop stops")
+                return True
+            return False
+
+        if args.eval_command and g % args.eval_every == 0 and "eval" not in gen:
+            reference = state.get("evaluated", args.start_model)
+            worse = evaluate("eval", reference, f"loop_g{g:03d}")
             state["evaluated"] = gen["model"]
             save_state(args.loop_dir, state)
-            log(args.loop_dir, f"gen {g} against {os.path.basename(reference)}: {gen['eval']['result']}")
-            if clearly_worse(gen["eval"]["result"]):
-                log(args.loop_dir, f"gen {g} is clearly worse than {os.path.basename(reference)}, the loop stops")
+            if worse:
+                return 2
+        if args.eval_command and args.anchor_every > 0 and g % args.anchor_every == 0 and "anchor" not in gen:
+            if evaluate("anchor", args.anchor_model or args.start_model, f"loop_g{g:03d}_anchor"):
                 return 2
     return 0
 
