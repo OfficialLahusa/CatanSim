@@ -17,7 +17,8 @@ namespace Agents.MCTS
     public class MCTSAgent : Agent
     {
         public const double TIME_LIMIT_SECONDS = 5;
-        protected const uint BATCH_SIZE = 256;
+        // Leaves selected before their evaluation, unless the constructor is given another number
+        public const int DefaultLeavesPerBatch = 256;
 
         // Search tree, kept across moves by HandleAction (null until the next Act builds a new one)
         protected MCTSTree? _tree;
@@ -114,7 +115,7 @@ namespace Agents.MCTS
 
         public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414, double timeLimitSeconds = TIME_LIMIT_SECONDS,
             StateValueNet? valueNet = null, IStateVectorizer? vectorizer = null, double placementWeight = 0, OpponentModel opponentModel = OpponentModel.MaxN,
-            long iterationLimit = 0)
+            long iterationLimit = 0, int leavesPerBatch = DefaultLeavesPerBatch)
             : base(playerIndex)
         {
             _explorationParameter = explorationParameter;
@@ -122,7 +123,7 @@ namespace Agents.MCTS
             IterationLimit = iterationLimit;
             _stateValueNet = valueNet ?? DefaultValueNet.Value;
             _stateVectorizer = vectorizer ?? StateVectorizer.For(_stateValueNet);
-            _search = new MCTSSearch(new DirectEvaluator(_stateValueNet), _stateVectorizer, (int)BATCH_SIZE, parallelSelection: true);
+            _search = new MCTSSearch(new DirectEvaluator(_stateValueNet), _stateVectorizer, leavesPerBatch, parallelSelection: true);
             PlacementWeight = placementWeight;
             _opponentModel = opponentModel;
 
