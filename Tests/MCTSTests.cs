@@ -220,6 +220,36 @@ namespace Tests
                 Assert.False(replay.HasHistory());
         }
 
+        [Fact]
+        public void AWinningMoveIsTheOnlyChildOfItsNode()
+        {
+            TestUtil.Seed(146);
+            GameState state = TestUtil.NewGame();
+            Assert.True(TestUtil.PlayUntil(state, s => TestUtil.IsFreeTurn(s) && TestUtil.CountBuildings(s, s.Turn.PlayerIndex, Intersection.BuildingType.Settlement) > 0));
+            int playerIdx = state.Turn.PlayerIndex;
+            PlayerState player = state.Players[playerIdx];
+            foreach ((ResourceCardType type, uint amount) in new[] { (ResourceCardType.Ore, 3u), (ResourceCardType.Grain, 2u) })
+                if (player.ResourceCards.Get(type) < amount)
+                    TestUtil.GiveCards(state, playerIdx, type, amount - player.ResourceCards.Get(type));
+
+            // Short of the city's point: nothing wins, all moves stay
+            player.VictoryPoints.SettlementPoints += (byte)(8 - player.VictoryPoints.Total);
+            List<Action> moves = MCTSTree.GetValidActions(state);
+            Assert.Null(MCTSTree.WinningMove(state, moves));
+            MCTSTree open = new(new GameState(state), (sbyte)playerIdx, 1.414, model: OpponentModel.MaxN);
+            open.ExpandNode(open.RootNode, new GameState(state));
+            Assert.Equal(moves.Count, open.RootNode.Children.Count);
+
+            // One city away from ten points: the city is the only child
+            player.VictoryPoints.SettlementPoints += 1;
+            Action? winning = MCTSTree.WinningMove(state, MCTSTree.GetValidActions(state));
+            Assert.IsType<CityAction>(winning);
+            MCTSTree tree = new(new GameState(state), (sbyte)playerIdx, 1.414, model: OpponentModel.MaxN);
+            tree.ExpandNode(tree.RootNode, new GameState(state));
+            Assert.Single(tree.RootNode.Children);
+            Assert.True(tree.RootNode.Children[0].LastAction!.IsSameDecision(winning!));
+        }
+
         // ================================================================ MCTSAgent with the value net
 
         [SkippableFact]

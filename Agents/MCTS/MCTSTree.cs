@@ -294,7 +294,10 @@ namespace Agents.MCTS
                 // recorded when selection first applies them (see SelectLeafNode) and when they are expanded themselves
                 node.ActivePlayerIndex = (sbyte)state.Turn.PlayerIndex;
 
+                // A move that wins at once is the only one worth searching
                 List<Action> actions = GetValidActions(state);
+                if (WinningMove(state, actions) is Action winning)
+                    actions = [winning];
                 List<MCTSNode> children = new(actions.Count);
                 foreach (var action in actions)
                 {
@@ -564,6 +567,26 @@ namespace Agents.MCTS
 
             bool hasDecidingPower = isOwnersTurn && !discardRequired || ownerHasToDiscard && !previousHasToDiscard;
             return hasDecidingPower;
+        }
+
+        /// <summary>
+        /// A move that ends the game with a win for the player making it, or null. Only moves without a random outcome are
+        /// tried, and only by a player at most 2 victory points short of winning (no single move gains more).
+        /// </summary>
+        public static Action? WinningMove(GameState state, IReadOnlyList<Action> actions)
+        {
+            if (actions.Count < 2) return null;
+            sbyte mover = actions[0].PlayerIndex;
+            if (state.Players[mover].VictoryPoints.Total < state.Settings.VictoryPoints - 2) return null;
+
+            foreach (Action action in actions)
+            {
+                if (action is IOutputRandomnessAction || action.PlayerIndex != mover) continue;
+                GameState after = new(state);
+                action.Clone().Apply(after);
+                if (after.HasEnded && after.Turn.PlayerIndex == mover) return action;
+            }
+            return null;
         }
 
         public static List<Action> GetValidActions(GameState state)
