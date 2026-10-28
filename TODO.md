@@ -84,6 +84,9 @@
 	- Etablierte Ratings bleiben stabil (Updates ~σ², Neue nehmen die Änderung auf), Nicht-Transitivität bildet eine Zahl nicht ab
 	- Zwei Sitze desselben Agents zählen als ein Team, jedes Spiel speichern (Agents, VP, Karten-Seed)
 	- Turnier-Runner als eigenes Projekt "Arena": zufällige 4er-Besetzungen, Sitze rotieren, feste Denkzeit pro Eintrag
+		- Eigenes Leaderboard pro Regelsatz (Perfect/Hidden Information × Handel aus/an, ggf. Zeitklasse), Ratings nicht übergreifend vergleichbar; Agents deklarieren unterstützte Regelsätze, Anker BuilderAgent auf jedem Board; Regelsatz-Feld von Anfang an
+		- Mit Handel nur ein Sitz pro Agent und Spiel (gleiche Kopien bewerten gleich => nehmen gegenseitige Angebote leichter an, Kingmaking): Leaderboard über verschiedene Agents, A/B-Tests als Gauntlet gegen dieselben drei Referenz-Agents statt gespiegeltem Duell; ohne Handel bleibt das 2-gegen-2-Duell
+		- Agents maximieren immer das Ergebnis ihres eigenen Sitzes, Team-Wertung nur in der Auswertung
 	- A/B-Tests per gespiegeltem Duell: nur doppelt gewonnene Paare zählen, Intervall pro Paar, SPRT als Abbruch
 		- ALS NÄCHSTES (wie Fishtest bei Stockfish): SPRT im Bench, z.B. H0 ≤ 0 gegen H1 ≥ 20 Elo, α = β = 0,05, Paar als Einheit => stoppt selbst, Live-Abbruch verfälscht dann nichts mehr
 		- Zweistufig wie STC/LTC: 5k-Duell als Filter, nur Bestandenes bei 60k oder gleicher Denkzeit; mehr Paare über mehr Parallelität (Server-GPU)
