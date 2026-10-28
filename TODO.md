@@ -58,7 +58,7 @@
 		- c_puct (505oscbr gegen sich bei 1,414, 5k): 0,7 −44 [−92, +3], 1,0 +19 [−12, +50], 2,0 −78 [−147, −14], 3,0 −28 [−76, +19] => Optimum um 1,0-1,4, mehr Exploration schadet; Default bleibt vorerst 1,414; c 1,0 gegen 1,414 später mit SPRT [0, +20] prüfen (vielleicht ~+10-20 Elo)
 		- First Play Urgency (bei c 1,0): 0,0 −10 [−50, +29], 0,25 −37 [−92, +16] gegen 0,1, beide SPRT H0 => 0,1 bleibt
 		- 64 statt 256 Blätter pro Batch bei gleichen Iterationen +10 [−43, +64] (68 Paare), pro Zug ~3x langsamer => 256 bleibt
-		- Duelle mit SPRT [0, +40] (scratch sprt_duel2.sh): alte Duelle wären nach 36-103 statt 50-269 Paaren entschieden gewesen; bisher liefen alle Duelle auf denselben Karten (Seeds ab 30000), jetzt eigener Seed-Bereich pro Duell aus dem Namen; P1 gegen E2 auf frischen Karten wiederholen
+		- Duelle mit SPRT [0, +40] (Arena mirror): alte Duelle wären nach 36-103 statt 50-269 Paaren entschieden gewesen; bisher liefen alle Duelle auf denselben Karten (Seeds ab 30000), jetzt eigener Seed-Bereich pro Duell aus dem Namen; P1 gegen E2 auf frischen Karten wiederholen
 		- Bei sofortigem Sieg wird nur der Siegzug gesucht; fast dominierte Züge (4:1 trotz Hafen, Opfer ohne Karten) bleiben, haben Nischenfälle, die Policy drückt sie, nur messen wie oft sie noch gewählt werden
 	- 6. Self-Play: Labels schwacher Agents binden das Net an deren Niveau
 		- SelfPlayCollector fertig (800/150 Iterationen, p = 0,25, Temperatur in den ersten 30 Zügen; Dirichlet erst mit Policy Head): ~25k Spiele/h, ~43 Positionen/Spiel => ~1M Positionen/h auf der 5080
@@ -75,9 +75,8 @@
 		- Iteration 3 mit 505oscbr (30k Spiele, 1,4M Positionen): Visits noch schärfer (Top-Zug 50%), offline wieder besser, aber hdikc5ka gegen 505oscbr −58 [−112, −6] und mit mehr v2 (z15n2pmb, 40%) −49 [−99, −2] => Schleife gestoppt
 		- Präzisions-Bester-Zug sinkt pro Iteration (P1 58,3%, 505oscbr 56,2%, hdikc5ka 55,3%; E2 61,3%) => Value driftet von breiten Positionen weg; vermutlich engt die schärfere Policy die Suche zu stark ein => Policy-Targets weicher (Temperatur > 1 oder KL-Regularisierung zum Vorgänger), c_puct höher, mehr Root-Rauschen testen
 		- Bestätigt: dieselben Iteration-3-Daten mit weichen Policy-Targets (T 2, xlcrer0q) +12 [−31, +56] gegen 505oscbr statt −58 => zu scharfe Targets waren die Hauptursache, ab jetzt T 2; Policy Target Pruning (KataGo) im Collector für neue Runs
-		- Kontinuierliche Schleife (Agents/Training/selfplay_loop.py) ab 505oscbr: 8k Spiele (~360k Positionen, ~50 min) pro Generation, 1M Samples bei lr 1e-4 konstant, Fenster 4 Generationen + 20% Iteration 3 + 30% v2, T 2, λ 0,5; SPRT gegen den Vorgänger alle 3, gegen 505oscbr alle 9 Generationen; Generation 3 gegen 505oscbr −8 [−46, +30]
-		- Server-GPU (GTX 1070 Ti) einbauen: Netzteil reicht (650 W), 8-Pin-Kabel, oberer x16-Slot frei; CUDA 12.x, Treiber 580, PyTorch cu126; CUDA-Provider für Linux, ~15-25k Spiele/Tag
-			- Vorher: Staub entfernen, Kontakte und Platine auf Korrosion prüfen (ggf. Isopropanol), Lüfter prüfen, Wärmeleitpaste erneuern
+		- Kontinuierliche Schleife (Agents/Training/selfplay_loop.py) ab 505oscbr: 8k Spiele (~360k Positionen, ~50 min) pro Generation, lr konstant, Fenster 4 Generationen + 20% Iteration 3 + 30% v2, T 2, λ 0,5; SPRT gegen den Vorgänger alle 3, gegen 505oscbr alle 9 Generationen (Arena); 1M Samples bei lr 1e-4: Generation 3 gegen 505oscbr −8 [−46, +30], 6 gegen 3 −24 [−71, +22], offline nur kleine Gewinne => Schritt zu klein, ab Generation 9 2M Samples bei lr 3e-4
+		- Server-GPU RTX 5060 Ti 16 GB einbauen (1x 8-Pin, oberer x16-Slot): nvidia-driver-580-open, CUDA 12.8+/13, PyTorch cu128; CUDA-Provider (OnnxRuntime.Gpu.Linux) und Arena sind bereit; Server für SPRT-Duelle, Desktop sammelt und trainiert
 			- Nach dem Einbau: ~1 h VRAM-Test (cuda_memtest oder OCCT) und Stresstest, Temperatur unter ~80 °C, keine Treiberfehler
 			- Im Self-Play regelmäßig Stichproben GPU gegen CPU vergleichen (stille Speicherfehler verfälschen sonst die Daten), Luftfeuchte am Server unter 60%
 		- Risiken: Bootstrapping (q vom eigenen Net), Kollaps in einen ausnutzbaren Stil
@@ -98,7 +97,7 @@
 		- Mit Handel nur ein Sitz pro Agent und Spiel (gleiche Kopien bewerten gleich => nehmen gegenseitige Angebote leichter an, Kingmaking): Leaderboard über verschiedene Agents, A/B-Tests als Gauntlet gegen dieselben drei Referenz-Agents statt gespiegeltem Duell; ohne Handel bleibt das 2-gegen-2-Duell
 		- Agents maximieren immer das Ergebnis ihres eigenen Sitzes, Team-Wertung nur in der Auswertung
 	- A/B-Tests per gespiegeltem Duell: nur doppelt gewonnene Paare zählen, Intervall pro Paar, SPRT als Abbruch
-		- SPRT ist umgesetzt (scratch sprt_duel2.sh, [0, +40], α = β = 0,05, Paar als Einheit, eigener Seed-Bereich pro Duell); für wichtige Entscheidungen [0, +20] über Nacht
+		- SPRT ist umgesetzt (Arena mirror, [0, +40], α = β = 0,05, Paar als Einheit, eigener Seed-Bereich pro Duell, entscheidet erst ab 10 Paaren); für wichtige Entscheidungen [0, +20] über Nacht
 		- Zweistufig wie STC/LTC: 5k-Duell als Filter, nur Bestandenes bei 60k oder gleicher Denkzeit; mehr Paare über mehr Parallelität (Server-GPU)
 	- Plackett-Luce misst die Unsicherheit des Spielausgangs, nicht die des Nets (dafür Ensemble oder Varianz-Head); Platzierungs-Head als Plackett-Luce wäre konsistent
 - Agents/env: OpenMP-Konflikt (conda-MKL und torch), torch nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren
