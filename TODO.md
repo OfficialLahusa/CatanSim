@@ -1,4 +1,5 @@
 ## Simulator
+- PRIORITÄT: Eval-Bar zeigt bei beendetem Spiel nicht 100% für den Sieger (das Net bewertet den Endzustand) => bei HasEnded das echte Ergebnis anzeigen
 - Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
 - Widget für Kartenanzahlen der anderen Spieler (Typ unbekannt)
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
