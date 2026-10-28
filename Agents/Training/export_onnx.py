@@ -10,7 +10,8 @@ from state_value_net import StateValueModule
 class ExportedValueNet(nn.Module):
     """Outputs für den Export: die Value Logits, bei Modellen mit trainiertem Platzierungs-Head die Platzierungs-Logits
     [batch, 4 Spieler, 4 Plätze], bei Modellen mit Policy Head die Queries [batch, Typen * dim] und die Embedding-Tabelle
-    der Zug-Tokens [Vokabular, dim] (konstant, für alle Batches gleich)"""
+    der Zug-Tokens [Vokabular, dim] (konstant, für alle Batches gleich). Die Queries kommen als float16: sie sind 300-mal so
+    groß wie die Value Logits, und die Kopie von der GPU bremst sonst die Suche"""
 
     def __init__(self, model: nn.Module, with_placements: bool, with_policy: bool):
         super().__init__()
@@ -23,7 +24,7 @@ class ExportedValueNet(nn.Module):
         if self.with_placements:
             result.append(outputs["placements"])
         if self.with_policy:
-            result.append(outputs["policy_query"].flatten(1))
+            result.append(outputs["policy_query"].flatten(1).half())
             result.append(self.model.policy_embeddings.weight * 1.0)
         return tuple(result)
 
@@ -74,7 +75,14 @@ def export_model(model: nn.Module, out_path: str, in_dim: int) -> float:
             torch_out = exported(torch.from_numpy(x_np))
         torch_outputs = [t.numpy() for t in torch_out]
         onnx_outputs = sess.run(output_names, {"state": x_np})
-        return max(float(np.abs(t - o).max()) for t, o in zip(torch_outputs, onnx_outputs))
+
+        def difference(t, o):
+            # float16-Outputs relativ zu ihrer Größe (ein paar Rundungsschritte von float16 sind erlaubt)
+            if t.dtype == np.float16:
+                t, o = t.astype(np.float32), o.astype(np.float32)
+                return float((np.abs(t - o) / np.maximum(np.abs(t), 1.0)).max()) * 1e-2
+            return float(np.abs(t - o).max())
+        return max(difference(t, o) for t, o in zip(torch_outputs, onnx_outputs))
 
     max_diff = max_difference(16)
     print(f"Max abs diff, PyTorch vs ONNX (batch=16): {max_diff:.2e}")

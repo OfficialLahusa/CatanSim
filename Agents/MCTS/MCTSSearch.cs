@@ -32,8 +32,8 @@ namespace Agents.MCTS
         // Leaves of a batch with their features, written by selection so the evaluation only runs the value net
         private sealed record LeafBatch((MCTSNode leafNode, GameState stateAtLeaf)[] Leaves, DenseTensor<float> Features, List<Action>?[] Moves);
 
-        // Utilities per leaf and player (flat: leaf * 4 + player) and the priors of the leaves' moves (null without policy)
-        private sealed record BatchResults(double[] Utilities, float[]?[] Priors);
+        // Utilities per leaf and player (flat: leaf * 4 + player) and the policy queries of the leaves (null without policy)
+        private sealed record BatchResults(double[] Utilities, float[]? PolicyQueries);
 
         private readonly ILeafEvaluator _evaluator;
         private readonly IStateVectorizer _vectorizer;
@@ -285,8 +285,9 @@ namespace Agents.MCTS
         }
 
         /// <summary>
-        /// Utilities of the leaves of a batch, one per player (flat: leaf * 4 + player), and the priors of their moves. Only
-        /// reads the batch, so it can run while the tree is in use.
+        /// Utilities of the leaves of a batch, one per player (flat: leaf * 4 + player), and their policy queries. Only reads
+        /// the batch, so it can run while the tree is in use. The priors are scored in the backpropagation's parallel loop,
+        /// which keeps this step (the one the search waits for) to the value net.
         /// </summary>
         private async Task<BatchResults> EvaluateBatchAsync(LeafBatch batch)
         {
@@ -302,12 +303,6 @@ namespace Agents.MCTS
             if (leaves.Any(leaf => !leaf.stateAtLeaf.HasEnded))
                 values = await _evaluator.EvaluateAsync(batch.Features, placementWeight > 0, withPolicy).ConfigureAwait(false);
 
-            var priors = new float[]?[leaves.Length];
-            if (withPolicy)
-                for (int i = 0; i < leaves.Length; i++)
-                    if (batch.Moves[i] is List<Action> moves)
-                        priors[i] = Priors(values!.Value.PolicyQueries!, i, moves);
-
             for (int i = 0; i < leaves.Length; i++)
             {
                 Span<double> destination = utilities.AsSpan(i * MCTSNode.PlayerCount, MCTSNode.PlayerCount);
@@ -319,7 +314,7 @@ namespace Agents.MCTS
             }
             _evaluationTime.Stop();
 
-            return new BatchResults(utilities, priors);
+            return new BatchResults(utilities, withPolicy ? values!.Value.PolicyQueries : null);
         }
 
         private void BackpropagateBatch(MCTSTree tree, LeafBatch batch, BatchResults results)
@@ -330,8 +325,8 @@ namespace Agents.MCTS
 
             void Backpropagate(int i)
             {
-                if (results.Priors[i] is float[] priors)
-                    tree.ApplyPriors(leaves[i].leafNode, priors);
+                if (results.PolicyQueries is float[] queries && batch.Moves[i] is List<Action> moves)
+                    tree.ApplyPriors(leaves[i].leafNode, Priors(queries, i, moves));
 
                 // Backpropagation
                 // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root;

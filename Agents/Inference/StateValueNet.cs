@@ -200,7 +200,19 @@ namespace Agents.Inference
             float[][] Run(List<NamedOnnxValue> inputs, string[] outputNames)
             {
                 using var results = _session.Run(inputs, outputNames);
-                return outputNames.Select(name => results.First(result => result.Name == name).AsTensor<float>().ToArray()).ToArray();
+                return outputNames.Select(name => ToFloats(results.First(result => result.Name == name))).ToArray();
+            }
+
+            // The policy queries come as float16 (half the copy from the GPU), the other outputs as float
+            static float[] ToFloats(DisposableNamedOnnxValue result)
+            {
+                if (result.ElementType != TensorElementType.Float16)
+                    return result.AsTensor<float>().ToArray();
+                // Converted in one vectorized pass over the tensor's memory (Float16 and Half share the IEEE layout)
+                ReadOnlySpan<Float16> halves = ((DenseTensor<Float16>)result.AsTensor<Float16>()).Buffer.Span;
+                float[] values = new float[halves.Length];
+                System.Numerics.Tensors.TensorPrimitives.ConvertToSingle(System.Runtime.InteropServices.MemoryMarshal.Cast<Float16, Half>(halves), values);
+                return values;
             }
         }
 
