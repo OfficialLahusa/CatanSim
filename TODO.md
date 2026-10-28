@@ -39,7 +39,7 @@
 	- Gespiegeltes Duell E2 gegen C (137 Karten): 154:120, +43 Elo (95%-KI +8 bis +80), doppelt gewonnene Paare 35:18 (p ≈ 0,014); Sitzvorteil ist kartenabhängig
 	- Größeres Net (--hidden): 3072 breit KL -4%, 4096 breit -6%, bester Zug kaum besser, MCTS 6-18% langsamer => kein Duell, E2 bleibt; Breite ist nicht der Hebel
 	- Nächste Schritte
-		- Platzierung als Tie-Breaker: β per gespiegeltem Duell tunen (0 / 0,03 / 0,1), Plumbing fertig
+		- Platzierung als Tie-Breaker mit Policy-Net 505oscbr: β 0,03 −41 [−96, +12], 0,1 −2 [−34, +30] gegen 0 (SPRT H0, eigene Karten) => β bleibt 0
 		- Umgewichten nach Position im Match und beendeten Playouts, Chance-Siblings ggf. aus dem Ranking
 		- Endspiel-Features nutzen Perfect Information: mit Hidden Information auf den sichtbaren Teil umstellen
 	- Beispielpartie (xnebmrjf): ganzes Dev-Deck nach 20 Runden gekauft, eingeschlossene Spieler bauten nichts mehr, 7x 4:1 trotz 2:1-Hafen => vermutlich Perfect Information und schwache Playout-Labels, mit Self-Play beobachten
@@ -96,7 +96,7 @@
 		- Mit Handel nur ein Sitz pro Agent und Spiel (gleiche Kopien bewerten gleich => nehmen gegenseitige Angebote leichter an, Kingmaking): Leaderboard über verschiedene Agents, A/B-Tests als Gauntlet gegen dieselben drei Referenz-Agents statt gespiegeltem Duell; ohne Handel bleibt das 2-gegen-2-Duell
 		- Agents maximieren immer das Ergebnis ihres eigenen Sitzes, Team-Wertung nur in der Auswertung
 	- A/B-Tests per gespiegeltem Duell: nur doppelt gewonnene Paare zählen, Intervall pro Paar, SPRT als Abbruch
-		- ALS NÄCHSTES (wie Fishtest bei Stockfish): SPRT im Bench, z.B. H0 ≤ 0 gegen H1 ≥ 20 Elo, α = β = 0,05, Paar als Einheit => stoppt selbst, Live-Abbruch verfälscht dann nichts mehr
+		- SPRT ist umgesetzt (scratch sprt_duel2.sh, [0, +40], α = β = 0,05, Paar als Einheit, eigener Seed-Bereich pro Duell); für wichtige Entscheidungen [0, +20] über Nacht
 		- Zweistufig wie STC/LTC: 5k-Duell als Filter, nur Bestandenes bei 60k oder gleicher Denkzeit; mehr Paare über mehr Parallelität (Server-GPU)
 	- Plackett-Luce misst die Unsicherheit des Spielausgangs, nicht die des Nets (dafür Ensemble oder Varianz-Head); Platzierungs-Head als Plackett-Luce wäre konsistent
 - Agents/env: OpenMP-Konflikt (conda-MKL und torch), torch nur mit KMP_DUPLICATE_LIB_OK=TRUE => nomkl installieren
