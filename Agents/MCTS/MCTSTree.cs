@@ -108,6 +108,47 @@ namespace Agents.MCTS
         }
 
         /// <summary>
+        /// The root's visits without those that only exploration under noise gave a move (policy target pruning as in
+        /// KataGo): every move but the most visited keeps the visits PUCT with the clean priors (in the order of the root's
+        /// children) would have given it before its value fell below the most visited move's PUCT; moves left with at most
+        /// one visit are dropped. Only for PUCT searches with every player's values (MaxN, Paranoid); otherwise the visits as
+        /// they are.
+        /// </summary>
+        public uint[] PrunedRootVisits(ReadOnlySpan<float> cleanPriors)
+        {
+            MCTSNode[] children = RootNode.ChildArray;
+            uint[] visits = children.Select(child => child.VisitCount).ToArray();
+            if (!RootNode.HasPriors || PlayerBounds == null || cleanPriors.Length != children.Length || children.Length < 2)
+                return visits;
+
+            int decider = RootNode.DeciderIndex;
+            bool invert = Model == OpponentModel.Paranoid && decider != _ownerIdx;
+            int valuePlayer = Model == OpponentModel.MaxN ? decider : _ownerIdx;
+            MinMaxStats.Range? range = PlayerBounds[valuePlayer].GetRange();
+            double Mean(MCTSNode child)
+            {
+                double mean = child.PlayerScore(valuePlayer) / child.VisitCount;
+                if (range != null) mean = range.Value.Normalize(mean);
+                return invert ? 1 - mean : mean;
+            }
+
+            int best = Array.IndexOf(visits, visits.Max());
+            double sqrtVisits = Math.Sqrt(Math.Max(RootNode.VisitCount, 1));
+            double bestPuct = Mean(children[best]) + _explorationParameter * cleanPriors[best] * sqrtVisits / (1 + visits[best]);
+            for (int i = 0; i < children.Length; i++)
+            {
+                if (i == best || visits[i] == 0) continue;
+                double gap = bestPuct - Mean(children[i]);
+                if (gap <= 0) continue;
+                // PUCT keeps choosing the move while c * P * sqrt(N) / (1 + n) >= gap, i.e. for n up to this bound
+                double bound = _explorationParameter * cleanPriors[i] * sqrtVisits / gap - 1;
+                uint allowed = bound < 0 ? 0 : (uint)Math.Min(visits[i], Math.Floor(bound) + 1);
+                visits[i] = allowed <= 1 ? 0 : allowed;
+            }
+            return visits;
+        }
+
+        /// <summary>
         /// Every player's mean result over the root's visits whose results are in, the search's value of the root state.
         /// Only the opponent models that use every player's values (MaxN, Paranoid) record them; 0 for an unvisited root.
         /// </summary>

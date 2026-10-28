@@ -164,6 +164,7 @@ namespace SelfPlayCollector
                     exploration = _settings.Exploration,
                     root_noise = _settings.RootNoise,
                     noise_concentration = _settings.RootNoiseConcentration,
+                    target_pruning = _settings.PruneTargets,
                     policy = net.Policy != null,
                     max_actions = _settings.MaxActions,
                     opponent_model = "MaxN",

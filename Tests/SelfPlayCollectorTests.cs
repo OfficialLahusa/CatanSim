@@ -85,7 +85,7 @@ namespace Tests
                     for (int i = 0; i <= saved.PlayedActions.Count; i++)
                     {
                         if (positions.TryGetValue(i, out var sample))
-                            CheckPosition(sample, state, states, vectorizer);
+                            CheckPosition(sample, state, states, vectorizer, prunedVisits: model == "policy_tiny.onnx");
                         if (i == saved.PlayedActions.Count) break;
 
                         Action action = saved.PlayedActions[i];
@@ -117,7 +117,7 @@ namespace Tests
         /// <summary>
         /// A recorded position matches the replayed state: its features, round and moves
         /// </summary>
-        private static void CheckPosition(Dictionary<string, string> sample, GameState state, byte[] states, IStateVectorizer vectorizer)
+        private static void CheckPosition(Dictionary<string, string> sample, GameState state, byte[] states, IStateVectorizer vectorizer, bool prunedVisits)
         {
             Assert.Equal(state.Turn.RoundCounter, int.Parse(sample["round"]));
             Assert.InRange(int.Parse(sample["actor"]), 0, 3);
@@ -136,7 +136,8 @@ namespace Tests
             int moves = MCTSTree.GetValidActions(state).Count;
             var visits = sample["visits"].Split(' ').Select(pair => pair.Split(':')).Select(pair => (move: int.Parse(pair[0]), visits: uint.Parse(pair[1]))).ToArray();
             Assert.All(visits, v => Assert.InRange(v.move, 0, moves - 1));
-            Assert.InRange((long)visits.Sum(v => v.visits), long.Parse(sample["root_visits"]) - 1, long.Parse(sample["root_visits"]));
+            // (with a policy head the visits only the root noise caused are left out, so they can add up to less)
+            Assert.InRange((long)visits.Sum(v => v.visits), prunedVisits ? 1 : long.Parse(sample["root_visits"]) - 1, long.Parse(sample["root_visits"]));
         }
 
         private static int[] ReadInts(string path)

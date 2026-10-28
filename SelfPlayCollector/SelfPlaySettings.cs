@@ -58,6 +58,12 @@ namespace SelfPlayCollector
         public double RootNoiseConcentration { get; init; } = 10;
 
         /// <summary>
+        /// Record the root visits of full searches without those only the root noise caused (policy target pruning, see
+        /// MCTSTree.PrunedRootVisits); only with a policy head and root noise
+        /// </summary>
+        public bool PruneTargets { get; init; } = true;
+
+        /// <summary>
         /// Games still running after this many actions are stopped and written without a result
         /// </summary>
         public int MaxActions { get; init; } = 3000;
@@ -134,6 +140,7 @@ namespace SelfPlayCollector
               --root-noise W           Weight of the Dirichlet noise on the root priors of full searches, with a policy
                                        head (default 0.25, 0 for none)
               --noise-concentration A  Total concentration of the root noise, alpha per move = A / moves (default 10)
+              --no-target-pruning      Record all root visits, also those only the root noise caused
               --max-actions N          Stop games after N actions, written without a result (default 3000)
               --model PATH             Value net (default: the deployed model)
               --nets N                 Net sessions evaluating batches in turn (default 2)
@@ -171,6 +178,7 @@ namespace SelfPlayCollector
                     case "--exploration": settings = settings with { Exploration = DoubleValue() }; break;
                     case "--root-noise": settings = settings with { RootNoise = DoubleValue() }; break;
                     case "--noise-concentration": settings = settings with { RootNoiseConcentration = DoubleValue() }; break;
+                    case "--no-target-pruning": settings = settings with { PruneTargets = false }; break;
                     case "--max-actions": settings = settings with { MaxActions = IntValue() }; break;
                     case "--model": settings = settings with { ModelPath = Value() }; break;
                     case "--nets": settings = settings with { Nets = IntValue() }; break;

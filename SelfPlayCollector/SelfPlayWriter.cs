@@ -11,7 +11,8 @@ namespace SelfPlayCollector
     /// Writes the finished games of a run (from one thread):
     /// states_c{chunk}.f16 holds one row of little-endian float16 features per recorded position;
     /// samples.csv one line per position with its search results, the row of its features (chunk, row) and the visits of
-    /// the root moves as "move:visits" pairs (move = index in MCTSTree.GetValidActions of the position);
+    /// the root moves as "move:visits" pairs (move = index in MCTSTree.GetValidActions of the position; with target pruning
+    /// without the visits only the root noise caused, so they can add up to less than root_visits);
     /// games.csv one line per game with its seed and result, and where its save file is: games_c{chunk}.yaml.gz holds one
     /// gzip member per game (at record_offset, record_length bytes), the final state with all played actions.
     /// A game's line is written last, after its rows, positions and save file are flushed, so a crash never leaves a game

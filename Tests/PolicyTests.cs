@@ -151,6 +151,37 @@ namespace Tests
         }
 
         [Fact]
+        public void TargetPruningDropsVisitsOnlyTheNoiseCaused()
+        {
+            TestUtil.Seed(415);
+            GameState state = TestUtil.EmptyNormalTurn(1);
+            TestUtil.GiveCards(state, 1, ResourceCardType.Grain, 4);
+            MCTSTree tree = new(new GameState(state), 1, 1.414, model: OpponentModel.MaxN) { UsesPolicy = true };
+            tree.ExpandNode(tree.RootNode, new GameState(state));
+            MCTSNode[] children = tree.RootNode.Children.ToArray();
+            Assert.True(children.Length >= 3);
+            float[] clean = Enumerable.Repeat(1f / children.Length, children.Length).ToArray();
+
+            // The best move wins for player 1, a second one as well, a third one loses but was visited a lot (by the noise)
+            for (int i = 0; i < 50; i++) tree.Backpropagate(children[0], [0, 1, 0, 0]);
+            for (int i = 0; i < 10; i++) tree.Backpropagate(children[1], [1, 0, 0, 0]);
+            for (int i = 0; i < 10; i++) tree.Backpropagate(children[2], [0, 1, 0, 0]);
+
+            uint[] pruned = tree.PrunedRootVisits(clean);
+            Assert.Equal(50u, pruned[0]);
+            // PUCT with these priors would have tried the losing move about twice at this root visit count
+            Assert.InRange(pruned[1], 0u, 2u);
+            Assert.Equal(10u, pruned[2]);
+            Assert.All(pruned.Skip(3), visits => Assert.Equal(0u, visits));
+
+            // Without priors on the tree (a UCT search) the visits stay as they are
+            MCTSTree uct = new(new GameState(state), 1, 1.414, model: OpponentModel.MaxN);
+            uct.ExpandNode(uct.RootNode, new GameState(state));
+            uct.Backpropagate(uct.RootNode.Children[1], [1, 0, 0, 0]);
+            Assert.Equal(1u, uct.PrunedRootVisits(clean)[1]);
+        }
+
+        [Fact]
         public void NetsWithAPolicyHeadGiveQueriesAndTheEmbeddingTable()
         {
             StateValueNet net = new(PolicyModelPath, provider: InferenceProvider.Cpu);

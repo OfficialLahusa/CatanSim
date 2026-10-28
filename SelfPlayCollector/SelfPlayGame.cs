@@ -86,7 +86,8 @@ namespace SelfPlayCollector
                     countIterations(search.LastSearch!.Iterations);
 
                     if (full)
-                        positions.Add(Record(state, actions.Count, tree, search.LastSearch.Iterations, vectorizer, features));
+                        positions.Add(Record(state, actions.Count, tree, search.LastSearch.Iterations, vectorizer, features,
+                            settings.PruneTargets ? search.LastRootPolicy : null));
 
                     action = searchedMoves < settings.TemperatureMoves ? tree.SampleMove(settings.Temperature, random) : tree.GetMostPromisingMove();
                     searchedMoves++;
@@ -100,7 +101,10 @@ namespace SelfPlayCollector
             return new GameRecord(game, seed, state, actions, positions, searchedMoves, stopwatch.Elapsed.TotalSeconds);
         }
 
-        private static RecordedPosition Record(GameState state, int actionIndex, MCTSTree tree, long iterations, IStateVectorizer vectorizer, float[] features)
+        /// <param name="cleanPriors">The root's priors before the root noise, to record the visits without those the noise
+        /// caused (MCTSTree.PrunedRootVisits); null records the visits as they are</param>
+        private static RecordedPosition Record(GameState state, int actionIndex, MCTSTree tree, long iterations, IStateVectorizer vectorizer, float[] features,
+            float[]? cleanPriors)
         {
             vectorizer.VectorizeInto(state, features);
             Half[] row = new Half[features.Length];
@@ -108,9 +112,10 @@ namespace SelfPlayCollector
                 row[i] = (Half)features[i];
 
             IReadOnlyList<MCTSNode> children = tree.RootNode.Children;
+            uint[] counts = cleanPriors != null ? tree.PrunedRootVisits(cleanPriors) : children.Select(child => child.VisitCount).ToArray();
             var visits = new List<(int, uint)>();
             for (int i = 0; i < children.Count; i++)
-                if (children[i].VisitCount > 0) visits.Add((i, children[i].VisitCount));
+                if (counts[i] > 0) visits.Add((i, counts[i]));
 
             return new RecordedPosition(actionIndex, state.Turn.RoundCounter, tree.RootNode.DeciderIndex, row, tree.RootValues(), tree.RootNode.VisitCount,
                 iterations, visits.ToArray(), children.Select(child => child.LastAction!).ToArray());

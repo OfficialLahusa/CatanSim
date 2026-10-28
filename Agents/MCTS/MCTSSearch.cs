@@ -83,6 +83,12 @@ namespace Agents.MCTS
         private bool UsesPolicy => _evaluator.Policy != null && !UniformPriors;
 
         /// <summary>
+        /// The policy's priors of the root's moves from the last search that evaluated the root, before the root noise; null
+        /// if the last search reused the root's priors from an earlier search (then they carry no noise)
+        /// </summary>
+        public float[]? LastRootPolicy { get; private set; }
+
+        /// <summary>
         /// Weight of the placement score in the search value (see MCTSAgent.PlacementWeight)
         /// </summary>
         public double PlacementWeight
@@ -122,6 +128,7 @@ namespace Agents.MCTS
             _evaluationWaitTime.Reset();
 
             tree.UsesPolicy = UsesPolicy || UniformPriors;
+            LastRootPolicy = null;
             if (UsesPolicy && !tree.RootState.HasEnded && (!tree.RootNode.HasPolicyPriors || RootNoiseWeight > 0))
                 await EvaluateRootPriorsAsync(tree).ConfigureAwait(false);
 
@@ -173,6 +180,7 @@ namespace Agents.MCTS
             LeafValues values = await _evaluator.EvaluateAsync(features, false, withPolicy: true).ConfigureAwait(false);
             List<Action> moves = MCTSTree.GetValidActions(tree.RootState);
             float[] priors = Priors(values.PolicyQueries!, 0, moves);
+            LastRootPolicy = (float[])priors.Clone();
 
             if (RootNoiseWeight > 0 && priors.Length > 1)
             {
