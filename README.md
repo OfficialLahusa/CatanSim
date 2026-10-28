@@ -6,6 +6,7 @@ Settlers of Catan simulator and AI agent sandbox featuring ML-based and handcraf
 ## Structure
 The codebase is divided into several projects:
 - **Agents:** Implementation of various game playing agents/bots and their underlying models.
+- **Arena:** Duel CLI for comparing agents: mirror duels of two MCTS agents (every map played twice with the sides swapped) with an Elo estimate and an SPRT that stops once one side is clearly stronger.
 - **Client:** Simulator GUI frontend enabling manual and automatic playouts, detailed game analysis, board editing, simulator configuration and state saving/loading.
 - **Common:** Simulator library containing game data structures, transactional action system (undo/redo), move legality validation, YAML serialization, and map generation.
 - **DatasetCollector:** High-performance dataset generator CLI for large-scale Catan simulation datasets.
