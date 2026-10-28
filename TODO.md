@@ -50,7 +50,7 @@
 	- 4. Setup-Phase spezialisieren: eigene Zeit, Best-Response-Gegner, Sibling-Gruppen an Setup-Entscheidungen
 	- 5. Policy Head + PUCT: erledigt (siehe PolicyNet), P1 mhn8ihqb ist Default (auf HF), gegen E2 im 5k-Duell +122 Elo [+78, +169] (104 Paare), Wiederholung +73 [+33, +115] (125 Paare); PUCT mit uniformen Priors ±0 [−47, +47] => der Gewinn kommt von der gelernten Policy
 		- Tempo: Queries als float16, Priors in der Backpropagation => P1 223k statt 170k Iterationen/s (E2 ~310k); Query-Dim 32 gibt 257k bei gleichem Loss, spielte aber nur +13 [−34, +61] gegen E2 => bei 64 bleiben, Streuung zwischen Trainingsläufen desselben Rezepts prüfen
-		- Offen: Duell mit gleicher Denkzeit und bei 60k Iterationen gegen E2
+		- Gleiche Denkzeit (0,25 s pro Zug) gegen E2: +132 Elo [+44, +242] (33 Paare, 16:4 doppelt gewonnen) => Policy lohnt sich trotz ~30% weniger Iterationen; offen: 60k-Duell
 		- Offen: c_puct und First Play Urgency tunen, dominierte Züge prunen (4:1 trotz 3:1- oder 2:1-Hafen)
 	- 6. Self-Play: Labels schwacher Agents binden das Net an deren Niveau
 		- SelfPlayCollector fertig (800/150 Iterationen, p = 0,25, Temperatur in den ersten 30 Zügen; Dirichlet erst mit Policy Head): ~25k Spiele/h, ~43 Positionen/Spiel => ~1M Positionen/h auf der 5080
