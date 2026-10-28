@@ -76,7 +76,7 @@ class StateValueNet(nn.Module):
 
 
 class StateValueModule(L.LightningModule):
-    def __init__(self, in_dim, lr=1e-3, weight_decay=1e-4,
+    def __init__(self, in_dim, lr=1e-3, weight_decay=1e-4, constant_lr=False,
                  placement_weight=0.0, vp_share_weight=0.0, rounds_weight=0.0, ranking_weight=0.0, normalize_inputs=False,
                  ranking_placement_weight=0.0, hidden=2048, policy_weight=0.0, policy_types=0, policy_vocabulary=0, policy_dim=64):
         super().__init__()
@@ -155,6 +155,9 @@ class StateValueModule(L.LightningModule):
             # Weight Decay als Regularisierung
             self.parameters(), lr=self.hparams.lr, weight_decay=self.hparams.weight_decay
         )
+        # Konstante Lernrate für kleine Schritte von Generation zu Generation (Self-Play-Schleife), sonst One-Cycle
+        if self.hparams.get("constant_lr", False):
+            return opt
         sched = torch.optim.lr_scheduler.OneCycleLR(
             opt, max_lr=self.hparams.lr, total_steps=self.trainer.estimated_stepping_batches
         )

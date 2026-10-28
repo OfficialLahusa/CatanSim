@@ -343,6 +343,10 @@ def main():
     parser.add_argument("--hidden", type=int, default=2048)
     parser.add_argument("--batch-size", type=int, default=2048)
     parser.add_argument("--lr", type=float, default=1e-3)
+    # Konstante Lernrate statt One-Cycle (Self-Play-Schleife: kleine Schritte pro Generation)
+    parser.add_argument("--constant-lr", action="store_true")
+    # Checkpoints in dieses Verzeichnis statt in das des W&B-Runs (die Self-Play-Schleife findet sie dort)
+    parser.add_argument("--checkpoint-dir", default=None)
     parser.add_argument("--max-epochs", type=int, default=60)
     parser.add_argument("--devices", type=int, default=1)
     # bf16-mixed auf Ampere oder neuer, sonst 16-mixed
@@ -426,7 +430,7 @@ def main():
         layout = full_ds.policy_layout
         policy = dict(policy_weight=args.policy_weight, policy_types=layout["move_types"][1], policy_vocabulary=layout["vocabulary"][1],
                       policy_dim=args.policy_dim)
-    model = StateValueModule(in_dim=in_dim, lr=args.lr, placement_weight=args.placement_weight, vp_share_weight=args.vp_share_weight,
+    model = StateValueModule(in_dim=in_dim, lr=args.lr, constant_lr=args.constant_lr, placement_weight=args.placement_weight, vp_share_weight=args.vp_share_weight,
                              rounds_weight=args.rounds_weight, ranking_weight=args.ranking_weight, normalize_inputs=args.normalize_inputs,
                              ranking_placement_weight=args.ranking_placement_weight, hidden=args.hidden, **policy)
     if args.init_from:
@@ -458,6 +462,7 @@ def main():
     logger = L.pytorch.loggers.WandbLogger(project="colonysim")
     callbacks = [
         L.pytorch.callbacks.ModelCheckpoint(
+            dirpath=args.checkpoint_dir,
             monitor="val_loss",
             mode="min",
             save_top_k=3,
