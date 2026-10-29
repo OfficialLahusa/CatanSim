@@ -36,6 +36,10 @@ namespace Client
         public BoardTarget? Hovered { get; set; }
         public Color HoverColor { get; set; } = Color.White;
 
+        // Pieces placed a moment ago, with their age: a ring spreads from them and fades
+        private readonly List<(BoardTarget target, Color color, float age)> _placements = [];
+        private const float PlacementSeconds = 1.2f;
+
         // Tiles of the last roll and how long ago it was
         private readonly List<int> _rolledTiles = [];
         private float _rollAge = float.MaxValue;
@@ -58,6 +62,20 @@ namespace Client
         {
             _time += deltaSeconds;
             if (_rollAge < float.MaxValue) _rollAge += deltaSeconds;
+            for (int i = _placements.Count - 1; i >= 0; i--)
+            {
+                var p = _placements[i];
+                if (p.age + deltaSeconds >= PlacementSeconds) _placements.RemoveAt(i);
+                else _placements[i] = (p.target, p.color, p.age + deltaSeconds);
+            }
+        }
+
+        /// <summary>
+        /// Marks a piece that was just placed (or the robber's new tile) with a spreading ring
+        /// </summary>
+        public void ShowPlacement(BoardTarget target, Color color)
+        {
+            _placements.Add((target, color, 0));
         }
 
         /// <summary>
@@ -85,6 +103,13 @@ namespace Client
         {
             DrawRollRings(target, board);
             DrawHeat(target, board);
+            foreach ((BoardTarget spot, Color color, float age) in _placements)
+            {
+                float t = age / PlacementSeconds;
+                float eased = 1 - (1 - t) * (1 - t);
+                float radius = _renderer.SideLength * (spot.Kind == TargetKind.Tile ? 0.5f : 0.2f) * (1 + 1.4f * eased);
+                DrawRing(target, Position(board, spot), radius, 5 * (1 - t) + 1, Theme.WithAlpha(color, 0.9f * (1 - t)));
+            }
 
             float pulse = Pulse;
             float opacity = MinOpacity + (MaxOpacity - MinOpacity) * pulse;
@@ -129,10 +154,14 @@ namespace Client
                     }
                 case TargetKind.Tile:
                     {
+                        // A ring around the token; the robber itself where it would stand, faint until hovered
                         Vector2f center = _renderer.GetTileCenter(board.Map.Values[ghost.Target.Index]);
                         float radius = _renderer.SideLength * 0.42f * scale;
-                        DrawRing(target, center, radius, 6, Theme.WithAlpha(Color.White, opacity * (hovered ? 1f : 0.8f)));
-                        DrawSprite(target, ghost.Sprite, center + new Vector2f(0, -_renderer.SideLength * 0.62f), scale * 1.1f, Theme.WithAlpha(ghost.Color, opacity));
+                        DrawRing(target, center, radius, hovered ? 6 : 4, Theme.WithAlpha(Color.White, hovered ? 1f : opacity * 0.75f));
+                        float offset = _renderer.SideLength / 2.5f + _renderer.IconSize / 3.25f;
+                        float alpha = hovered ? 1f : opacity * 0.35f;
+                        DrawSprite(target, ghost.Sprite, center + new Vector2f(-offset, 0), 0.93f, Theme.WithAlpha(ghost.Color, alpha));
+                        DrawSprite(target, ghost.Sprite, center + new Vector2f(offset, 0), 0.93f, Theme.WithAlpha(ghost.Color, alpha));
                         break;
                     }
             }

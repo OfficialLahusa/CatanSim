@@ -50,7 +50,7 @@ namespace Client
         [System.Runtime.InteropServices.DllImport("opengl32.dll")]
         private static extern void glReadPixels(int x, int y, int width, int height, uint format, uint type, byte[] pixels);
 
-        public static readonly string[] Scenes = ["setup", "main", "road", "roll", "discard", "trade", "devcards", "spectate", "edit", "end"];
+        public static readonly string[] Scenes = ["setup", "main", "road", "roll", "discard", "robber", "trade", "devcards", "spectate", "edit", "end"];
 
         /// <summary>
         /// Plays fast agent moves up to a situation and sets the mode for it. Seat 4 (Orange) is the human.
@@ -127,6 +127,14 @@ namespace Client
                     {
                         if (game > 0) NewGame();
                         PlayUntil(() => ActingPlayer == 3 && Legal(3).Any(a => a is DiscardAction));
+                    }
+                    break;
+
+                case "robber":
+                    for (int game = 0; game < 50 && !(ActingPlayer == 3 && Legal(3).Any(a => a is RobberAction)); game++)
+                    {
+                        if (game > 0) NewGame();
+                        PlayUntil(() => ActingPlayer == 3 && Legal(3).Any(a => a is RobberAction));
                     }
                     break;
 

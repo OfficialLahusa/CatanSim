@@ -417,6 +417,8 @@ namespace Client
             }
 
             _actionLogger.Log(action, _state);
+            if (TargetOf(action) is BoardTarget placed)
+                _overlay.ShowPlacement(placed, action is RobberAction ? Color.White : Theme.PlayerColor(action.PlayerIndex));
 
             if (playSound)
                 PlaySoundForAction(action);

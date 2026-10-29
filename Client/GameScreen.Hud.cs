@@ -7,6 +7,7 @@ using Agents.MCTS;
 using Common.Serialization;
 using ImGuiNET;
 using SFML.Graphics;
+using SFML.System;
 using System.Numerics;
 using Action = Common.Actions.Action;
 using Color = SFML.Graphics.Color;
@@ -65,6 +66,7 @@ namespace Client
             }
 
             DrawRollLabel();
+            DrawGhostTooltip();
             DrawDialogs();
             DrawEndScreen();
             DrawModals();
@@ -573,6 +575,50 @@ namespace Client
             Theme.TextCentered(dl, Theme.SemiBold15, min + size / 2, Theme.Text, text);
         }
         #endregion
+
+        /// <summary>
+        /// Next to the hovered ghost: what a click does there and what it costs
+        /// </summary>
+        private void DrawGhostTooltip()
+        {
+            if (_mode != InteractionMode.Play || HumanToAct is not int player || _dialog != Dialog.None || _overlay.Hovered is not BoardTarget hovered) return;
+            List<Action> moves = ClickableMoves(player).Where(m => TargetOf(m) == hovered).ToList();
+            if (moves.Count == 0) return;
+
+            Action move = moves[0];
+            bool free = PlacingFreeRoads(player);
+            (string title, ResourceCardType[] cost) = move switch
+            {
+                RoadAction when free => ("Place a free road", Array.Empty<ResourceCardType>()),
+                RoadAction => ("Build a road here", new[] { ResourceCardType.Lumber, ResourceCardType.Brick }),
+                SettlementAction => ("Build a settlement here", new[] { ResourceCardType.Lumber, ResourceCardType.Brick, ResourceCardType.Wool, ResourceCardType.Grain }),
+                CityAction => ("Upgrade to a city", new[] { ResourceCardType.Grain, ResourceCardType.Grain, ResourceCardType.Ore, ResourceCardType.Ore, ResourceCardType.Ore }),
+                RobberAction => ("Move the robber here", Array.Empty<ResourceCardType>()),
+                FirstInitialSettlementAction or SecondInitialSettlementAction => ("Place your settlement here", Array.Empty<ResourceCardType>()),
+                _ => ("Place your road here", Array.Empty<ResourceCardType>())
+            };
+            string detail = move is RobberAction
+                ? moves.All(m => ((RobberAction)m).TargetPlayerIndex == null) ? "nobody to rob" : "rob " + string.Join(" or ", moves.Select(m => ((RobberAction)m).TargetPlayerIndex).OfType<sbyte>().Select(v => Theme.PlayerName(v)))
+                : cost.Length > 0 ? "click  ·  costs" : "click";
+
+            Vector2f mapPos = _overlay.Position(_state.Board, hovered);
+            Vector2i pixel = _window.MapCoordsToPixel(mapPos, _mapView);
+            Vector2 anchor = new Vector2(pixel.X, pixel.Y) / GuiImpl.UiScale;
+            float costWidth = cost.Length * 19;
+            float width = Math.Max(Theme.TextSize(Theme.Bold15, title).X, Theme.TextSize(Theme.Regular13, detail).X + (cost.Length > 0 ? costWidth + 6 : 0)) + 28;
+            Vector2 min = anchor + new Vector2(22, -48);
+            if (min.X + width > Display.X - Margin - ColumnWidth - 8) min.X = anchor.X - 22 - width;
+
+            ImDrawListPtr dl = ImGui.GetForegroundDrawList();
+            Theme.DrawPanel(dl, min, min + new Vector2(width, 52), Theme.BorderLight, 8, new Color(15, 33, 86, 245));
+            Theme.DrawText(dl, Theme.Bold15, min + new Vector2(14, 6), Theme.Text, title);
+            Theme.DrawText(dl, Theme.Regular13, min + new Vector2(14, 28), Theme.TextMuted, detail);
+            if (cost.Length > 0)
+            {
+                float x = min.X + 14 + Theme.TextSize(Theme.Regular13, detail).X + 6 + costWidth / 2;
+                Theme.CostRow(dl, cost, new Vector2(x, min.Y + 37), 16);
+            }
+        }
 
         #region Dialogs
         private void DrawDialogs()
