@@ -5,7 +5,7 @@
 	- Offen: Bots machen selbst Angebote und Gegenangebote, Zeitlimit für Antworten im Netzwerkspiel, Handel im Policy Head/Training
 - Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
 	- Umgesetzt: Modi Play, Spectate, Edit (Ghosts aus den legalen Moves, Dialoge, Ertragspartikel, Hidden Info im Play, Policy-Heatmap und Eval-Bar im Spectate, Edit mit Undo/Redo und Log), HUD skaliert mit der Fensterhöhe; --selftest spielt Partien über die UI-Pfade
-	- Offen: Coach-Modus (Zugvorschläge, Blunder-Check), Hot-Seat mit verdeckter Übergabe (zeigt sonst sofort die Hand des nächsten Menschen)
+	- Offen: Coach-Modus (Zugvorschläge, Blunder-Check); Hot-Seat mit verdeckter Übergabe ist umgesetzt (Vorhang zwischen zwei Menschen)
 	- Danach, erst wenn die UI im C#-Client fertig ist: Web-Client fürs Spielen (gleiche Farben, Icons und Proportionen; Brett als SVG, UI in HTML/CSS); Spiellogik und Agents bleiben in C# auf dem Simulation Server (SignalR/WebSocket), keine KI im Browser
 	- Der C#-Client bleibt die Obermenge (Analyse, Eval-Bar, Edit Mode, Playouts), der Web-Client deckt nur das Spielen ab
 	- Web-Client auch als Discord Activity (Embedded App SDK im iframe, z.B. im Voice-Channel): ein Spielraum pro Activity-Instanz, Spieler per Discord-OAuth, leere Sitze übernehmen Agents; Server per HTTPS erreichbar (URL-Mapping über Discords Proxy, für privates Spielen reicht ein Tunnel zum lokalen Server); dafür relative URLs, alles mitgeliefert (CSP), Layout fürs Handy
@@ -22,10 +22,9 @@
 	- 4. Belief-aware StateValueNet: Training auf StateView-Inputs (Views per Replay der Histories rekonstruierbar), Sichtbarkeits-Augmentation nach der echten Beobachtungsverteilung statt zufällig, erwartete versteckte VP als Feature
 	- 5. Particle MCTS / POMCP erst mit Spielerhandel (Angebote schwer als Constraints)
 - Client
-	- Edit Mode schreibt direkt ins Board: Building Stock, VPs, Longest Road und Action Stack werden nicht nachgezogen, geleerte Felder behalten einen Owner, Klicks auf ImGui-Fenster editieren mit
 	- Font, Texture Atlas und Sounds relativ zum Arbeitsverzeichnis geladen => AppContext.BaseDirectory, res/ ins Build-Output kopieren
 	- SimulateRandomRollouts: kein Rundenlimit, countdown.Signal nicht im finally, Threadanzahl 0 hängt
-	- Fehlendes Exception Handling beim Auflisten von Verzeichnissen und Schreiben von Saves, Redo entfernt die Action vor der Validierung
+	- Fehlendes Exception Handling beim Auflisten von Verzeichnissen und Schreiben von Saves
 	- Linux-Port: RenderDataImpl.dll (nur Windows, ohne Quellcode) ersetzen, ShowWindow nur unter Windows, Pfade mit Path.Combine
 
 ## Agents
@@ -176,11 +175,10 @@
 - AlphaBetaAgent
 - PPO RL Agent
 - PlayerAgent
-	- Besseres Interface für Bank/Port Trades implementieren (Dropdown für Zielressource)
 
 ## Future Enhancements
 - Simulation Server: gesamte Spiel- und Simulationslogik im Server, Client nur Darstellung und Eingabe, auch headless (Duelle, Benchmarks, Datensammlung, Self-Play)
-	- Umgesetzt: Bibliothek Simulation (Match mit History/Undo/Edits, AgentRunner, Event-Stream, LocalSimulation/RemoteSimulation), Protokoll JSON über WebSocket (States/Actions als Save-File-YAML), Server-Exe mit Admin-Konsole, Rollen Admin/Player/Agent/Spectator mit gehashten Tokens und Reconnect; Client spielt immer über ISimulation, hostet oder tritt bei; Admin-Panel im Client (Sitze, Playback, Verbindungen, Tokens anlegen/widerrufen, Optionen), TLS mit gepinntem Fingerprint, Login-Sperre nach Fehlversuchen, Admins nur lokal (AllowRemoteAdmins), Origin-Check, Größen- und Verbindungslimits; Server würfelt selbst (Client-History wird verworfen)
+	- Umgesetzt: Bibliothek Simulation (Match mit History/Undo/Edits, AgentRunner, Event-Stream, LocalSimulation/RemoteSimulation), Protokoll JSON über WebSocket (States/Actions als Save-File-YAML), Server-Exe mit Admin-Konsole, Rollen Admin/Player/Agent/Spectator mit gehashten Tokens und Reconnect; Client spielt immer über ISimulation, hostet oder tritt bei; Admin-Panel im Client (Sitze, Playback, Verbindungen, Tokens anlegen/widerrufen, Optionen), TLS mit gepinntem Fingerprint, Login-Sperre nach Fehlversuchen, Admins nur lokal (AllowRemoteAdmins), Origin-Check, Größen- und Verbindungslimits; Server würfelt selbst (Client-History wird verworfen); Analyse des Matches (Win Chances und Priors der Agent-Nets, Live-Suche) nur an Zuschauer und Admins
 	- Offen: Events pro Session nach Hidden Information filtern (braucht StateView, s. oben; bis dahin sehen Clients den vollen State), Bench als Headless-Kommandos (Builder-Checks, Statistik), mehrere Matches pro Server und Lobby
 	- Agent Bridge als eigenes Projekt: Konsolen-App verbindet sich mit Agent-Token für einen Sitz und spielt ihn mit lokalem Agent (MCTS mit beliebigem Net) oder reicht die Entscheidungen per JSON über stdin/stdout an externe Bots weiter (Python, Catanatron)
 - Share Links: Klick öffnet direkt ein Replay, eine Position oder ein Match mit gegebener Konfiguration (Sitze, Regeln, Agents), z.B. per URL-Schema im Client oder Web-Client
