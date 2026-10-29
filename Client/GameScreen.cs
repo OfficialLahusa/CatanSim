@@ -1030,9 +1030,6 @@ namespace Client
         }
 
         /// <summary>
-        /// Saves the game into memory and loads it again (a check of the save file format)
-        /// </summary>
-        /// <summary>
         /// A point on the map in HUD units, where it is on screen now
         /// </summary>
         private System.Numerics.Vector2 ScreenPosition(Vector2f mapPoint)
@@ -1041,6 +1038,9 @@ namespace Client
             return new System.Numerics.Vector2(pixel.X, pixel.Y) / GuiImpl.UiScale;
         }
 
+        /// <summary>
+        /// Saves the game into memory and loads it again (a check of the save file format)
+        /// </summary>
         public void SerializeLoop()
         {
             SaveFile saveFile = new SaveFile(State, Record.ActionsSinceLastEdit(), Record.RedoActionsUntilEdit());

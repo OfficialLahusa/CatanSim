@@ -439,18 +439,7 @@ namespace Tests
                 state.Settings.FreeTrade = true;
                 for (int move = 0; move < 3000 && !state.HasEnded; move++)
                 {
-                    sbyte acting = (sbyte)Enumerable.Range(0, 4).First(state.CanPlayerAct);
-                    List<Action> legal = LegalActionProvider.GetActionsForState(state, acting);
-                    Action action = legal[random.Next(legal.Count)];
-
-                    // Now and then an offer on turn, or a counteroffer when answering
-                    if (OfferTradeAction.IsTurnValid(state, acting) && random.NextDouble() < 0.3
-                        && RandomTerms(state.Players[acting].ResourceCards, random) is var (give, get))
-                        action = new OfferTradeAction(acting, give, get, (byte)(random.Next(1, 16) & OfferTradeAction.Everyone(state, acting)) is byte to && to != 0 ? to : OfferTradeAction.Everyone(state, acting));
-                    else if (RespondToTradeAction.IsTurnValid(state.Turn, acting) && random.NextDouble() < 0.3
-                        && RandomTerms(state.Players[acting].ResourceCards, random) is var (theirs, mine))
-                        action = new CounterTradeAction(acting, mine, theirs);
-                    if (!action.IsValidFor(state)) action = legal[random.Next(legal.Count)];
+                    Action action = RandomTradingMove(state, random);
 
                     GameState before = new GameState(state);
                     Action probe = action.Clone();
@@ -470,6 +459,74 @@ namespace Tests
                 }
             }
             Assert.True(offers > 100 && counters > 10 && trades > 10, $"{offers} offers, {counters} counteroffers, {trades} trades");
+        }
+
+        [Fact]
+        public void SaveFilesOfGamesWithTradesReplayInBothDirections()
+        {
+            Random random = new Random(9);
+            int pendingSaves = 0, tradeMoves = 0;
+            for (int game = 0; game < 12; game++)
+            {
+                Utils.Random.SeedCurrentThread(300 + game);
+                GameState state = new GameState(MapGenerator.GenerateRandomClassic(), 4);
+                state.Settings.FreeTrade = true;
+                GameState initial = new GameState(state);
+
+                // Cut off anywhere, also in the middle of an open offer; the last few moves go to the redo list
+                List<Action> played = [];
+                int length = random.Next(50, 1500);
+                for (int move = 0; move < length && !state.HasEnded; move++)
+                {
+                    Action action = RandomTradingMove(state, random);
+                    action.Apply(state);
+                    played.Add(action);
+                }
+                tradeMoves += played.Count(a => a is OfferTradeAction or RespondToTradeAction or CounterTradeAction or ConfirmTradeAction or CancelTradeAction);
+                List<Action> redo = [];
+                for (int i = 0; i < Math.Min(random.Next(0, 6), played.Count); i++)
+                {
+                    played[^1].Revert(state);
+                    redo.Add(played[^1]);
+                    played.RemoveAt(played.Count - 1);
+                }
+                pendingSaves += state.Turn.PendingTrade != null ? 1 : 0;
+
+                SaveFile loaded = SaveFileSerializer.Deserialize(SaveFileSerializer.Serialize(new SaveFile(state, played, redo)));
+                Assert.True(loaded.GameState.Equals(state), $"game {game}: the loaded state differs");
+                Assert.True(loaded.GameState.Settings.FreeTrade);
+
+                // Undo everything with the loaded histories, then redo everything including the redo list (newest last in it)
+                GameState replay = loaded.GameState;
+                for (int i = loaded.PlayedActions.Count - 1; i >= 0; i--)
+                    loaded.PlayedActions[i].Revert(replay);
+                Assert.True(replay.Equals(initial), $"game {game}: undoing the loaded moves did not reach the start");
+                foreach (Action action in loaded.PlayedActions) action.Apply(replay);
+                Assert.True(replay.Equals(state), $"game {game}: redoing the loaded moves did not reach the saved state");
+                for (int i = loaded.UndoHistory.Count - 1; i >= 0; i--)
+                {
+                    Assert.True(loaded.UndoHistory[i].IsValidFor(replay), $"game {game}: a loaded redo move is not legal");
+                    loaded.UndoHistory[i].Apply(replay);
+                }
+            }
+            Assert.True(tradeMoves > 50 && pendingSaves > 0, $"{tradeMoves} trade moves, {pendingSaves} saves with an open offer");
+        }
+
+        /// <summary>
+        /// A random legal move, now and then an offer on turn or a counteroffer when answering
+        /// </summary>
+        private static Action RandomTradingMove(GameState state, Random random)
+        {
+            sbyte acting = (sbyte)Enumerable.Range(0, 4).First(state.CanPlayerAct);
+            List<Action> legal = LegalActionProvider.GetActionsForState(state, acting);
+            Action action = legal[random.Next(legal.Count)];
+            if (OfferTradeAction.IsTurnValid(state, acting) && random.NextDouble() < 0.3
+                && RandomTerms(state.Players[acting].ResourceCards, random) is var (give, get))
+                action = new OfferTradeAction(acting, give, get, (byte)(random.Next(1, 16) & OfferTradeAction.Everyone(state, acting)) is byte to && to != 0 ? to : OfferTradeAction.Everyone(state, acting));
+            else if (RespondToTradeAction.IsTurnValid(state.Turn, acting) && random.NextDouble() < 0.3
+                && RandomTerms(state.Players[acting].ResourceCards, random) is var (theirs, mine))
+                action = new CounterTradeAction(acting, mine, theirs);
+            return action.IsValidFor(state) ? action : legal[random.Next(legal.Count)];
         }
 
         #region Agents

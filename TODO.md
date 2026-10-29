@@ -1,5 +1,6 @@
 ## Simulator
-- Prüfen, ob die Save Files noch alle nötigen Infos serialisieren oder eine neue Version brauchen
+- Save Files geprüft: auch mit Handel vollständig (Test lädt offene Angebote und Redo-Liste, ganz zurück und wieder vor), alte Dateien laden richtig => keine neue Version nötig
+	- Offen: Protokollversion im Hello (ältere Clients verwerfen PendingTrade und FreeTrade sonst still), Edits und Sitze im Save für Share Links
 - Freier Handel umgesetzt (Regelbuch: nur mit dem Spieler am Zug, nach dem Wurf, keine Geschenke/gleichen Rohstoffe; Angebot, Annehmen/Ablehnen/Gegenangebot, Partnerwahl; Regel FreeTrade aus für Self-Play/Datasets, an im Client; Bots antworten per Value Net bzw. Handheuristik, max. 10 Angebote pro Zug)
 	- Offen: Bots machen selbst Angebote und Gegenangebote, Zeitlimit für Antworten im Netzwerkspiel, Handel im Policy Head/Training
 - Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
