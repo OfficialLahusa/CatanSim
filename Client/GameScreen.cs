@@ -364,6 +364,7 @@ namespace Client
 
             PollAgentMove();
             AdvanceAgents();
+            StepSelfTest();
             UpdateAnalysis();
         }
 

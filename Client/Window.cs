@@ -52,6 +52,8 @@ namespace Client
             GameScreen gameScreen = new GameScreen(window);
             screen = gameScreen;
             if (scene != null) gameScreen.RunScene(scene, seed);
+            string? selfTest = Option("--selftest");
+            if (selfTest != null) gameScreen.StartSelfTest(int.Parse(selfTest), seed);
 
             window.Closed += Window_Closed;
 
@@ -74,6 +76,8 @@ namespace Client
 
                 // Rendering
                 screen.Draw(deltaTime);
+
+                if (gameScreen.SelfTestFinished) window.Close();
 
                 // A scripted screenshot quits once it is written
                 if (screenshot != null)
