@@ -287,6 +287,38 @@ namespace Tests
         }
 
         [Fact]
+        public async Task ClientsOfAnotherProtocolVersionAreRefused()
+        {
+            using Match match = NewMatch();
+            await using SimulationServer server = await SimulationServer.StartAsync(match, Config());
+
+            Exception older = await Assert.ThrowsAnyAsync<Exception>(() => RemoteSimulation.ConnectAsync(server.Uri,
+                new Hello("Old", "admin-secret", Role.Admin, null, null, Protocol.Version - 1)));
+            Assert.Contains("protocol version", older.Message);
+            Assert.Contains("update the client", older.Message);
+
+            Exception newer = await Assert.ThrowsAnyAsync<Exception>(() => RemoteSimulation.ConnectAsync(server.Uri,
+                new Hello("New", "admin-secret", Role.Admin, null, null, Protocol.Version + 1)));
+            Assert.Contains("update the server", newer.Message);
+
+            using RemoteSimulation current = await Connect(server, "admin-secret", Role.Admin);
+            Assert.Equal(Role.Admin, current.Session!.Role);
+        }
+
+        [Fact]
+        public void MessagesWithoutAVersionAreVersionZero()
+        {
+            // Clients and servers from before the protocol version sent none
+            Assert.Equal(0, Protocol.DeserializeHello("""{"type":"Hello","name":"Old","role":"Spectator"}""").Version);
+            WelcomeEvent welcome = (WelcomeEvent)Protocol.DeserializeEvent("""{"type":"WelcomeEvent","session":{"id":"s","name":"S","role":"Spectator"}}""");
+            Assert.Equal(0, welcome.Version);
+
+            Assert.Equal(Protocol.Version, Protocol.DeserializeHello(Protocol.Serialize(new Hello("Now", null, Role.Spectator, null, null))).Version);
+            Assert.Null(Protocol.VersionMismatch(Protocol.Version, otherIsServer: true));
+            Assert.Contains("update the server", Protocol.VersionMismatch(0, otherIsServer: true));
+        }
+
+        [Fact]
         public async Task AdminsFromOtherComputersNeedThePermission()
         {
             using Match match = NewMatch();

@@ -65,9 +65,9 @@ namespace Simulation
     public abstract record MatchEvent;
 
     /// <summary>
-    /// The connection is accepted with this role
+    /// The connection is accepted with this role, by a server of this protocol version
     /// </summary>
-    public sealed record WelcomeEvent(SessionInfo Session) : MatchEvent;
+    public sealed record WelcomeEvent(SessionInfo Session, int Version = Protocol.Version) : MatchEvent;
 
     /// <summary>
     /// The whole match: after connecting, a new game or a loaded one

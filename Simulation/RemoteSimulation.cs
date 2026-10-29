@@ -72,6 +72,9 @@ namespace Simulation
 
                 string? first = await SimulationServer.ReceiveAsync(socket, timeout.Token, MaxMessageBytes);
                 MatchEvent? welcome = first != null ? Protocol.DeserializeEvent(first) : null;
+                // A server of another protocol version would send states this client reads wrongly
+                if (welcome is WelcomeEvent { Version: var version } && Protocol.VersionMismatch(version, otherIsServer: true) is string mismatch)
+                    throw new InvalidOperationException(mismatch);
                 return welcome switch
                 {
                     WelcomeEvent w => new RemoteSimulation(socket, uri, w.Session),

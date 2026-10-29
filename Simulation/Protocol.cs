@@ -8,9 +8,10 @@ using Action = Common.Actions.Action;
 namespace Simulation
 {
     /// <summary>
-    /// The first message of a connection: who connects and as what. A reconnecting client sends its session ID to keep it.
+    /// The first message of a connection: who connects and as what, and the protocol version it speaks. A reconnecting client
+    /// sends its session ID to keep it.
     /// </summary>
-    public sealed record Hello(string Name, string? Token, Role Role, int? Seat, string? SessionId);
+    public sealed record Hello(string Name, string? Token, Role Role, int? Seat, string? SessionId, int Version = Protocol.Version);
 
     /// <summary>
     /// The wire format: one JSON object per WebSocket text message, with a "type" field. Game states and moves are embedded as
@@ -19,6 +20,23 @@ namespace Simulation
     public static class Protocol
     {
         public const string Path = "/match";
+
+        /// <summary>
+        /// The version of the messages and the game states in them. Bump it whenever a client or server of another version
+        /// would read them wrongly (new fields of the state are ignored silently, e.g. an open trade offer): both sides then
+        /// refuse each other with a message instead. Messages without a version are version 0.
+        /// </summary>
+        public const int Version = 1;
+
+        /// <summary>
+        /// Why two sides of different protocol versions can't play together, or null if the versions match
+        /// </summary>
+        public static string? VersionMismatch(int other, bool otherIsServer)
+        {
+            if (other == Version) return null;
+            string self = otherIsServer ? "client" : "server", them = otherIsServer ? "server" : "client";
+            return $"This {self} speaks protocol version {Version}, the {them} version {other}: update the {(other < Version ? them : self)}.";
+        }
 
         #region Game payloads
         private static string Yaml(GameState state) => SaveFileSerializer.Serialize(state);
@@ -200,7 +218,7 @@ namespace Simulation
         {
             JsonObject json = e switch
             {
-                WelcomeEvent w => new JsonObject { ["session"] = Session(w.Session) },
+                WelcomeEvent w => new JsonObject { ["session"] = Session(w.Session), ["version"] = w.Version },
                 SnapshotEvent s => new JsonObject
                 {
                     ["state"] = Yaml(s.State),
@@ -242,7 +260,7 @@ namespace Simulation
             JsonNode json = JsonNode.Parse(text) ?? throw new JsonException("Empty message");
             return (string?)json["type"] switch
             {
-                nameof(WelcomeEvent) => new WelcomeEvent(Session(json["session"])),
+                nameof(WelcomeEvent) => new WelcomeEvent(Session(json["session"]), (int?)json["version"] ?? 0),
                 nameof(SnapshotEvent) => new SnapshotEvent(State(json["state"]), Entries(json["history"]), Entries(json["redo"]), SeatKinds(json["seats"]),
                     Playback(json["playback"]), Agents(json["agents"])),
                 nameof(AppliedEvent) => new AppliedEvent(Entry(json["entry"]), (bool)json["redo"]!),
@@ -274,13 +292,15 @@ namespace Simulation
             ["role"] = hello.Role.ToString(),
             ["seat"] = hello.Seat,
             ["sessionId"] = hello.SessionId,
+            ["version"] = hello.Version,
         }.ToJsonString();
 
         public static Hello DeserializeHello(string text)
         {
             JsonNode json = JsonNode.Parse(text) ?? throw new JsonException("Empty message");
             if ((string?)json["type"] != nameof(Hello)) throw new JsonException("The first message must be a hello");
-            return new Hello((string?)json["name"] ?? "Guest", (string?)json["token"], Named<Role>(json["role"]), (int?)json["seat"], (string?)json["sessionId"]);
+            return new Hello((string?)json["name"] ?? "Guest", (string?)json["token"], Named<Role>(json["role"]), (int?)json["seat"], (string?)json["sessionId"],
+                (int?)json["version"] ?? 0);
         }
         #endregion
     }

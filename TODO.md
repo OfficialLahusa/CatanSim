@@ -1,6 +1,6 @@
 ## Simulator
 - Save Files geprüft: auch mit Handel vollständig (Test lädt offene Angebote und Redo-Liste, ganz zurück und wieder vor), alte Dateien laden richtig => keine neue Version nötig
-	- Offen: Protokollversion im Hello (ältere Clients verwerfen PendingTrade und FreeTrade sonst still), Edits und Sitze im Save für Share Links
+	- Offen: Edits und Sitze im Save für Share Links
 - Freier Handel umgesetzt (Regelbuch: nur mit dem Spieler am Zug, nach dem Wurf, keine Geschenke/gleichen Rohstoffe; Angebot, Annehmen/Ablehnen/Gegenangebot, Partnerwahl; Regel FreeTrade aus für Self-Play/Datasets, an im Client; Bots antworten per Value Net bzw. Handheuristik, max. 10 Angebote pro Zug)
 	- Offen: Bots machen selbst Angebote und Gegenangebote, Zeitlimit für Antworten im Netzwerkspiel, Handel im Policy Head/Training
 - Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
@@ -178,7 +178,7 @@
 
 ## Future Enhancements
 - Simulation Server: gesamte Spiel- und Simulationslogik im Server, Client nur Darstellung und Eingabe, auch headless (Duelle, Benchmarks, Datensammlung, Self-Play)
-	- Umgesetzt: Bibliothek Simulation (Match mit History/Undo/Edits, AgentRunner, Event-Stream, LocalSimulation/RemoteSimulation), Protokoll JSON über WebSocket (States/Actions als Save-File-YAML), Server-Exe mit Admin-Konsole, Rollen Admin/Player/Agent/Spectator mit gehashten Tokens und Reconnect; Client spielt immer über ISimulation, hostet oder tritt bei; Admin-Panel im Client (Sitze, Playback, Verbindungen, Tokens anlegen/widerrufen, Optionen), TLS mit gepinntem Fingerprint, Login-Sperre nach Fehlversuchen, Admins nur lokal (AllowRemoteAdmins), Origin-Check, Größen- und Verbindungslimits; Server würfelt selbst (Client-History wird verworfen); Analyse des Matches (Win Chances und Priors der Agent-Nets, Live-Suche) nur an Zuschauer und Admins
+	- Umgesetzt: Bibliothek Simulation (Match mit History/Undo/Edits, AgentRunner, Event-Stream, LocalSimulation/RemoteSimulation), Protokoll JSON über WebSocket (States/Actions als Save-File-YAML), Server-Exe mit Admin-Konsole, Rollen Admin/Player/Agent/Spectator mit gehashten Tokens und Reconnect; Client spielt immer über ISimulation, hostet oder tritt bei; Admin-Panel im Client (Sitze, Playback, Verbindungen, Tokens anlegen/widerrufen, Optionen), TLS mit gepinntem Fingerprint, Login-Sperre nach Fehlversuchen, Admins nur lokal (AllowRemoteAdmins), Origin-Check, Größen- und Verbindungslimits; Server würfelt selbst (Client-History wird verworfen); Analyse des Matches (Win Chances und Priors der Agent-Nets, Live-Suche) nur an Zuschauer und Admins; Protokollversion in Hello und Welcome, andere Versionen werden mit Hinweis abgelehnt
 	- Offen: Events pro Session nach Hidden Information filtern (braucht StateView, s. oben; bis dahin sehen Clients den vollen State), Bench als Headless-Kommandos (Builder-Checks, Statistik), mehrere Matches pro Server und Lobby
 	- Agent Bridge als eigenes Projekt: Konsolen-App verbindet sich mit Agent-Token für einen Sitz und spielt ihn mit lokalem Agent (MCTS mit beliebigem Net) oder reicht die Entscheidungen per JSON über stdin/stdout an externe Bots weiter (Python, Catanatron)
 - Share Links: Klick öffnet direkt ein Replay, eine Position oder ein Match mit gegebener Konfiguration (Sitze, Regeln, Agents), z.B. per URL-Schema im Client oder Web-Client

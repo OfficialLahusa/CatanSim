@@ -173,6 +173,11 @@ namespace Simulation
                 await RefuseAsync(socket, "Invalid hello.");
                 return;
             }
+            if (Protocol.VersionMismatch(hello.Version, otherIsServer: false) is string mismatch)
+            {
+                await RefuseAsync(socket, mismatch);
+                return;
+            }
 
             IPAddress address = context.Connection.RemoteIpAddress ?? IPAddress.None;
             (SessionInfo? session, string? tokenHash, string? refusal) = Authenticate(hello, address);
