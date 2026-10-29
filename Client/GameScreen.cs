@@ -179,6 +179,7 @@ namespace Client
             _uiView = new View(new Vector2f(0, 0), _mapView.Size);
 
             _window.SetView(_mapView);
+            FitBoard();
 
             _window.MouseWheelScrolled += Window_MouseWheelScrolled;
             _window.Resized += Window_Resized;
@@ -675,7 +676,7 @@ namespace Client
                     {
                         sent[owner, resourceIdx]++;
                         Vector2i from = _window.MapCoordsToPixel(tileCenter, _mapView);
-                        _particles.Add(resource, new System.Numerics.Vector2(from.X, from.Y), CardDestination(owner, resource), delay);
+                        _particles.Add(resource, new System.Numerics.Vector2(from.X, from.Y) / GuiImpl.UiScale, CardDestination(owner, resource), delay);
                         delay += 0.12f;
                     }
                 }
@@ -944,8 +945,36 @@ namespace Client
 
         private void Window_Resized(object? sender, SizeEventArgs e)
         {
-            _mapView.Size = new Vector2f(e.Width, e.Height) * _viewZoom;
             _uiView.Size = new Vector2f(e.Width, e.Height);
+            FitBoard();
+        }
+
+        /// <summary>
+        /// Zooms and centers the board so it fits between the panel columns
+        /// </summary>
+        private void FitBoard()
+        {
+            float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
+            foreach (Tile tile in _state.Board.Map.Values)
+            {
+                if (tile.Type == Tile.TileType.NonPlayable) continue;
+                Vector2f c = _renderer.GetTileCenter(tile);
+                minX = Math.Min(minX, c.X - _renderer.FlatSideLength);
+                maxX = Math.Max(maxX, c.X + _renderer.FlatSideLength);
+                minY = Math.Min(minY, c.Y - _renderer.SideLength);
+                maxY = Math.Max(maxY, c.Y + _renderer.SideLength);
+            }
+            if (minX > maxX) return;
+
+            // The space between the seat panels and the right column, in pixels
+            float scale = GuiImpl.UiScale;
+            float columns = 2 * (Margin + ColumnWidth + 8) * scale;
+            float width = Math.Max(200, _window.Size.X - columns);
+            float height = Math.Max(200, _window.Size.Y - 16 * scale);
+            _viewZoom = Math.Max((maxX - minX) / width, (maxY - minY) / height);
+            _viewZoomBase = (float)(Math.Log(_viewZoom * 1.3) / Math.Log(1.3));
+            _mapView.Size = new Vector2f(_window.Size.X, _window.Size.Y) * _viewZoom;
+            _mapView.Center = new Vector2f((minX + maxX) / 2, (minY + maxY) / 2);
         }
 
         public void PlaySoundForAction(Action action)

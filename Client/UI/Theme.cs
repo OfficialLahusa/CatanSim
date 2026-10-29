@@ -38,24 +38,32 @@ namespace Client.UI
         /// <summary>
         /// Loads the Open Sans fonts into ImGui's atlas and sets the style; once, before the first frame
         /// </summary>
-        public static void Init()
+        public static void Init(float uiScale = 1f)
         {
             if (_fontsLoaded) return;
             _fontsLoaded = true;
+            GuiImpl.UiScale = uiScale;
 
+            // Rasterized at the pixel size they end up at, laid out at their size in UI units
             ImGuiIOPtr io = ImGui.GetIO();
             const string dir = @"..\..\..\res\Open_Sans\static\";
-            Regular15 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-Regular.ttf", 15);
-            Regular13 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-Regular.ttf", 13);
-            Regular17 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-Regular.ttf", 17);
-            SemiBold15 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-SemiBold.ttf", 15);
-            SemiBold17 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-SemiBold.ttf", 17);
-            Bold13 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-Bold.ttf", 13);
-            Bold15 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-Bold.ttf", 15);
-            Bold17 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-Bold.ttf", 17);
-            Bold20 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-Bold.ttf", 20);
-            Bold22 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-Bold.ttf", 22);
-            ExtraBold36 = io.Fonts.AddFontFromFileTTF(dir + "OpenSans-ExtraBold.ttf", 36);
+            ImFontPtr Load(string file, float size)
+            {
+                ImFontPtr font = io.Fonts.AddFontFromFileTTF(dir + file, size * uiScale);
+                font.Scale = 1f / uiScale;
+                return font;
+            }
+            Regular15 = Load("OpenSans-Regular.ttf", 15);
+            Regular13 = Load("OpenSans-Regular.ttf", 13);
+            Regular17 = Load("OpenSans-Regular.ttf", 17);
+            SemiBold15 = Load("OpenSans-SemiBold.ttf", 15);
+            SemiBold17 = Load("OpenSans-SemiBold.ttf", 17);
+            Bold13 = Load("OpenSans-Bold.ttf", 13);
+            Bold15 = Load("OpenSans-Bold.ttf", 15);
+            Bold17 = Load("OpenSans-Bold.ttf", 17);
+            Bold20 = Load("OpenSans-Bold.ttf", 20);
+            Bold22 = Load("OpenSans-Bold.ttf", 22);
+            ExtraBold36 = Load("OpenSans-ExtraBold.ttf", 36);
             unsafe { io.NativePtr->FontDefault = Regular15.NativePtr; }
             GuiImpl.UpdateFontTexture();
 
@@ -189,7 +197,7 @@ namespace Client.UI
 
         public static void DrawText(ImDrawListPtr dl, ImFontPtr font, Vector2 pos, Color color, string text)
         {
-            dl.AddText(font, font.FontSize, pos, U32(color), text);
+            dl.AddText(font, font.FontSize * font.Scale, pos, U32(color), text);
         }
 
         public static Vector2 TextSize(ImFontPtr font, string text)

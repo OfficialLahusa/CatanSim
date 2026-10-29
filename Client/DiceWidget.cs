@@ -9,9 +9,9 @@ namespace Client
     {
         private RectangleShape _firstDie;
         private RectangleShape _secondDie;
-        // Size of a die in pixels
+        // Size of a die in UI units (GuiImpl.UiScale pixels each)
         public const int Size = 120;
-        private const int _size = Size;
+        private static float _size => Size * GuiImpl.UiScale;
         private static readonly Color _inactiveColor = new Color(255, 255, 255, 85);
         private bool _active;
 
@@ -30,6 +30,7 @@ namespace Client
         public DiceWidget(RenderWindow window)
         {
             _firstDie = new RectangleShape(new SFML.System.Vector2f(_size, _size));
+
             _firstDie.Texture = TextureAtlas.Texture;
 
             _secondDie = new RectangleShape(new SFML.System.Vector2f(_size, _size));
@@ -63,8 +64,9 @@ namespace Client
         private void UpdatePosition(RenderWindow window)
         {
             // Position at the bottom right corner of view coordinate system (center = 0, 0)
-            _firstDie.Position = new Vector2f(window.Size.X / 2 - 2 * _size - 40, window.Size.Y / 2 - _size - 20);
-            _secondDie.Position = new Vector2f(window.Size.X / 2 - _size - 20, window.Size.Y / 2 - _size - 20);
+            float margin = 20 * GuiImpl.UiScale;
+            _firstDie.Position = new Vector2f(window.Size.X / 2 - 2 * _size - 2 * margin, window.Size.Y / 2 - _size - margin);
+            _secondDie.Position = new Vector2f(window.Size.X / 2 - _size - margin, window.Size.Y / 2 - _size - margin);
         }
 
         public void UpdateSprites()

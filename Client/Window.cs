@@ -46,7 +46,9 @@ namespace Client
 
             // Init ImGui
             GuiImpl.Init(window);
-            UI.Theme.Init();
+            // The HUD is laid out for a window about 1100 pixels high and scaled to the screen in quarter steps
+            float uiScale = Math.Clamp(MathF.Round(window.Size.Y / 1100f * 4) / 4, 0.75f, 2f);
+            UI.Theme.Init(uiScale);
 
             // Init Screen
             GameScreen gameScreen = new GameScreen(window);

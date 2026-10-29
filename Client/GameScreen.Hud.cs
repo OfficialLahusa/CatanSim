@@ -409,7 +409,8 @@ namespace Client
                 bool clicked = Theme.HitArea($"build{i}", min, size, out bool hovered);
                 float alpha = button.available || button.active ? 1f : 0.42f;
                 Color fill = button.active ? Theme.PanelActive : hovered && button.available ? new Color(32, 52, 112) : Theme.PanelRaised;
-                Theme.DrawPanel(dl, min, min + size, button.active ? Theme.PlayerColor(player) : Theme.BorderLight, 12, Theme.WithAlpha(fill, alpha), button.active ? 3 : 1);
+                Color dimmed = Theme.Lerp(fill, new Color(15, 33, 86), 0.6f);
+                Theme.DrawPanel(dl, min, min + size, button.active ? Theme.PlayerColor(player) : alpha < 1 ? Theme.Border : Theme.BorderLight, 12, alpha < 1 ? dimmed : fill, button.active ? 3 : 1);
                 Color iconColor = Theme.WithAlpha(i == 3 ? new Color(200, 160, 230) : Theme.PlayerColor(player), alpha);
                 Theme.IconCentered(dl, button.sprite, min + new Vector2(w / 2, 34), 42, iconColor);
                 Theme.TextCentered(dl, Theme.Bold15, min + new Vector2(w / 2, 82), Theme.WithAlpha(Theme.Text, alpha), button.label);
@@ -442,7 +443,8 @@ namespace Client
             bool clicked = Theme.HitArea(id, min, size, out bool hovered);
             float alpha = enabled ? 1 : 0.42f;
             Color f = hovered && enabled ? Theme.Lerp(fill, Color.White, 0.08f) : fill;
-            Theme.DrawPanel(dl, min, min + size, Theme.WithAlpha(border, alpha), 12, Theme.WithAlpha(f, alpha));
+            // Disabled: dimmed but opaque, so the board doesn't show through
+            Theme.DrawPanel(dl, min, min + size, enabled ? border : Theme.Lerp(border, Theme.Panel, 0.6f), 12, enabled ? f : Theme.Lerp(f, new Color(15, 33, 86), 0.6f));
             Theme.TextCentered(dl, font, min + size / 2, Theme.WithAlpha(Theme.Text, alpha), label);
             if (key != null)
             {

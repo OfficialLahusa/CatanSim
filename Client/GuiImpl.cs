@@ -203,10 +203,16 @@ namespace Client
             }
         }
 
+        /// <summary>
+        /// Size of an ImGui unit in pixels: ImGui lays out in units and the draw data is scaled to pixels when rendered, so the
+        /// UI keeps its proportions on small and large screens (fonts are loaded at the scaled size and stay sharp)
+        /// </summary>
+        public static float UiScale { get; set; } = 1f;
+
         public static void Update(Vector2i mousePos, Vector2f displaySize, Time dt)
         {
             var io = ImGui.GetIO();
-            io.DisplaySize = new Vector2(displaySize.X, displaySize.Y);
+            io.DisplaySize = new Vector2(displaySize.X, displaySize.Y) / UiScale;
 
             io.DeltaTime = dt.AsSeconds();
 
@@ -219,7 +225,7 @@ namespace Client
                 }
                 else
                 {
-                    io.MousePos = new Vector2(mousePos.X, mousePos.Y);
+                    io.MousePos = new Vector2(mousePos.X, mousePos.Y) / UiScale;
                 }
 
                 for (var i = 0; i < 3; i++)
@@ -252,7 +258,27 @@ namespace Client
         {
             target.ResetGLStates();
             ImGui.Render();
-            RenderDrawLists(ImGui.GetDrawData(), ImGui.GetIO());
+            ImDrawDataPtr drawData = ImGui.GetDrawData();
+            ScaleDrawData(drawData);
+            RenderDrawLists(drawData, ImGui.GetIO());
+        }
+
+        /// <summary>
+        /// From ImGui units to pixels: vertex positions, clip rects and the display size the renderer projects with
+        /// </summary>
+        private static void ScaleDrawData(ImDrawDataPtr drawData)
+        {
+            if (UiScale == 1f) return;
+            for (int n = 0; n < drawData.CmdListsCount; n++)
+            {
+                ImDrawListPtr cmdList = drawData.CmdListsRange[n];
+                for (int i = 0; i < cmdList.VtxBuffer.Size; i++)
+                    cmdList.VtxBuffer[i].pos *= UiScale;
+            }
+            drawData.ScaleClipRects(new Vector2(UiScale, UiScale));
+            drawData.DisplayPos *= UiScale;
+            drawData.DisplaySize *= UiScale;
+            ImGui.GetIO().DisplaySize *= UiScale;
         }
 
         public static void Render()
