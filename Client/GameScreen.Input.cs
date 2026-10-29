@@ -374,6 +374,19 @@ namespace Client
         private Action? BestTrade(int player, ResourceCardType give, ResourceCardType get) =>
             Trades(player).Where(a => TradeOf(a) is var t && t!.Value.give == give && t.Value.get == get).OrderBy(a => TradeOf(a)!.Value.ratio).FirstOrDefault();
 
+        /// <summary>
+        /// The legal discard that matches the cards picked in the discard dialog
+        /// </summary>
+        private DiscardAction? SelectedDiscard(int player) => Legal(player).OfType<DiscardAction>().FirstOrDefault(a =>
+            CardTypeExtensions.ResourceTypes.Select((type, idx) => a.SelectedCards.Get(type) == _discardSelection[idx]).All(x => x));
+
+        /// <summary>
+        /// The legal Year of Plenty move for the two cards picked in its dialog, in either order
+        /// </summary>
+        private YearOfPlentyAction? SelectedPlenty(int player) => Legal(player).OfType<YearOfPlentyAction>().FirstOrDefault(a =>
+            (a.FirstChoice == _plentyFirst && a.SecondChoice == _plentySecond) || (a.FirstChoice == _plentySecond && a.SecondChoice == _plentyFirst)
+            || (_plentySecond == null && a.FirstChoice == _plentyFirst && a.SecondChoice == null));
+
         private bool HasDevelopmentMoves(int player) =>
             Legal(player).Any(a => a is KnightAction or RoadBuildingAction or YearOfPlentyAction or MonopolyAction);
         #endregion

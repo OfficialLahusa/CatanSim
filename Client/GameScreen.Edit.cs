@@ -59,8 +59,14 @@ namespace Client
 
         private void HandleEditClick()
         {
-            if (HoveredTarget(EditCandidates()) is not BoardTarget target) return;
+            if (HoveredTarget(EditCandidates()) is BoardTarget target) EditAt(target);
+        }
 
+        /// <summary>
+        /// What a click with the edit tool does on a spot
+        /// </summary>
+        private void EditAt(BoardTarget target)
+        {
             GameState after = new GameState(_state);
             Board board = after.Board;
             PlayerState player = after.Players[_editPlayer];

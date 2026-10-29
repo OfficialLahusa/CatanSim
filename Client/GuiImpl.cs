@@ -305,7 +305,9 @@ namespace Client
             var io = ImGui.GetIO();
             io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out var width, out var height, out var bpp);
 
-            _fontTexture = new Texture((uint)width, (uint)height);
+            // Smooth: ImGui's anti-aliased lines sample a baked gradient from this texture and need bilinear filtering,
+            // otherwise outlines (circles, rounded borders) come out with hard, stepped edges
+            _fontTexture = new Texture((uint)width, (uint)height) { Smooth = true };
 
             var size = width * height * bpp;
             var byteArray = new byte[size];

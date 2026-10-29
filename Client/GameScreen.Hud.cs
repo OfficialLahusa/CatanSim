@@ -644,9 +644,7 @@ namespace Client
             bool ready = chosen == required;
             if (DrawButton(dl, "discardok", min + new Vector2(560 - 24 - 180, 330 - 24 - 48), new Vector2(180, 48), ready ? "Discard" : $"{chosen} / {required}", ready, Theme.Accent, Theme.AccentBorder, Theme.Bold17))
             {
-                DiscardAction? match = Legal(player).OfType<DiscardAction>().FirstOrDefault(a =>
-                    CardTypeExtensions.ResourceTypes.Select((type, idx) => a.SelectedCards.Get(type) == _discardSelection[idx]).All(x => x));
-                if (match != null) PlayHumanMove(match);
+                if (SelectedDiscard(player) is DiscardAction match) PlayHumanMove(match);
             }
             if (DrawButton(dl, "discardclear", min + new Vector2(24, 330 - 24 - 48), new Vector2(120, 48), "Reset", chosen > 0, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))
                 Array.Clear(_discardSelection);
@@ -797,9 +795,7 @@ namespace Client
                 i++;
             }
 
-            YearOfPlentyAction? match = Legal(player).OfType<YearOfPlentyAction>().FirstOrDefault(a =>
-                (a.FirstChoice == _plentyFirst && a.SecondChoice == _plentySecond) || (a.FirstChoice == _plentySecond && a.SecondChoice == _plentyFirst)
-                || (_plentySecond == null && a.FirstChoice == _plentyFirst && a.SecondChoice == null));
+            YearOfPlentyAction? match = SelectedPlenty(player);
             if (DrawButton(dl, "plentyok", min + new Vector2(600 - 24 - 180, 300 - 20 - 44), new Vector2(180, 44), "Take", match != null, Theme.Accent, Theme.AccentBorder, Theme.Bold17))
                 PlayHumanMove(match!);
             if (DrawButton(dl, "plentycancel", min + new Vector2(24, 300 - 20 - 44), new Vector2(120, 44), "Back", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))

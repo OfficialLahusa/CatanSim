@@ -30,13 +30,25 @@ namespace Client
         private void CaptureScreenshot()
         {
             if (_screenshotPath == null) return;
-            using Texture texture = new Texture(_window.Size.X, _window.Size.Y);
-            texture.Update(_window);
-            using Image image = texture.CopyToImage();
+
+            // glReadPixels resolves the multisampled back buffer (copying it into a texture would take one sample per pixel)
+            uint width = _window.Size.X, height = _window.Size.Y;
+            byte[] pixels = new byte[width * height * 4];
+            glReadPixels(0, 0, (int)width, (int)height, 0x1908, 0x1401, pixels);
+
+            // OpenGL rows run bottom to top
+            byte[] flipped = new byte[pixels.Length];
+            int stride = (int)width * 4;
+            for (int row = 0; row < height; row++)
+                Array.Copy(pixels, row * stride, flipped, (height - 1 - row) * stride, stride);
+            using Image image = new Image(width, height, flipped);
             image.SaveToFile(_screenshotPath);
             Console.WriteLine($"Screenshot saved to {Path.GetFullPath(_screenshotPath)}");
             _screenshotPath = null;
         }
+
+        [System.Runtime.InteropServices.DllImport("opengl32.dll")]
+        private static extern void glReadPixels(int x, int y, int width, int height, uint format, uint type, byte[] pixels);
 
         public static readonly string[] Scenes = ["setup", "main", "road", "roll", "discard", "trade", "devcards", "spectate", "edit", "end"];
 
