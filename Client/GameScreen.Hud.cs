@@ -294,6 +294,12 @@ namespace Client
                 headline = "Edit mode";
                 detail = $" · {EditToolName(_editTool)} for {Theme.PlayerName(_editPlayer)} · Ctrl+Z undoes";
             }
+            else if (_mode == InteractionMode.Play && _curtainFor is int next)
+            {
+                colorSeat = next;
+                headline = $"{Theme.PlayerName(next)}'s turn";
+                detail = " · pass the screen, then show the hand";
+            }
             else if (HumanToAct is int human)
             {
                 headline = HumanCount() > 1 ? $"{Theme.PlayerName(human)}'s turn" : "Your turn";
@@ -494,6 +500,11 @@ namespace Client
             Vector2 min = new Vector2(Margin, Display.Y - Margin - 194);
             Vector2 size = new Vector2(590, 194);
             _handAnchor = min + new Vector2(120, 110);
+            if (_curtainFor is int next)
+            {
+                DrawCurtain(min, size, next);
+                return;
+            }
             if (viewer is not int seat) return;
 
             PlayerState player = _state.Players[seat];
@@ -563,6 +574,20 @@ namespace Client
                 Theme.TextCentered(dl, Theme.Regular13, slot + new Vector2(40, 84), new Color(159, 143, 208), "No dev");
                 Theme.TextCentered(dl, Theme.Regular13, slot + new Vector2(40, 101), new Color(159, 143, 208), "cards");
             }
+            ImGui.End();
+        }
+
+        /// <summary>
+        /// Instead of a hand while the screen goes to the next human: nothing hidden is shown until they confirm
+        /// </summary>
+        private void DrawCurtain(Vector2 min, Vector2 size, int next)
+        {
+            ImDrawListPtr dl = Theme.BeginHud("##curtain", min, size + new Vector2(0, 8));
+            Theme.DrawPanel(dl, min, min + size, Theme.PlayerColor(next), 16, null, 2);
+            Theme.DrawText(dl, Theme.Bold22, min + new Vector2(24, 22), Theme.Text, $"Pass the screen to {Theme.PlayerName(next)}");
+            Theme.DrawText(dl, Theme.Regular15, min + new Vector2(24, 56), Theme.TextMuted, "The hands stay hidden until the next player is ready.");
+            if (DrawButton(dl, "curtain", min + new Vector2(24, 100), new Vector2(260, 56), $"I'm {Theme.PlayerName(next)}, show my hand", true, Theme.Accent, Theme.AccentBorder, Theme.Bold15))
+                _curtainFor = null;
             ImGui.End();
         }
 

@@ -153,11 +153,12 @@ namespace Client.UI
         };
 
         /// <summary>
-        /// Heat map colors from dark purple (rare) over red and orange to yellow (most chosen), for t on [0, 1]
+        /// Heat map colors from dark plum (rare) over magenta and pink to white (most chosen), for t on [0, 1]: no red, orange,
+        /// green or blue hues, so heat never looks like a player's pieces
         /// </summary>
         public static Color Heat(float t)
         {
-            ReadOnlySpan<(float at, byte r, byte g, byte b)> stops = [(0f, 42, 10, 94), (0.25f, 123, 31, 126), (0.5f, 209, 66, 110), (0.75f, 251, 138, 60), (1f, 253, 231, 76)];
+            ReadOnlySpan<(float at, byte r, byte g, byte b)> stops = [(0f, 70, 18, 70), (0.25f, 140, 30, 130), (0.5f, 214, 62, 196), (0.75f, 255, 150, 232), (1f, 255, 245, 253)];
             t = Math.Clamp(t, 0, 1);
             for (int i = 1; i < stops.Length; i++)
             {
@@ -168,7 +169,7 @@ namespace Client.UI
                         (byte)(stops[i - 1].b + (stops[i].b - stops[i - 1].b) * f));
                 }
             }
-            return new Color(253, 231, 76);
+            return new Color(255, 245, 253);
         }
         #endregion
 

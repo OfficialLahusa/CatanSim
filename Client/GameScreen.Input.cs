@@ -40,7 +40,7 @@ namespace Client
         {
             get
             {
-                if (_mode != InteractionMode.Play || _agentMove != null) return null;
+                if (_mode != InteractionMode.Play || _agentMove != null || _curtainFor != null) return null;
                 int acting = ActingPlayer;
                 return acting >= 0 && IsHuman(acting) ? acting : null;
             }

@@ -33,7 +33,9 @@ namespace Client
         private static readonly Color TokenFace = new Color(230, 230, 120);
         private static readonly Color TokenRim = new Color(200, 196, 100);
         private float _tokenRadius;
+        private float _tokenTextSize;
         private Text _tokenText;
+        private readonly List<(Vector2i pixel, int number, Color ink)> _tokenNumbers = [];
         private CircleShape _tokenBase;
         private CircleShape _yieldPoint;
 
@@ -95,7 +97,7 @@ namespace Client
 
             _tokenRadius = SideLength / 3;
             _tokenText = new Text("", GameScreen.BoldFont);
-            _tokenText.CharacterSize = (uint)Math.Round(sideLength * 0.35f);
+            _tokenTextSize = sideLength * 0.35f;
 
             _tokenBase = new CircleShape(_tokenRadius, 64);
             _tokenBase.Origin = new Vector2f(_tokenBase.Radius, _tokenBase.Radius);
@@ -380,6 +382,40 @@ namespace Client
             array.Append(rightOutset);
         }
 
+        /// <summary>
+        /// The token numbers in screen pixels: rasterized at the size they appear at and snapped to whole pixels, so every
+        /// number is equally sharp and centered at any zoom (in map coordinates each would land on another pixel fraction)
+        /// </summary>
+        private void DrawTokenNumbers(RenderTarget target, RenderStates states)
+        {
+            // A copy: GetView returns the window's current view itself, which SetView replaces
+            View mapView = new View(target.GetView());
+            float zoom = mapView.Size.X / target.Size.X;
+            target.SetView(new View(new FloatRect(0, 0, target.Size.X, target.Size.Y)));
+            _tokenText.CharacterSize = (uint)Math.Max(1, Math.Round(_tokenTextSize / zoom));
+
+            foreach ((Vector2i pixel, int value, Color ink) in _tokenNumbers)
+            {
+                string number = value.ToString();
+                _tokenText.DisplayedString = number;
+                _tokenText.FillColor = ink;
+
+                // Centered on the ink, except the 11: the flags of its ones stretch the ink box to the left, so its
+                // stems would sit right of the middle. Open Sans figures are tabular with the 1 in the middle of its
+                // advance, so the 11 is centered on its advance width instead.
+                FloatRect bounds = _tokenText.GetLocalBounds();
+                float originX = bounds.Left + bounds.Width / 2.0f;
+                if (number == "11")
+                    originX = (_tokenText.FindCharacterPos((uint)number.Length).X - _tokenText.FindCharacterPos(0).X) / 2.0f;
+                _tokenText.Origin = new Vector2f(MathF.Round(originX), MathF.Round(bounds.Top + bounds.Height / 2.0f));
+                _tokenText.Position = new Vector2f(pixel.X, pixel.Y);
+                target.Draw(_tokenText, states);
+            }
+
+            _tokenNumbers.Clear();
+            target.SetView(mapView);
+        }
+
         public Vector2f GetTileCenter(Tile tile)
         {
             return GetTileCenter(tile.X, tile.Y);
@@ -515,21 +551,9 @@ namespace Client
                         _tokenBase.FillColor = TokenFace;
                         target.Draw(_tokenBase, states);
 
-                        // The number a bit above the middle, the probability pips below it
-                        string number = value.Number.ToString();
-                        _tokenText.DisplayedString = number;
-                        _tokenText.FillColor = ink;
-
-                        // Centered on the ink, except the 11: the flags of its ones stretch the ink box to the left, so its
-                        // stems would sit right of the middle. Open Sans figures are tabular with the 1 in the middle of
-                        // its advance, so the 11 is centered on its advance width instead.
-                        FloatRect bounds = _tokenText.GetLocalBounds();
-                        float originX = bounds.Left + bounds.Width / 2.0f;
-                        if (number == "11")
-                            originX = (_tokenText.FindCharacterPos((uint)number.Length).X - _tokenText.FindCharacterPos(0).X) / 2.0f;
-                        _tokenText.Origin = new Vector2f(originX, bounds.Top + bounds.Height / 2.0f);
-                        _tokenText.Position = ClientUtils.RoundVec2f(center + new Vector2f(0, DrawYieldPoints ? -_tokenRadius * 0.08f : 0));
-                        target.Draw(_tokenText, states);
+                        // The number a bit above the middle (drawn after the loop in screen pixels), the probability pips below it
+                        Vector2f numberCenter = center + new Vector2f(0, DrawYieldPoints ? -_tokenRadius * 0.08f : 0);
+                        _tokenNumbers.Add((target.MapCoordsToPixel(numberCenter), value.Number ?? 0, ink));
 
                         if (DrawYieldPoints)
                         {
@@ -546,6 +570,8 @@ namespace Client
                     }
                 }
             }
+
+            DrawTokenNumbers(target, states);
 
             // Draw center markers
             if (DrawCenterMarkers)

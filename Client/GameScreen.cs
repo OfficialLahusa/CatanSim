@@ -279,14 +279,15 @@ namespace Client
         }
 
         /// <summary>
-        /// Whose hidden information the screen shows: in Play mode the human who acts (or the first human seat), everything
-        /// (null) in Spectate and Edit mode and once the game is over
+        /// Whose hidden information the screen shows: in Play mode the human who acts (or the first human seat), nobody's (-1)
+        /// while the screen is passed between humans, everything (null) in Spectate and Edit mode and once the game is over
         /// </summary>
         private int? Viewer
         {
             get
             {
                 if (_mode != InteractionMode.Play || _state.HasEnded) return null;
+                if (_curtainFor != null) return -1;
                 int acting = ActingPlayer;
                 if (acting >= 0 && IsHuman(acting)) return acting;
                 if (_lastHumanViewer is int last && IsHuman(last)) return last;
@@ -297,6 +298,9 @@ namespace Client
         }
 
         private int? _lastHumanViewer;
+
+        // The human the screen is being passed to; until they confirm, no hidden information is shown (Viewer is -1)
+        private int? _curtainFor;
         #endregion
 
         public void Draw(Time deltaTime)
@@ -503,8 +507,13 @@ namespace Client
             _diceWidget.RollResult = _state.Turn.LastRoll;
             _diceWidget.UpdateSprites();
 
+            // Between two humans on one screen a curtain hides the hands until the next one takes over
             int acting = ActingPlayer;
-            if (acting >= 0 && IsHuman(acting)) _lastHumanViewer = acting;
+            if (acting >= 0 && IsHuman(acting))
+            {
+                if (_mode == InteractionMode.Play && HumanCount() > 1 && _lastHumanViewer is int last && last != acting) _curtainFor = acting;
+                _lastHumanViewer = acting;
+            }
             ClearHumanInput();
         }
 
@@ -903,6 +912,7 @@ namespace Client
             AfterPositionChanged();
             _valuationHistory = [(float[])_valuation.Clone()];
             _lastHumanViewer = null;
+            _curtainFor = null;
             _sinceLastMove.Restart();
         }
 
