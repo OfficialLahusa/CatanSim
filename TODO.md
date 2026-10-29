@@ -6,6 +6,7 @@
 - Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
 	- Umgesetzt: Modi Play, Spectate, Edit (Ghosts aus den legalen Moves, Dialoge, Ertragspartikel, Hidden Info im Play, Policy-Heatmap und Eval-Bar im Spectate, Edit mit Undo/Redo und Log), HUD skaliert mit der Fensterhöhe; --selftest spielt Partien über die UI-Pfade
 	- Offen: Coach-Modus (Zugvorschläge, Blunder-Check); Hot-Seat mit verdeckter Übergabe ist umgesetzt (Vorhang zwischen zwei Menschen)
+	- Hauptmenü: lokales Spiel gegen Bots, Hot-Seat oder Verbindung zu einem Server usw. wählen; Einstellungen für Sounds, Partikel usw.
 	- Danach, erst wenn die UI im C#-Client fertig ist: Web-Client fürs Spielen (gleiche Farben, Icons und Proportionen; Brett als SVG, UI in HTML/CSS); Spiellogik und Agents bleiben in C# auf dem Simulation Server (SignalR/WebSocket), keine KI im Browser
 	- Der C#-Client bleibt die Obermenge (Analyse, Eval-Bar, Edit Mode, Playouts), der Web-Client deckt nur das Spielen ab
 	- Web-Client auch als Discord Activity (Embedded App SDK im iframe, z.B. im Voice-Channel): ein Spielraum pro Activity-Instanz, Spieler per Discord-OAuth, leere Sitze übernehmen Agents; Server per HTTPS erreichbar (URL-Mapping über Discords Proxy, für privates Spielen reicht ein Tunnel zum lokalen Server); dafür relative URLs, alles mitgeliefert (CSP), Layout fürs Handy
