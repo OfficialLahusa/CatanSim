@@ -1,7 +1,7 @@
 using Common;
 using Common.Actions;
 
-namespace Client.Editing
+namespace Simulation
 {
     /// <summary>
     /// A change made in Edit mode, kept as the position before and after it, so it can be undone and redone like a move

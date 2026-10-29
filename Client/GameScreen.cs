@@ -1,4 +1,4 @@
-﻿using Client.Editing;
+using BoardEdit = Simulation.BoardEdit;
 using Client.Logging;
 using Client.UI;
 using Common;
