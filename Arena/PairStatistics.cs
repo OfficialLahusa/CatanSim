@@ -11,7 +11,7 @@ namespace Arena
     internal sealed record PairStatistics(int Pairs, int ChallengerTwice, int BaselineTwice, double Elo, double EloLow, double EloHigh,
         double Llr, double LowerBound, double UpperBound)
     {
-        public const int MinPairs = 10;
+        public const int MinPairs = 30;
         public const double MinVariance = 0.01;
 
         public int Split => Pairs - ChallengerTwice - BaselineTwice;
