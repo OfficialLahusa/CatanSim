@@ -209,7 +209,8 @@ namespace Client
                 {
                     float x = 80 + Theme.TextSize(Theme.Bold22, name).X + 10;
                     float w = Theme.TextSize(Theme.Bold13, tag).X + 20;
-                    Theme.Pill(dl, min + new Vector2(x, 16), min + new Vector2(x + w, 40), color, Theme.Bold13, Theme.TextOnPlayer(seat), tag);
+                    // Centered on the name's capitals, not on its line box
+                    Theme.Pill(dl, min + new Vector2(x, 10), min + new Vector2(x + w, 34), color, Theme.Bold13, Theme.TextOnPlayer(seat), tag);
                 }
 
                 // Victory points: the hidden ones only where they may be seen
