@@ -1,6 +1,6 @@
 ## Simulator
-- Projekt in Hexfarer umbenannt (CATAN ist Marke der CATAN GmbH; Hexfarer frei: keine Marke in TMview, kein Spiel, Domains, GitHub, HF frei): Repo-Inhalt, Solution, Texte, HEXFARER_*-Variablen (CATANSIM_* noch akzeptiert), %AppData%\Hexfarer übernimmt das Host-Zertifikat
-	- Offen: Domains und GitHub-Org sichern, GitHub-Repo und HF-Modell umbenennen (dann Download-URL in Agents.csproj), Repo- und Datenordner umbenennen (loop_state.json hat absolute Pfade)
+- Projekt in Hexfarer umbenannt (CATAN ist Marke der CATAN GmbH; Hexfarer frei: keine Marke in TMview, kein Spiel, Domains, GitHub, HF frei): Repo-Inhalt, Solution, Texte, Repo-Ordner, GitHub-Repo, Domains hexfarer.dev (.com leitet weiter), HEXFARER_*-Variablen (CATANSIM_* noch akzeptiert), %AppData%\Hexfarer übernimmt das Host-Zertifikat
+	- Offen: HF-Modell umbenennen (dann Download-URL in Agents.csproj), Datenordner umbenennen (loop_state.json hat absolute Pfade)
 - Save Files geprüft: auch mit Handel vollständig (Test lädt offene Angebote und Redo-Liste, ganz zurück und wieder vor), alte Dateien laden richtig => keine neue Version nötig
 	- Offen: Edits und Sitze im Save für Share Links
 - Freier Handel umgesetzt (Regelbuch: nur mit dem Spieler am Zug, nach dem Wurf, keine Geschenke/gleichen Rohstoffe; Angebot, Annehmen/Ablehnen/Gegenangebot, Partnerwahl; Regel FreeTrade aus für Self-Play/Datasets, an im Client; Bots antworten per Value Net bzw. Handheuristik, max. 10 Angebote pro Zug)

@@ -1,4 +1,6 @@
 # Hexfarer
+[hexfarer.dev](https://hexfarer.dev)
+
 Simulator and AI agent sandbox for the rules of the board game CATAN, featuring ML-based and handcrafted agents, a parallelized dataset generator, and save file serialization.
 
 ![Playing against three agents late in a game.](screenshot-client.png)
