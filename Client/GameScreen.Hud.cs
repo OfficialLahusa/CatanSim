@@ -182,7 +182,10 @@ namespace Client
                 if (isActing) Theme.Glow(dl, min, max, color, Theme.Rounding, 1.2f);
                 Color border = isActing ? color : selected ? Color.White : hovered && _mode == InteractionMode.Edit ? Theme.BorderLight : Theme.Border;
                 Theme.DrawPanel(dl, min, max, border, Theme.Rounding, isActing ? Theme.PanelRaised : null, isActing || selected ? 2.5f : 1f);
-                dl.RoundRectFilled(min, min + new Vector2(9, SeatHeight), Theme.U32(color), Theme.Rounding, ImDrawCornerFlags.Left);
+                // The color tab: the panel's own shape cut to its left edge, so its curves are the border's
+                dl.PushClipRect(min - new Vector2(4), new Vector2(min.X + 9, max.Y + 4), true);
+                dl.RoundRectFilled(min, max, Theme.U32(color), Theme.Rounding);
+                dl.PopClipRect();
 
                 // Avatar with the seat number
                 Vector2 avatar = min + new Vector2(48, 40);

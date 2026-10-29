@@ -271,14 +271,18 @@ namespace Client.UI
         }
 
         /// <summary>
-        /// A glow around a rounded rect, as stacked transparent outlines
+        /// A glow around a rounded rect fading out over 10 units: one-pixel rings side by side, so it is a smooth gradient
+        /// (outlines spaced apart showed as stripes)
         /// </summary>
         public static void Glow(ImDrawListPtr dl, Vector2 min, Vector2 max, Color color, float rounding = Rounding, float strength = 1f)
         {
-            for (int i = 1; i <= 5; i++)
+            float pixel = 1 / GuiImpl.UiScale;
+            int rings = Math.Max(1, (int)MathF.Round(10 * GuiImpl.UiScale));
+            for (int i = 0; i < rings; i++)
             {
-                float grow = i * 2f;
-                dl.RoundRect(min - new Vector2(grow), max + new Vector2(grow), U32(WithAlpha(color, 0.22f * strength * (1 - i / 6f))), rounding + grow, ImDrawCornerFlags.All, 2.5f);
+                float fade = 1 - (i + 0.5f) / rings;
+                Vector2 grow = new Vector2((i + 1) * pixel);
+                dl.RoundRect(min - grow, max + grow, U32(WithAlpha(color, 0.3f * strength * fade * fade)), rounding + (i + 1) * pixel, ImDrawCornerFlags.All, pixel);
             }
         }
 
