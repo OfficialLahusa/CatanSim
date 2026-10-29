@@ -144,6 +144,7 @@ namespace Client
 
             _renderer = new BoardRenderer(_state.Board, 120, 20);
             _overlay = new BoardOverlay(_renderer);
+            _renderer.BeforeBuildings = (target, states) => _overlay.DrawUnderBuildings(target, _state.Board);
             _diceWidget = new DiceWidget(window);
             _diceWidget.Active = true;
 
@@ -304,8 +305,8 @@ namespace Client
 
             // Draw map
             _window.SetView(_mapView);
-            _renderer.Draw(_window, RenderStates.Default, _state, (sbyte)Math.Max(0, ActingPlayer));
             PrepareOverlay();
+            _renderer.Draw(_window, RenderStates.Default, _state, (sbyte)Math.Max(0, ActingPlayer));
             _overlay.Draw(_window, _state.Board);
 
             // Draw UI

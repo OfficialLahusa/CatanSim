@@ -44,6 +44,7 @@ namespace Client
         private readonly List<int> _rolledTiles = [];
         private float _rollAge = float.MaxValue;
 
+        private readonly VertexArray _roadVertices = new(PrimitiveType.Triangles);
         private readonly RectangleShape _sprite;
         private readonly RectangleShape _bar = new();
         private readonly CircleShape _cap = new(1, 24);
@@ -116,7 +117,7 @@ namespace Client
             float scale = MinScale + (MaxScale - MinScale) * pulse;
             foreach (Ghost ghost in Ghosts)
             {
-                if (Hovered == ghost.Target) continue;
+                if (Hovered == ghost.Target || ghost.Target.Kind == TargetKind.Edge) continue;
                 DrawPiece(target, board, ghost, opacity, scale, false);
             }
 
@@ -124,9 +125,25 @@ namespace Client
             if (Hovered is BoardTarget hovered)
             {
                 int index = Ghosts.FindIndex(g => g.Target == hovered);
-                if (index >= 0) DrawPiece(target, board, Ghosts[index], 1f, 1.1f, true);
-                else DrawHoverMarker(target, board, hovered);
+                if (index >= 0 && hovered.Kind != TargetKind.Edge) DrawPiece(target, board, Ghosts[index], 1f, 1.1f, true);
+                else if (index < 0) DrawHoverMarker(target, board, hovered);
             }
+        }
+
+        /// <summary>
+        /// What lies under the buildings: road ghosts and the heat map's roads, in the shape of built roads
+        /// </summary>
+        public void DrawUnderBuildings(RenderTarget target, Board board)
+        {
+            _roadVertices.Clear();
+            foreach (HeatSpot spot in Heat.Where(s => s.Target.Kind == TargetKind.Edge).OrderBy(s => s.Intensity))
+                _renderer.AppendRoad(_roadVertices, board.Edges[spot.Target.Index], Theme.Heat(spot.Intensity));
+
+            // Road ghosts pulse in opacity only; the hovered one is solid
+            float opacity = MinOpacity + (MaxOpacity - MinOpacity) * Pulse;
+            foreach (Ghost ghost in Ghosts.Where(g => g.Target.Kind == TargetKind.Edge))
+                _renderer.AppendRoad(_roadVertices, board.Edges[ghost.Target.Index], Theme.WithAlpha(ghost.Color, Hovered == ghost.Target ? 1f : opacity * 0.75f));
+            target.Draw(_roadVertices);
         }
 
         private void DrawPiece(RenderTarget target, Board board, Ghost ghost, float opacity, float scale, bool hovered)
@@ -199,9 +216,6 @@ namespace Client
                 switch (spot.Target.Kind)
                 {
                     case TargetKind.Edge:
-                        (Vector2f a, Vector2f b) = _renderer.GetEdgePoints(board.Edges[spot.Target.Index]);
-                        DrawRoad(target, a, b, _renderer.SideLength * 0.2f, new Color(8, 25, 76, 150), 1f);
-                        DrawRoad(target, a, b, _renderer.SideLength * 0.13f, color, 1f);
                         break;
                     case TargetKind.Intersection:
                         Vector2f c = _renderer.GetIntersectionCenter(board.Intersections[spot.Target.Index], board);

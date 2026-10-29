@@ -29,11 +29,9 @@ namespace Client
         private VertexArray _portBridges;
         private VertexArray _roads;
 
-        // Number tokens: ivory face with a darker rim, dark ink, a muted red for the 6 and 8
-        private static readonly Color TokenFace = new Color(246, 236, 210);
-        private static readonly Color TokenRim = new Color(196, 170, 120);
-        private static readonly Color TokenInk = new Color(52, 42, 32);
-        private static readonly Color TokenRed = new Color(196, 36, 36);
+        // Number tokens: the classic yellow face with a faint rim, bold black numbers, the 6 and 8 in red
+        private static readonly Color TokenFace = new Color(230, 230, 120);
+        private static readonly Color TokenRim = new Color(200, 196, 100);
         private float _tokenRadius;
         private Text _tokenText;
         private CircleShape _tokenBase;
@@ -73,6 +71,11 @@ namespace Client
         }
         #endregion
 
+        /// <summary>
+        /// Drawn after the roads and tokens, before the buildings
+        /// </summary>
+        public System.Action<RenderTarget, RenderStates>? BeforeBuildings;
+
         public float IconSize
         {
             get => SideLength * 7 / 15;
@@ -90,9 +93,9 @@ namespace Client
             _portBridges = new VertexArray(PrimitiveType.Triangles);
             _roads = new VertexArray(PrimitiveType.Triangles);
 
-            _tokenRadius = SideLength * 0.31f;
+            _tokenRadius = SideLength / 3;
             _tokenText = new Text("", GameScreen.BoldFont);
-            _tokenText.CharacterSize = (uint)Math.Round(sideLength * 0.27f);
+            _tokenText.CharacterSize = (uint)Math.Round(sideLength * 0.35f);
 
             _tokenBase = new CircleShape(_tokenRadius, 64);
             _tokenBase.Origin = new Vector2f(_tokenBase.Radius, _tokenBase.Radius);
@@ -327,50 +330,54 @@ namespace Client
             {
                 // Skip edges without roads
                 if (Board.GetRoad(edge.Index) == Edge.BuildingType.None) continue;
-
-                // Anchor edge to one of its two neighboring tiles
-                (Tile anchor, Direction.Tile anchorDir) = GetEdgeAnchor(edge);
-
-                // Determine corner positions
-                (Direction.Corner leftCorner, Direction.Corner rightCorner) = anchorDir.GetAdjacentCorners();
-                float leftAngle  = leftCorner.ToAngle();
-                float rightAngle = rightCorner.ToAngle();
-
-                Vector2f tileCenter     = GetTileCenter(anchor);
-                Vector2f leftDir        = ClientUtils.EulerAngleToVec2f(leftAngle);
-                Vector2f rightDir       = ClientUtils.EulerAngleToVec2f(rightAngle);
-                Vector2f leftInnerDir   = ClientUtils.EulerAngleToVec2f(leftCorner.Mirror().ToAngle());
-                Vector2f rightInnerDir  = ClientUtils.EulerAngleToVec2f(rightCorner.Mirror().ToAngle());
-                Vector2f leftOuterDir   = ClientUtils.EulerAngleToVec2f(leftCorner.Rotate(1).ToAngle());
-                Vector2f rightOuterDir  = ClientUtils.EulerAngleToVec2f(rightCorner.Rotate(-1).ToAngle());
-
-                Color playerColor = ColorPalette.GetPlayerColor(Board.GetRoadOwner(edge.Index));
-
-                // Build vertices
-                Vertex left         = new Vertex(tileCenter + SideLength * leftDir, playerColor);
-                Vertex right        = new Vertex(tileCenter + SideLength * rightDir, playerColor);
-                Vertex leftInset    = new Vertex(left.Position  + leftInnerDir  * (_borderWidth / 2), playerColor);
-                Vertex rightInset   = new Vertex(right.Position + rightInnerDir * (_borderWidth / 2), playerColor);
-                Vertex leftOutset   = new Vertex(left.Position  + leftOuterDir  * (_borderWidth / 2), playerColor);
-                Vertex rightOutset  = new Vertex(right.Position + rightOuterDir * (_borderWidth / 2), playerColor);
-
-
-                _roads.Append(leftInset);
-                _roads.Append(leftOutset);
-                _roads.Append(rightInset);
-
-                _roads.Append(leftOutset);
-                _roads.Append(rightOutset);
-                _roads.Append(rightInset);
-
-                _roads.Append(left);
-                _roads.Append(leftInset);
-                _roads.Append(leftOutset);
-
-                _roads.Append(right);
-                _roads.Append(rightInset);
-                _roads.Append(rightOutset);
+                AppendRoad(_roads, edge, ColorPalette.GetPlayerColor(Board.GetRoadOwner(edge.Index)));
             }
+        }
+
+        /// <summary>
+        /// The triangles of a road on an edge, with pointed ends that meet the neighboring roads
+        /// </summary>
+        public void AppendRoad(VertexArray array, Edge edge, Color playerColor)
+        {
+            // Anchor edge to one of its two neighboring tiles
+            (Tile anchor, Direction.Tile anchorDir) = GetEdgeAnchor(edge);
+
+            // Determine corner positions
+            (Direction.Corner leftCorner, Direction.Corner rightCorner) = anchorDir.GetAdjacentCorners();
+            float leftAngle  = leftCorner.ToAngle();
+            float rightAngle = rightCorner.ToAngle();
+
+            Vector2f tileCenter     = GetTileCenter(anchor);
+            Vector2f leftDir        = ClientUtils.EulerAngleToVec2f(leftAngle);
+            Vector2f rightDir       = ClientUtils.EulerAngleToVec2f(rightAngle);
+            Vector2f leftInnerDir   = ClientUtils.EulerAngleToVec2f(leftCorner.Mirror().ToAngle());
+            Vector2f rightInnerDir  = ClientUtils.EulerAngleToVec2f(rightCorner.Mirror().ToAngle());
+            Vector2f leftOuterDir   = ClientUtils.EulerAngleToVec2f(leftCorner.Rotate(1).ToAngle());
+            Vector2f rightOuterDir  = ClientUtils.EulerAngleToVec2f(rightCorner.Rotate(-1).ToAngle());
+
+            // Build vertices
+            Vertex left         = new Vertex(tileCenter + SideLength * leftDir, playerColor);
+            Vertex right        = new Vertex(tileCenter + SideLength * rightDir, playerColor);
+            Vertex leftInset    = new Vertex(left.Position  + leftInnerDir  * (_borderWidth / 2), playerColor);
+            Vertex rightInset   = new Vertex(right.Position + rightInnerDir * (_borderWidth / 2), playerColor);
+            Vertex leftOutset   = new Vertex(left.Position  + leftOuterDir  * (_borderWidth / 2), playerColor);
+            Vertex rightOutset  = new Vertex(right.Position + rightOuterDir * (_borderWidth / 2), playerColor);
+
+            array.Append(leftInset);
+            array.Append(leftOutset);
+            array.Append(rightInset);
+
+            array.Append(leftOutset);
+            array.Append(rightOutset);
+            array.Append(rightInset);
+
+            array.Append(left);
+            array.Append(leftInset);
+            array.Append(leftOutset);
+
+            array.Append(right);
+            array.Append(rightInset);
+            array.Append(rightOutset);
         }
 
         public Vector2f GetTileCenter(Tile tile)
@@ -487,15 +494,15 @@ namespace Client
                     {
                         Vector2f center = GetTileCenter(x, y);
                         bool hot = value.Number == 6 || value.Number == 8;
-                        Color ink = hot ? TokenRed : TokenInk;
+                        Color ink = hot ? Color.Red : Color.Black;
 
                         // Soft shadow, a rim and an ivory face
                         if (DrawTokenShadows)
                         {
                             _tokenBase.Radius = _tokenRadius + 1;
                             _tokenBase.Origin = new Vector2f(_tokenBase.Radius, _tokenBase.Radius);
-                            _tokenBase.FillColor = new Color(0, 0, 0, 55);
-                            _tokenBase.Position = center + new Vector2f(2, 4);
+                            _tokenBase.FillColor = new Color(0, 0, 0, 70);
+                            _tokenBase.Position = center + new Vector2f(3, 3);
                             target.Draw(_tokenBase, states);
                         }
                         _tokenBase.Radius = _tokenRadius;
@@ -503,25 +510,33 @@ namespace Client
                         _tokenBase.FillColor = TokenRim;
                         _tokenBase.Position = center;
                         target.Draw(_tokenBase, states);
-                        _tokenBase.Radius = _tokenRadius - 3.5f;
+                        _tokenBase.Radius = _tokenRadius - 2f;
                         _tokenBase.Origin = new Vector2f(_tokenBase.Radius, _tokenBase.Radius);
                         _tokenBase.FillColor = TokenFace;
                         target.Draw(_tokenBase, states);
 
                         // The number a bit above the middle, the probability pips below it
-                        _tokenText.DisplayedString = value.Number.ToString();
+                        string number = value.Number.ToString();
+                        _tokenText.DisplayedString = number;
                         _tokenText.FillColor = ink;
+
+                        // Centered on the ink, except the 11: the flags of its ones stretch the ink box to the left, so its
+                        // stems would sit right of the middle. Open Sans figures are tabular with the 1 in the middle of
+                        // its advance, so the 11 is centered on its advance width instead.
                         FloatRect bounds = _tokenText.GetLocalBounds();
-                        _tokenText.Origin = new Vector2f(bounds.Left + bounds.Width / 2.0f, bounds.Top + bounds.Height / 2.0f);
-                        _tokenText.Position = ClientUtils.RoundVec2f(center + new Vector2f(0, DrawYieldPoints ? -_tokenRadius * 0.12f : 0));
+                        float originX = bounds.Left + bounds.Width / 2.0f;
+                        if (number == "11")
+                            originX = (_tokenText.FindCharacterPos((uint)number.Length).X - _tokenText.FindCharacterPos(0).X) / 2.0f;
+                        _tokenText.Origin = new Vector2f(originX, bounds.Top + bounds.Height / 2.0f);
+                        _tokenText.Position = ClientUtils.RoundVec2f(center + new Vector2f(0, DrawYieldPoints ? -_tokenRadius * 0.08f : 0));
                         target.Draw(_tokenText, states);
 
                         if (DrawYieldPoints)
                         {
                             int yieldPoints = value.YieldPoints;
-                            float spacing = _tokenRadius / 5.2f;
+                            float spacing = _tokenRadius / 6f;
                             _yieldPoint.FillColor = ink;
-                            _yieldPoint.Position = center + new Vector2f(-spacing * (yieldPoints - 1) / 2f, _tokenRadius * 0.6f);
+                            _yieldPoint.Position = center + new Vector2f(-spacing * (yieldPoints - 1) / 2f, _tokenRadius * 0.64f);
                             for (int i = 0; i < yieldPoints; i++)
                             {
                                 target.Draw(_yieldPoint, states);
@@ -585,6 +600,9 @@ namespace Client
                     target.Draw(_intersectionMarker, states);
                 }
             }
+
+            // Things that belong under the buildings, like previews of roads
+            BeforeBuildings?.Invoke(target, states);
 
             // Draw intersection buildings
             foreach (Intersection intersection in Board.Intersections)
