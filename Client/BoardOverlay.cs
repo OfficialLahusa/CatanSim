@@ -28,6 +28,9 @@ namespace Client
         public const float PulsePeriod = 1.6f;
         private const float MinOpacity = 0.45f, MaxOpacity = 0.9f, MinScale = 0.94f, MaxScale = 1.06f;
 
+        // Road ghosts are thin, so they pulse over a wider and higher range than the circles
+        private const float MinRoadOpacity = 0.45f, MaxRoadOpacity = 0.95f;
+
         // Road, settlement and city ghosts share one light gray that no player color uses, so the legal spots stand out from
         // the pieces; only the hovered one shows the piece in the player's color. The circles stay translucent (at most
         // about 75% opaque) even at the top of the pulse.
@@ -150,9 +153,9 @@ namespace Client
                 _renderer.AppendRoad(_roadVertices, board.Edges[spot.Target.Index], Theme.Heat(spot.Intensity));
 
             // Road ghosts pulse in opacity only; the hovered one is solid
-            float opacity = MinOpacity + (MaxOpacity - MinOpacity) * Pulse;
+            float opacity = MinRoadOpacity + (MaxRoadOpacity - MinRoadOpacity) * Pulse;
             foreach (Ghost ghost in Ghosts.Where(g => g.Target.Kind == TargetKind.Edge))
-                _renderer.AppendRoad(_roadVertices, board.Edges[ghost.Target.Index], Hovered == ghost.Target ? ghost.Color : Theme.WithAlpha(GhostColor, opacity * 0.8f));
+                _renderer.AppendRoad(_roadVertices, board.Edges[ghost.Target.Index], Hovered == ghost.Target ? ghost.Color : Theme.WithAlpha(GhostColor, opacity));
             target.Draw(_roadVertices);
         }
 
