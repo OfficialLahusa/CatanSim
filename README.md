@@ -34,7 +34,7 @@ F12 saves a screenshot. The developer tools (menu) hold map generation, renderin
 The ML-based agents and the client's state evaluation use an ONNX state value network hosted at [Lahusa/catansim-state-value-net](https://huggingface.co/Lahusa/catansim-state-value-net). The build downloads it into `Agents/Artifacts/` when it is missing and verifies its checksum (disable with `-p:DownloadStateValueNet=false`). The deployed model is set by `StateValueNetModel` in `Agents/Agents.csproj`.
 
 ## Credits
-Developed by Lasse Huber-Saffer.
+Developed by Lasse Huber-Saffer. Since 2026, development has been supported by AI coding assistants; the design, decisions and review are my own.
 
 Based upon "CATAN", a creation and design of Klaus Teuber and property of CATAN GmbH.
 
