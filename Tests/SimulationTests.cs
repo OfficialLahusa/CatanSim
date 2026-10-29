@@ -467,6 +467,49 @@ namespace Tests
         }
 
         [Fact]
+        public async Task RemotePlayersAndAgentsPlayAWholeGame()
+        {
+            // Seats 1 and 3 play from their own connections, the match's agents play the random seats
+            using Match match = NewMatch([SeatKind.Random, SeatKind.Human, SeatKind.Random, SeatKind.Human], 15);
+            match.Handle(Admin, new SetPlayback(new PlaybackState(false, false, 0)));
+            match.Start();
+            ServerConfig config = Config() with
+            {
+                Tokens = [.. Config().Tokens, new TokenEntry(ServerConfig.HashToken("seat4-secret"), Role.Player, 3), new TokenEntry(ServerConfig.HashToken("seat2b-secret"), Role.Player, 1)]
+            };
+            await using SimulationServer server = await SimulationServer.StartAsync(match, config);
+            using RemoteSimulation red = await RemoteSimulation.ConnectAsync(server.Uri, new Hello("Red", "seat2b-secret", Role.Player, 1, null));
+            using RemoteSimulation orange = await RemoteSimulation.ConnectAsync(server.Uri, new Hello("Orange", "seat4-secret", Role.Player, 3, null));
+
+            Random random = new Random(15);
+            int sentAt = -1;
+            System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+            while (!orange.Game.Record.State.HasEnded && clock.Elapsed.TotalSeconds < 120)
+            {
+                red.ProcessEvents();
+                orange.ProcessEvents();
+
+                // A player moves once its copy shows its turn, one move per position
+                foreach (RemoteSimulation player in new[] { red, orange })
+                {
+                    GameState state = player.Game.Record.State;
+                    int seat = player.Session!.Seat!.Value;
+                    if (state.HasEnded || !state.CanPlayerAct(seat) || Acting(state) != seat || player.Game.Record.Version == sentAt) continue;
+                    List<Action> legal = LegalActionProvider.GetActionsForState(state, (sbyte)seat);
+                    player.Send(new PlayMove(legal[random.Next(legal.Count)]));
+                    sentAt = player.Game.Record.Version;
+                }
+                Thread.Sleep(2);
+            }
+
+            Assert.True(orange.Game.Record.State.HasEnded, "the game did not end in time");
+            Assert.True(Pump(red, () => red.Game.Record.History.Count == match.Record.History.Count));
+            Assert.Equal(match.Record.State, red.Game.Record.State);
+            Assert.Equal(match.Record.State, orange.Game.Record.State);
+            Assert.Empty(red.Errors.Where(e => !e.Contains("not a legal move")));
+        }
+
+        [Fact]
         public async Task TheHostPlaysThroughTheSameMatch()
         {
             // A client hosting a game: its local simulation and the remote players share one match
