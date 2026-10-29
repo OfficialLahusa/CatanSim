@@ -179,15 +179,8 @@
 
 ## Future Enhancements
 - Simulation Server: gesamte Spiel- und Simulationslogik im Server, Client nur Darstellung und Eingabe, auch headless (Duelle, Benchmarks, Datensammlung, Self-Play)
-	- Client startet einen internen Server oder verbindet sich übers Netzwerk
-	- Bench aus dem Scratch-Ordner übernehmen: Duelle, gespiegelte Paare (mit Start-Offset), Builder-Checks, parallele Spiele mit Iterationsbudget, Statistik
-	- Schichten: Common (Engine) => Agents => neue Bibliothek Simulation (Match, History, Undo, Runner, Event-Stream); ISimulation mit LocalSimulation und RemoteSimulation; Protocol; Server- und Client-exe
-	- Server autoritativ, schickt angewandte Actions mit aufgelöstem Zufall, Client spielt sie nach; Hidden Information später als Observation-Filter
-	- Protokoll WebSocket + JSON (Framing, Ping, TLS gratis, sprachneutral für Bridges), ersetzt Common/Net/Packet.cs
-	- Rollen Admin, Spectator, Player, Agent/Bridge; lokal (Server im Client) automatisch Admin
-		- Netzwerk: Tokens als Hash in der Konfiguration, im hello oder Authorization-Header, außerhalb des LAN nur wss; Rolle bleibt über Reconnects, Spectator optional ohne Token
-		- Prüfung bei jedem Kommando, Events pro Session gefiltert
-	- Migration: 1. Simulation aus GameScreen herauslösen, 2. ISimulation/LocalSimulation, 3. Bench als Headless-Kommandos, 4. Netzwerk und "Mit Server verbinden"
+	- Umgesetzt: Bibliothek Simulation (Match mit History/Undo/Edits, AgentRunner, Event-Stream, LocalSimulation/RemoteSimulation), Protokoll JSON über WebSocket (States/Actions als Save-File-YAML), Server-Exe mit Admin-Konsole, Rollen Admin/Player/Agent/Spectator mit gehashten Tokens und Reconnect; Client spielt immer über ISimulation, hostet oder tritt bei
+	- Offen: Events pro Session nach Hidden Information filtern (braucht StateView, s. oben; bis dahin sehen Clients den vollen State), Bench als Headless-Kommandos (Builder-Checks, Statistik), mehrere Matches pro Server und Lobby, wss/TLS hinter einem Reverse Proxy dokumentieren
 - Interface für JSettlers Agents/Server
 - Tabletalking über LLMs
 	- Zusätzlich zu Value Functions von einem Basisbot
