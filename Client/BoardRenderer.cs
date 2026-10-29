@@ -400,7 +400,7 @@ namespace Client
                 _tokenText.DisplayedString = number;
                 _tokenText.FillColor = ink;
 
-                // Optically centered: halfway between the middle of the ink box and the ink's centroid, so open
+                // Optically centered: a quarter of the way from the middle of the ink box to the ink's centroid, so open
                 // shapes like 3, 4 and 7 (or the flags of an 11) don't look shifted against the pips below
                 FloatRect bounds = _tokenText.GetLocalBounds();
                 float originX = bounds.Left + bounds.Width / 2.0f + OpticalShift(value) * _tokenText.CharacterSize;
@@ -417,7 +417,8 @@ namespace Client
         private readonly Dictionary<int, float> _opticalShift = [];
 
         /// <summary>
-        /// Half the offset of a number's ink centroid from the middle of its ink box, measured once from a large rendering
+        /// A quarter of the offset of a number's ink centroid from the middle of its ink box, measured once from a large
+        /// rendering (half the offset pushed open shapes like the 3 visibly too far)
         /// </summary>
         private float OpticalShift(int number)
         {
@@ -443,7 +444,7 @@ namespace Client
                 }
             }
             float centroid = weight > 0 ? (float)(sum / weight) : bounds.Left + bounds.Width / 2;
-            shift = 0.5f * (centroid - (bounds.Left + bounds.Width / 2)) / size;
+            shift = 0.25f * (centroid - (bounds.Left + bounds.Width / 2)) / size;
             _opticalShift[number] = shift;
             return shift;
         }
