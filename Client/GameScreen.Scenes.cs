@@ -53,7 +53,8 @@ namespace Client
         [System.Runtime.InteropServices.DllImport("opengl32.dll")]
         private static extern void glReadPixels(int x, int y, int width, int height, uint format, uint type, byte[] pixels);
 
-        public static readonly string[] Scenes = ["setup", "main", "road", "city", "roll", "discard", "robber", "trade", "devcards", "spectate", "edit", "end"];
+        public static readonly string[] Scenes = ["setup", "main", "road", "city", "roll", "discard", "robber", "victim", "trade", "devcards", "plenty",
+            "monopoly", "newgame", "save", "developer", "curtain", "spectate", "edit", "end"];
 
         /// <summary>
         /// Plays fast agent moves up to a situation and sets the mode for it. Seat 4 (Orange) is the human.
@@ -86,6 +87,12 @@ namespace Client
                 case "city":
                 case "trade":
                 case "devcards":
+                case "plenty":
+                case "monopoly":
+                case "newgame":
+                case "save":
+                case "developer":
+                case "curtain":
                 case "edit":
                     PlayUntil(() => HumanMainPhase(4));
                     if (scene == "road")
@@ -120,6 +127,29 @@ namespace Client
                         SendEdit(new BoardEdit("gave Orange development cards", 3, State, after));
                         _dialog = Dialog.DevelopmentCard;
                     }
+                    else if (scene is "plenty" or "monopoly")
+                    {
+                        // A card bought in an earlier turn, so it can be played now
+                        DevelopmentCardType card = scene == "plenty" ? DevelopmentCardType.YearOfPlenty : DevelopmentCardType.Monopoly;
+                        GameState after = new GameState(State);
+                        after.Players[3].DevelopmentCards.Add(card, 1);
+                        after.DevelopmentBank.Remove(card, 1);
+                        SendEdit(new BoardEdit($"gave Orange a {card.GetName().ToLower()} card", 3, State, after));
+                        _dialog = scene == "plenty" ? Dialog.YearOfPlenty : Dialog.Monopoly;
+                    }
+                    else if (scene == "newgame")
+                    {
+                        Array.Copy(Seats, _newGameSeats, PLAYER_COUNT);
+                        _dialog = Dialog.NewGame;
+                    }
+                    else if (scene == "save") _openSaveModal = true;
+                    else if (scene == "developer") _showDeveloperWindow = true;
+                    else if (scene == "curtain")
+                    {
+                        // Hot seat: Blue is a second human at this screen, and the screen waits to be passed to Orange
+                        Send(new Simulation.SetSeat(0, SeatKind.Human));
+                        _curtainFor = 3;
+                    }
                     else if (scene == "edit")
                     {
                         SetMode(InteractionMode.Edit);
@@ -130,8 +160,11 @@ namespace Client
                 case "roll":
                     PlayUntil(() => ActingPlayer == 3 && State.Turn.MustRoll && State.Turn.RoundCounter >= 4
                         && Legal(3).Any(a => a is RollAction));
+                    // The roll's flying cards and lit tiles stay: they are what the scene is for
+                    ClearSceneEffects();
                     RollOrEndTurn();
-                    break;
+                    ApplyPlaybackForMode(playing: false);
+                    return;
 
                 case "discard":
                     for (int game = 0; game < 50 && !(ActingPlayer == 3 && Legal(3).Any(a => a is DiscardAction)); game++)
@@ -148,6 +181,24 @@ namespace Client
                         PlayUntil(() => ActingPlayer == 3 && Legal(3).Any(a => a is RobberAction));
                     }
                     break;
+
+                case "victim":
+                    {
+                        // A robber move with a tile where two or more players could be robbed
+                        int? Contested() => ActingPlayer == 3 ? Legal(3).Where(a => a is RobberAction).GroupBy(a => TargetOf(a))
+                            .Where(g => g.Count() > 1).Select(g => g.Key?.Index).FirstOrDefault() : null;
+                        for (int game = 0; game < 50 && Contested() == null; game++)
+                        {
+                            if (game > 0) NewGame();
+                            PlayUntil(() => Contested() != null, 20000);
+                        }
+                        if (Contested() is int tile)
+                        {
+                            _victimTile = tile;
+                            _dialog = Dialog.Victim;
+                        }
+                        break;
+                    }
 
                 case "spectate":
                     PlayUntil(() => State.Turn.RoundCounter >= 5 && !State.Turn.MustRoll && State.Turn.TypeOfRound == TurnState.RoundType.Normal);

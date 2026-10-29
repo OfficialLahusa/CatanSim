@@ -507,8 +507,7 @@ namespace Client
                     for (int i = 0; i < amount && sent[owner, resourceIdx] < awarded[owner, resourceIdx]; i++)
                     {
                         sent[owner, resourceIdx]++;
-                        Vector2i from = _window.MapCoordsToPixel(tileCenter, _mapView);
-                        _particles.Add(resource, new System.Numerics.Vector2(from.X, from.Y) / GuiImpl.UiScale, () => CardDestination(owner, resource), delay);
+                        _particles.Add(resource, () => ScreenPosition(tileCenter), () => CardDestination(owner, resource), delay);
                         delay += 0.12f;
                     }
                 }
@@ -878,6 +877,15 @@ namespace Client
         /// <summary>
         /// Saves the game into memory and loads it again (a check of the save file format)
         /// </summary>
+        /// <summary>
+        /// A point on the map in HUD units, where it is on screen now
+        /// </summary>
+        private System.Numerics.Vector2 ScreenPosition(Vector2f mapPoint)
+        {
+            Vector2i pixel = _window.MapCoordsToPixel(mapPoint, _mapView);
+            return new System.Numerics.Vector2(pixel.X, pixel.Y) / GuiImpl.UiScale;
+        }
+
         public void SerializeLoop()
         {
             SaveFile saveFile = new SaveFile(State, Record.ActionsSinceLastEdit(), Record.RedoActionsUntilEdit());
