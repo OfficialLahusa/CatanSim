@@ -686,7 +686,8 @@ namespace Client
         {
             min = new Vector2(Display.X / 2 - size.X / 2, Display.Y / 2 - size.Y / 2 - 20);
             ImDrawListPtr dl = Theme.BeginHud(id, min - new Vector2(16), size + new Vector2(32));
-            ImGui.SetWindowFocus();
+            // Stay in front of the other HUD windows, but not of a combo's list opened in the dialog
+            if (!ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId)) ImGui.SetWindowFocus();
             Color border = colorSeat is int s ? Theme.PlayerColor(s) : Theme.BorderLight;
             Theme.Glow(dl, min, min + size, border, 16, 0.8f);
             Theme.DrawPanel(dl, min, min + size, border, 16, new Color(15, 33, 86, 250), 2);
