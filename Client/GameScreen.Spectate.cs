@@ -294,18 +294,20 @@ namespace Client
 
             Theme.DrawText(dl, Theme.Regular13, min + new Vector2(300, 48), Theme.TextMuted, "Prior (net)");
             Theme.DrawText(dl, Theme.Regular13, min + new Vector2(450, 48), Theme.TextMuted, hasVisits ? "Visits (search)" : "Visits (no search)");
-            float maxShare = Math.Max(1e-6f, analysis.Max(m => Math.Max(m.Prior, m.Visits ?? 0)));
+            // The last row sums up the moves that don't fit: the bars are scaled to it too, so it stays inside the panel
             int rows = Math.Min(7, analysis.Count);
+            bool summed = analysis.Count > rows;
+            float restPrior = summed ? analysis.Skip(rows - 1).Sum(m => m.Prior) : 0;
+            float? restVisits = summed && hasVisits ? analysis.Skip(rows - 1).Sum(m => m.Visits ?? 0) : null;
+            float maxShare = Math.Max(1e-6f, Math.Max(analysis.Take(rows).Max(m => Math.Max(m.Prior, m.Visits ?? 0)), Math.Max(restPrior, restVisits ?? 0)));
             for (int i = 0; i < rows; i++)
             {
                 MoveAnalysis move = analysis[i];
                 float y = min.Y + 72 + i * 16;
                 bool top = i == 0;
                 string label = DescribeMove(move.Move);
-                if (i == rows - 1 && analysis.Count > rows)
+                if (i == rows - 1 && summed)
                 {
-                    float restPrior = analysis.Skip(rows - 1).Sum(m => m.Prior);
-                    float? restVisits = hasVisits ? analysis.Skip(rows - 1).Sum(m => m.Visits ?? 0) : null;
                     move = new MoveAnalysis(move.Move, restPrior, restVisits, null);
                     label = $"{analysis.Count - rows + 1} more moves";
                 }
