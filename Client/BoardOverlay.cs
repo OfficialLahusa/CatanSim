@@ -178,12 +178,7 @@ namespace Client
                         float radius = _renderer.SideLength * 0.17f;
                         if (hovered)
                         {
-                            // The piece itself in the player's color; a city on a dark disc that covers the settlement it replaces
-                            if (ghost.Sprite == TextureAtlas.Sprite.City)
-                            {
-                                DrawDisc(target, center, radius * 1.5f, new Color(8, 25, 76, 200));
-                                DrawRing(target, center, radius * 1.5f, 3, GhostColor);
-                            }
+                            // The piece itself in the player's color, without a disc behind it
                             DrawSprite(target, ghost.Sprite, center, 1.1f, ghost.Color);
                         }
                         else if (ghost.Sprite == TextureAtlas.Sprite.City)
