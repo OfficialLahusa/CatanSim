@@ -128,11 +128,13 @@ namespace Client
             if (_stateValueNet == null)
                 Console.WriteLine($"Value net not found at \"{StateValueNet.DefaultModelPath}\": net evaluation, GreedyAgent and MCTSAgent are unavailable.");
 
-            // A local match: three agents and the human on seat 4
+            // A local match: three agents and the human on a random seat, so they don't always start last
             SeatKind bot = _stateValueNet != null ? SeatKind.MctsMedium : SeatKind.Builder;
             GameState first = new GameState(MapGenerator.GenerateRandomClassic(), PLAYER_COUNT);
             first.Settings.FreeTrade = true;
-            _sim = StartLocal(first, [bot, bot, bot, SeatKind.Human]);
+            SeatKind[] seats = Enumerable.Repeat(bot, PLAYER_COUNT).ToArray();
+            seats[Random.Shared.Next(PLAYER_COUNT)] = SeatKind.Human;
+            _sim = StartLocal(first, seats);
 
             _renderer = new BoardRenderer(State.Board, 120, 20);
             _overlay = new BoardOverlay(_renderer);
@@ -384,6 +386,7 @@ namespace Client
                         {
                             _overlay.ClearRoll();
                         }
+                        ShowCardEffects(action);
                         _actionLogger.Log(action, State);
                         if (TargetOf(action) is BoardTarget placed)
                             _overlay.ShowPlacement(placed, action is RobberAction ? Color.White : Theme.PlayerColor(action.PlayerIndex));
@@ -491,7 +494,7 @@ namespace Client
         }
         #endregion
 
-        #region Roll effects
+        #region Card effects
         /// <summary>
         /// Rings on the producing tiles and a card flying to each receiving player per yield
         /// </summary>
@@ -529,11 +532,141 @@ namespace Client
                     for (int i = 0; i < amount && sent[owner, resourceIdx] < awarded[owner, resourceIdx]; i++)
                     {
                         sent[owner, resourceIdx]++;
-                        _particles.Add(resource, () => ScreenPosition(tileCenter), () => CardDestination(owner, resource), delay);
+                        _particles.Add(resource, () => ScreenPosition(tileCenter), () => CardPosition(owner, resource), delay);
                         delay += 0.12f;
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Cards flying where a move sends them: the starting settlement's yields from their tiles, building costs into the
+        /// built piece, other payments to and from the bank, stolen and monopolized cards and trades between players. A card
+        /// the viewer may not know flies face down, as the log hides it.
+        /// </summary>
+        private void ShowCardEffects(Action action)
+        {
+            int player = action.PlayerIndex;
+            float delay = 0;
+            void Fly(FlyingCard card, Func<System.Numerics.Vector2> from, Func<System.Numerics.Vector2> to, float step = 0.1f)
+            {
+                _particles.Add(card, from, to, delay);
+                delay += step;
+            }
+            Func<System.Numerics.Vector2> Hand(int seat, FlyingCard card) => () => CardPosition(seat, card);
+            Func<System.Numerics.Vector2> Spot(BoardTarget target)
+            {
+                Vector2f point = _overlay.Position(State.Board, target);
+                return () => ScreenPosition(point);
+            }
+            void Pay(Func<System.Numerics.Vector2> to, params ResourceCardType[] cards)
+            {
+                foreach (ResourceCardType card in cards) Fly(card, Hand(player, card), to, 0.08f);
+            }
+            void BankTrade(ResourceCardType input, int ratio, ResourceCardType output)
+            {
+                Pay(BankPosition, [.. Enumerable.Repeat(input, ratio)]);
+                delay += 0.15f;
+                Fly(output, BankPosition, Hand(player, output));
+            }
+            bool Sees(params int[] players) => EventLog.Viewer is not int viewer || players.Contains(viewer);
+            static IEnumerable<ResourceCardType> Each(CardSet<ResourceCardType> cards) =>
+                CardTypeExtensions.ResourceTypes.SelectMany(type => Enumerable.Repeat(type, (int)cards.Get(type)));
+
+            switch (action)
+            {
+                case SecondInitialSettlementAction settlement:
+                    {
+                        List<Tile> tiles = [.. State.Board.Adjacency.GetTiles(State.Board.Intersections[settlement.IntersectionIndex]).Where(t => t.HasYield())];
+                        foreach (ResourceCardType card in settlement.History!.InitialYields)
+                        {
+                            Tile? tile = tiles.FirstOrDefault(t => t.Type.ToCardType() == card);
+                            if (tile == null) continue;
+                            tiles.Remove(tile);
+                            Vector2f center = _renderer.GetTileCenter(tile);
+                            Fly(card, () => ScreenPosition(center), Hand(player, card), 0.12f);
+                        }
+                        break;
+                    }
+
+                case RoadAction road when !road.History!.WasFree:
+                    Pay(Spot(TargetOf(road)!.Value), ResourceCardType.Lumber, ResourceCardType.Brick);
+                    break;
+
+                case SettlementAction:
+                    Pay(Spot(TargetOf(action)!.Value), ResourceCardType.Lumber, ResourceCardType.Brick, ResourceCardType.Wool, ResourceCardType.Grain);
+                    break;
+
+                case CityAction:
+                    Pay(Spot(TargetOf(action)!.Value), ResourceCardType.Grain, ResourceCardType.Grain, ResourceCardType.Ore, ResourceCardType.Ore, ResourceCardType.Ore);
+                    break;
+
+                case BuyDevelopmentCardAction buy:
+                    {
+                        Pay(BankPosition, ResourceCardType.Wool, ResourceCardType.Grain, ResourceCardType.Ore);
+                        delay += 0.15f;
+                        FlyingCard drawn = Sees(player) ? buy.History!.DrawnType : FlyingCard.HiddenDevelopment;
+                        Fly(drawn, BankPosition, Hand(player, drawn));
+                        break;
+                    }
+
+                case RobberAction robber when robber.History!.StolenCard is ResourceCardType stolen && robber.TargetPlayerIndex is sbyte victim:
+                    {
+                        FlyingCard card = Sees(player, victim) ? stolen : FlyingCard.Hidden;
+                        delay = 0.2f;
+                        Fly(card, Hand(victim, card), Hand(player, card));
+                        break;
+                    }
+
+                case MonopolyAction monopoly:
+                    foreach ((int victim, uint amount) in monopoly.History!.TransferredCards)
+                    {
+                        for (int i = 0; i < amount; i++)
+                            Fly(monopoly.ChosenType, Hand(victim, monopoly.ChosenType), Hand(player, monopoly.ChosenType), 0.08f);
+                    }
+                    break;
+
+                case YearOfPlentyAction plenty:
+                    Fly(plenty.FirstChoice, BankPosition, Hand(player, plenty.FirstChoice));
+                    if (plenty.SecondChoice is ResourceCardType second) Fly(second, BankPosition, Hand(player, second));
+                    break;
+
+                case DiscardAction discard:
+                    Pay(BankPosition, [.. Each(discard.SelectedCards)]);
+                    break;
+
+                case FourToOneTradeAction trade:
+                    BankTrade(trade.InputType, 4, trade.OutputType);
+                    break;
+
+                case ThreeToOneTradeAction trade:
+                    BankTrade(trade.InputType, 3, trade.OutputType);
+                    break;
+
+                case TwoToOneTradeAction trade:
+                    BankTrade(trade.InputType, 2, trade.OutputType);
+                    break;
+
+                case ConfirmTradeAction confirm when confirm.History?.TermsWith(confirm.Partner) is { } terms:
+                    foreach (ResourceCardType card in Each(terms.give)) Fly(card, Hand(player, card), Hand(confirm.Partner, card), 0.08f);
+                    foreach (ResourceCardType card in Each(terms.get)) Fly(card, Hand(confirm.Partner, card), Hand(player, card), 0.08f);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Where cards go to and come from the bank: the middle of the board
+        /// </summary>
+        private System.Numerics.Vector2 BankPosition()
+        {
+            Vector2f sum = new Vector2f();
+            int tiles = 0;
+            foreach (Tile tile in State.Board.Map.Where(t => t.IsLandTile()))
+            {
+                sum += _renderer.GetTileCenter(tile);
+                tiles++;
+            }
+            return ScreenPosition(tiles > 0 ? sum / tiles : sum);
         }
         #endregion
 

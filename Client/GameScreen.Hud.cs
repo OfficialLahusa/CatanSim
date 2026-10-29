@@ -27,6 +27,7 @@ namespace Client
         // Where cards fly to: the card icon of each seat panel and the stacks of the own hand, from the last frame
         private readonly Vector2[] _seatCardAnchor = new Vector2[PLAYER_COUNT];
         private readonly Dictionary<ResourceCardType, Vector2> _handStackCenter = [];
+        private readonly Dictionary<DevelopmentCardType, Vector2> _handDevelopmentStackCenter = [];
         private Vector2 _handAnchor;
 
         // Hover animation of the hand's card stacks
@@ -498,11 +499,12 @@ namespace Client
         /// <summary>
         /// Where a card flies to: the stack in the own hand when its owner is the viewer, the seat panel otherwise
         /// </summary>
-        private Vector2 CardDestination(int player, ResourceCardType type)
+        private Vector2 CardPosition(int player, FlyingCard card)
         {
-            if (_mode == InteractionMode.Play && Viewer == player)
-                return _handStackCenter.TryGetValue(type, out Vector2 stack) ? stack : _handAnchor;
-            return _seatCardAnchor[player];
+            if (_mode != InteractionMode.Play || Viewer != player) return _seatCardAnchor[player];
+            if (card.Development is DevelopmentCardType d && _handDevelopmentStackCenter.TryGetValue(d, out Vector2 devStack)) return devStack;
+            if (card.Resource is ResourceCardType r && _handStackCenter.TryGetValue(r, out Vector2 stack)) return stack;
+            return _handAnchor;
         }
 
         private void DrawHandPanel()
@@ -548,6 +550,7 @@ namespace Client
             float top = min.Y + 56;
             float dt = ImGui.GetIO().DeltaTime;
             _handStackCenter.Clear();
+            _handDevelopmentStackCenter.Clear();
 
             int stackIdx = 0;
             foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
@@ -593,6 +596,7 @@ namespace Client
                     DrawTooltip(dl, new Vector2(x + width / 2, top - lift - 16), legal ? $"{tip} · click to play" : tip);
                 }
                 if (clicked && legal) PlayDevelopmentCard(seat, type);
+                _handDevelopmentStackCenter[type] = front + cardSize / 2;
                 x += width + gap;
             }
 
