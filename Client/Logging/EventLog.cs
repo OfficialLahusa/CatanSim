@@ -20,6 +20,11 @@ namespace Client.Logging
 
         private bool _scrollToBottom = false;
 
+        /// <summary>
+        /// The player whose hidden information the log may show, or null for all of it
+        /// </summary>
+        public static int? Viewer { get; set; }
+
         public EventLog()
         {
             _sections = new List<List<ILogEntry>>();
@@ -28,7 +33,12 @@ namespace Client.Logging
 
         public void Draw()
         {
-            ImGui.BeginChild("ScrollLog", new Vector2(250, 350), true, ImGuiWindowFlags.NavFlattened);
+            Draw(new Vector2(250, 350), true);
+        }
+
+        public void Draw(Vector2 size, bool border)
+        {
+            ImGui.BeginChild("ScrollLog", size, border, ImGuiWindowFlags.NavFlattened);
 
             // Draw closed sections
             foreach(List<ILogEntry> section in _sections)
@@ -47,7 +57,7 @@ namespace Client.Logging
 
             if (_scrollToBottom)
             {
-                ImGui.SetScrollHereY();
+                ImGui.SetScrollHereY(1.0f);
 
                 _scrollToBottom = false;
             }

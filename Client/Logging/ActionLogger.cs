@@ -1,15 +1,15 @@
-﻿using Common;
+﻿using Client.UI;
+using Common;
 using Common.Actions;
 using SFML.Graphics;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Action = Common.Actions.Action;
 
 namespace Client.Logging
 {
+    /// <summary>
+    /// Writes every played move to the event log as a short sentence ("Blue rolled 8 (5+3)"), one section per move so undo can
+    /// take it back. Hidden information (stolen cards, drawn development cards) is only named for the players who know it.
+    /// </summary>
     public class ActionLogger
     {
         private EventLog _log;
@@ -29,206 +29,157 @@ namespace Client.Logging
             _prevPlayer = 0;
         }
 
+        private static (string, Color) Name(int player) => (Theme.PlayerName(player), Theme.PlayerTextColor(player));
+
+        private static (string, Color) Plain(string text) => (text, Theme.TextSoft);
+
+        private static (string, Color) Muted(string text) => (text, Theme.TextMuted);
+
+        private void Line(params (string, Color)[] segments) => _log.WriteLine(new SentenceEntry(segments));
+
+        private static string Card(ResourceCardType type) => type.GetName().ToLower();
+
+        private static string Cards(uint amount, ResourceCardType type) => amount == 1 ? $"1 {Card(type)}" : $"{amount} {Card(type)}";
+
         public void Log(Action action, GameState state)
         {
-            Color playerColor = ColorPalette.GetPlayerColor(action.PlayerIndex);
+            int player = action.PlayerIndex;
 
-            // Action entry
             switch (action)
             {
-                case EndTurnAction endTurnAction:
-                    _log.WriteLine(new ColoredStrEntry("Ended turn", playerColor));
+                case EndTurnAction:
+                    Line(Name(player), Muted(" ended the turn"));
                     break;
 
                 case RollAction rollAction:
                     {
-                        _log.WriteLine(new ColoredStrEntry($"Rolled {rollAction.History!.RollResult.Total} ({rollAction.History!.RollResult.First}+{rollAction.History!.RollResult.Second})", playerColor));
-
                         RollAction.RollActionHistory outcome = rollAction.History!;
+                        Line(Name(player), Plain($" rolled {outcome.RollResult.Total}"), Muted($" ({outcome.RollResult.First}+{outcome.RollResult.Second})"));
 
-                        // Summarize yields
-                        if (!outcome.TriggeredRobber)
+                        if (outcome.TriggeredRobber || outcome.AwardedYields == null) break;
+
+                        // Who received what
+                        uint[,] yields = outcome.AwardedYields;
+                        for (int playerIdx = 0; playerIdx < yields.GetLength(0); playerIdx++)
                         {
-                            uint[,] yieldSummary = outcome.AwardedYields!;
-
-                            for (int playerIdx = 0; playerIdx < yieldSummary.GetLength(0); playerIdx++)
+                            List<string> received = [];
+                            for (int resourceIdx = 0; resourceIdx < yields.GetLength(1); resourceIdx++)
                             {
-                                List<(uint, string)> yieldEntries = new List<(uint, string)>();
-
-                                for (int resourceIdx = 0; resourceIdx < yieldSummary.GetLength(1); resourceIdx++)
-                                {
-                                    uint amount = yieldSummary[playerIdx, resourceIdx];
-
-                                    if (amount == 1)
-                                    {
-                                        yieldEntries.Add((amount, CardSet<ResourceCardType>.Values[resourceIdx].GetName().ToLower()));
-                                    }
-                                    else if (amount > 1)
-                                    {
-                                        yieldEntries.Add((amount, $"{amount} {CardSet<ResourceCardType>.Values[resourceIdx].GetName().ToLower()}"));
-                                    }
-                                }
-
-                                if (yieldEntries.Count > 0)
-                                {
-                                    List<string> yieldStrings = yieldEntries.OrderByDescending(x => x.Item1).Select(x => x.Item2).ToList();
-
-                                    _log.WriteLine(new ColoredStrEntry("Received " + string.Join(", ", yieldStrings), ColorPalette.GetPlayerColor(playerIdx)));
-                                }
+                                if (yields[playerIdx, resourceIdx] > 0)
+                                    received.Add("+" + Cards(yields[playerIdx, resourceIdx], CardSet<ResourceCardType>.Values[resourceIdx]));
                             }
-
-                            if (outcome.RobbedYields > 0)
-                            {
-                                _log.WriteLine(new ColoredStrEntry($"The robber blocked {outcome.RobbedYields} yield" + (outcome.RobbedYields > 1 ? "s" : ""), playerColor));
-                            }
-
-                            if (outcome.CappedYields > 0)
-                            {
-                                _log.WriteLine(new ColoredStrEntry($"Bank stock limited {outcome.CappedYields} yield" + (outcome.CappedYields > 1 ? "s" : ""), playerColor));
-                            }
+                            if (received.Count > 0)
+                                Line(Plain("   "), Name(playerIdx), Plain(" " + string.Join(", ", received)));
                         }
 
+                        if (outcome.RobbedYields > 0)
+                            Line(Muted($"   The robber blocked {outcome.RobbedYields} yield" + (outcome.RobbedYields > 1 ? "s" : "")));
+                        if (outcome.CappedYields > 0)
+                            Line(Muted($"   The bank ran short by {outcome.CappedYields} card" + (outcome.CappedYields > 1 ? "s" : "")));
                         break;
                     }
-                    
 
                 case DiscardAction discardAction:
-                    StringBuilder sb = new StringBuilder();
-                    foreach (ResourceCardType resourceType in CardSet<ResourceCardType>.Values)
                     {
-                        for (int i = 0; i < discardAction.SelectedCards.Get(resourceType); i++)
+                        List<string> cards = [];
+                        foreach (ResourceCardType type in CardSet<ResourceCardType>.Values)
                         {
-                            sb.Append(resourceType.GetAbbreviation());
+                            uint amount = discardAction.SelectedCards.Get(type);
+                            if (amount > 0) cards.Add(Cards(amount, type));
                         }
+                        Line(Name(player), Plain($" discarded {discardAction.SelectedCards.Count()} cards"), Muted($" ({string.Join(", ", cards)})"));
+                        break;
                     }
-                    _log.WriteLine(new ColoredStrEntry($"Discarded {discardAction.SelectedCards.Count()} cards ({sb})", playerColor));
-                    break;
 
                 case RobberAction robberAction:
                     {
-                        _log.WriteLine(new ColoredStrEntry("Moved robber", playerColor));
+                        Tile tile = state.Board.Map.Values[robberAction.TargetTileIndex];
+                        string where = tile.HasYield() ? $" to {tile.Number} ({tile.Type.ToString().ToLower()})" : $" to the {tile.Type.ToString().ToLower()}";
+                        Line(Name(player), Plain(" moved the robber" + where));
 
                         RobberAction.RobberActionHistory outcome = robberAction.History!;
-                        
-                        if (outcome.StolenCard.HasValue)
+                        if (outcome.StolenCard.HasValue && robberAction.TargetPlayerIndex is sbyte victim)
                         {
-                            // TODO: Filter out unknown information
-                            _log.WriteLine(new ColoredStrEntry($"Stole {outcome.StolenCard.Value.GetName().ToLower()} from Player {robberAction.TargetPlayerIndex!}", playerColor));
+                            _log.WriteLine(new SentenceEntry(
+                                [Name(player), Plain($" stole a {Card(outcome.StolenCard.Value)} from "), Name(victim)],
+                                [Name(player), Plain(" stole a card from "), Name(victim)],
+                                player, victim));
                         }
-
                         break;
                     }
 
-                case FirstInitialSettlementAction firstInitialSettlementAction:
-                    _log.WriteLine(new ColoredStrEntry("Placed 1st initial settlement", playerColor));
-                    break;
-
-                case FirstInitialRoadAction firstInitialRoadAction:
-                    _log.WriteLine(new ColoredStrEntry("Placed 1st initial road", playerColor));
-                    break;
-
-                case SecondInitialSettlementAction secondInitialSettlementAction:
+                case FirstInitialSettlementAction:
+                case SecondInitialSettlementAction:
                     {
-                        _log.WriteLine(new ColoredStrEntry("Placed 2nd initial settlement", playerColor));
+                        Line(Name(player), Plain(" placed a settlement"));
 
-                        SecondInitialSettlementAction.SecondInitialSettlementActionHistory outcome = secondInitialSettlementAction.History!;
-
-                        // Initial yields
-                        if(outcome.InitialYields.Count > 0)
+                        if (action is SecondInitialSettlementAction second && second.History!.InitialYields.Count > 0)
                         {
-                            List<KeyValuePair<ResourceCardType, int>> initialYields = outcome.InitialYields.CountBy(x => x).OrderByDescending(x => (x.Value, -CardSet<ResourceCardType>.ToInt(x.Key))).ToList();
-                            List<string> initialYieldEntries = [];
-
-                            foreach ((ResourceCardType cardType, int count) in initialYields)
-                            {
-                                if (count > 1)
-                                {
-                                    initialYieldEntries.Add($"{count} {cardType.GetName().ToLower()}");
-                                }
-                                else
-                                {
-                                    initialYieldEntries.Add(cardType.GetName().ToLower());
-                                }
-                            }
-
-                            _log.WriteLine(new ColoredStrEntry("Received " + string.Join(", ", initialYieldEntries), playerColor));
+                            IEnumerable<string> yields = second.History.InitialYields.CountBy(x => x)
+                                .OrderByDescending(x => (x.Value, -CardSet<ResourceCardType>.ToInt(x.Key)))
+                                .Select(x => "+" + Cards((uint)x.Value, x.Key));
+                            Line(Plain("   "), Name(player), Plain(" " + string.Join(", ", yields)));
                         }
-
                         break;
                     }
 
-                case SecondInitialRoadAction secondInitialRoadAction:
-                    _log.WriteLine(new ColoredStrEntry("Placed 2nd initial road", playerColor));
+                case FirstInitialRoadAction:
+                case SecondInitialRoadAction:
+                    Line(Name(player), Plain(" placed a road"));
                     break;
 
-                case RoadAction roadAction:
-                    _log.WriteLine(new ColoredStrEntry("Placed road", playerColor));
+                case RoadAction:
+                    Line(Name(player), Plain(" built a road"));
                     break;
 
-                case SettlementAction settlementAction:
-                    _log.WriteLine(new ColoredStrEntry("Placed settlement", playerColor));
+                case SettlementAction:
+                    Line(Name(player), Plain(" built a settlement"));
                     break;
 
-                case CityAction cityAction:
-                    _log.WriteLine(new ColoredStrEntry("Upgraded settlement to city", playerColor));
+                case CityAction:
+                    Line(Name(player), Plain(" upgraded a settlement to a city"));
                     break;
 
-                case BuyDevelopmentCardAction buyDevelopmentCardAction:
-                    {
-                        _log.WriteLine(new ColoredStrEntry("Bought development card", playerColor));
-
-                        BuyDevelopmentCardAction.BuyDevelopmentCardActionHistory outcome = buyDevelopmentCardAction.History!;
-
-                        // TODO: Filter out unknown information
-                        _log.WriteLine(new ColoredStrEntry($"Received {outcome.DrawnType.GetName().ToLower()}", playerColor));
-                    }
+                case BuyDevelopmentCardAction buyAction:
+                    _log.WriteLine(new SentenceEntry(
+                        [Name(player), Plain(" bought a development card"), Muted($" ({buyAction.History!.DrawnType.GetName()})")],
+                        [Name(player), Plain(" bought a development card")],
+                        player));
                     break;
 
-                case KnightAction knightAction:
-                    _log.WriteLine(new ColoredStrEntry("Activated knight", playerColor));
+                case KnightAction:
+                    Line(Name(player), Plain(" played a knight"));
                     break;
 
                 case MonopolyAction monopolyAction:
                     {
-                        _log.WriteLine(new ColoredStrEntry($"Activated monopoly on {monopolyAction.ChosenType.GetName().ToLower()}", playerColor));
-
-                        MonopolyAction.MonopolyActionHistory outcome = monopolyAction.History!;
-
-                        // Transferred cards
-                        foreach ((int playerIdx, uint amount) in outcome.TransferredCards)
-                        {
-                            _log.WriteLine(new ColoredStrEntry($"Received {amount} {monopolyAction.ChosenType.GetName().ToLower()} from Player {playerIdx}", playerColor));
-                        }
-
+                        Line(Name(player), Plain($" played monopoly on {Card(monopolyAction.ChosenType)}"));
+                        foreach ((int playerIdx, uint amount) in monopolyAction.History!.TransferredCards)
+                            Line(Plain("   took "), Plain(Cards(amount, monopolyAction.ChosenType)), Plain(" from "), Name(playerIdx));
                         break;
                     }
 
-                case RoadBuildingAction roadBuildingAction:
-                    _log.WriteLine(new ColoredStrEntry("Activated road building", playerColor));
+                case RoadBuildingAction:
+                    Line(Name(player), Plain(" played road building"));
                     break;
 
-                case YearOfPlentyAction yearOfPlentyAction:
-                    _log.WriteLine(new ColoredStrEntry("Activated year of plenty", playerColor));
-                    if (yearOfPlentyAction.SecondChoice.HasValue)
+                case YearOfPlentyAction plentyAction:
                     {
-                        _log.WriteLine(new ColoredStrEntry($"Received {yearOfPlentyAction.FirstChoice.GetName().ToLower()}, {yearOfPlentyAction.SecondChoice.Value.GetName().ToLower()}", playerColor));
+                        string cards = plentyAction.SecondChoice.HasValue ? $"{Card(plentyAction.FirstChoice)}, {Card(plentyAction.SecondChoice.Value)}" : Card(plentyAction.FirstChoice);
+                        Line(Name(player), Plain($" played year of plenty: {cards}"));
+                        break;
                     }
-                    else
-                    {
-                        _log.WriteLine(new ColoredStrEntry($"Received {yearOfPlentyAction.FirstChoice.GetName().ToLower()}", playerColor));
-                    }
+
+                case FourToOneTradeAction t:
+                    Line(Name(player), Plain($" traded 4 {Card(t.InputType)} for 1 {Card(t.OutputType)}"));
                     break;
 
-                case FourToOneTradeAction fourToOneTradeAction:
-                    _log.WriteLine(new ColoredStrEntry($"Traded 4 {fourToOneTradeAction.InputType.GetName().ToLower()} for 1 {fourToOneTradeAction.OutputType.GetName().ToLower()}", playerColor));
+                case ThreeToOneTradeAction t:
+                    Line(Name(player), Plain($" traded 3 {Card(t.InputType)} for 1 {Card(t.OutputType)}"));
                     break;
 
-                case ThreeToOneTradeAction threeToOneTradeAction:
-                    _log.WriteLine(new ColoredStrEntry($"Traded 3 {threeToOneTradeAction.InputType.GetName().ToLower()} for 1 {threeToOneTradeAction.OutputType.GetName().ToLower()}", playerColor));
-                    break;
-
-                case TwoToOneTradeAction twoToOneTradeAction:
-                    _log.WriteLine(new ColoredStrEntry($"Traded 2 {twoToOneTradeAction.InputType.GetName().ToLower()} for 1 {twoToOneTradeAction.OutputType.GetName().ToLower()}", playerColor));
+                case TwoToOneTradeAction t:
+                    Line(Name(player), Plain($" traded 2 {Card(t.InputType)} for 1 {Card(t.OutputType)}"));
                     break;
 
                 // TODO: Changes in Longest Road/Largest Army Leader
@@ -252,7 +203,7 @@ namespace Client.Logging
             if (state.HasEnded)
             {
                 _log.WriteLine(new SeparatorEntry());
-                _log.WriteLine(new ColoredStrEntry($"Player {state.Turn.PlayerIndex} won", ColorPalette.GetPlayerColor(state.Turn.PlayerIndex)));
+                Line(Name(state.Turn.PlayerIndex), Plain(" won the game"));
             }
 
             _log.PushSection();

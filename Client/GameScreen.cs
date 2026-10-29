@@ -1,4 +1,6 @@
-﻿using Client.Logging;
+﻿using Client.Editing;
+using Client.Logging;
+using Client.UI;
 using Common;
 using Common.Actions;
 using Common.Serialization;
@@ -11,36 +13,55 @@ using SFML.System;
 using SFML.Window;
 using System.Collections.Concurrent;
 using Action = Common.Actions.Action;
-using Edge = Common.Edge;
 using Agents.MCTS;
 
 namespace Client
 {
-    public class GameScreen : Screen
+    /// <summary>
+    /// How the user takes part: playing seats, watching agents play, or editing the position freely
+    /// </summary>
+    public enum InteractionMode { Play, Spectate, Edit }
+
+    /// <summary>
+    /// Who plays a seat
+    /// </summary>
+    public enum SeatKind { Human, MctsEasy, MctsMedium, MctsHard, Greedy, Builder, Simple, Random }
+
+    /// <summary>
+    /// A played move or an edit, in the order they happened; undo goes back through them
+    /// </summary>
+    public sealed record HistoryEntry(Action? Action, BoardEdit? Edit);
+
+    public partial class GameScreen : Screen
     {
         private RenderWindow _window;
         private View _mapView;
         private View _uiView;
 
         private GameState _state;
-        private Stack<Action> _playedActions;
-        private Stack<Action> _undoHistory;
+        private Stack<HistoryEntry> _history;
+        private Stack<HistoryEntry> _redo;
+
+        // Counts every change of the position, so caches (legal moves, priors) know when they are stale
+        private int _stateVersion;
 
         private BoardRenderer _renderer;
-        private CardWidget _cardWidget;
+        private BoardOverlay _overlay;
         private DiceWidget _diceWidget;
+        private Particles _particles = new();
 
         private EventLog _eventLog;
         private ActionLogger _actionLogger;
         private float[] _rollDistribution;
-        private bool _showEvaluationBar = true;
 
         public static Font Font;
+        public static Font BoldFont;
 
         // View movement
         private float _viewZoom = 1f;
         private float _viewZoomBase = 1f;
         private const float _moveSpeed = 300f;
+        private Vector2i? _panStart;
 
         // FPS Counter
         private float _frameTimeSum = 0.0f;
@@ -50,16 +71,8 @@ namespace Client
         // Map generator options
         private bool _centerDesert = false;
 
-        // Gameplay options
-        private bool _spectatorMode = true;
-        private bool _editMode = false;
-        private int _playerIndex = 0;
+        private InteractionMode _mode = InteractionMode.Play;
         public const int PLAYER_COUNT = 4;
-
-        // Point-and-click building
-        private CircleShape _intersectionHitbox;
-        private RectangleShape _edgeHitbox;
-        private CircleShape _centerHitbox;
 
         // Sounds
         private bool _muteQuickPlayouts = false;
@@ -76,14 +89,12 @@ namespace Client
         private int _pendingUpgradeVersion;
         private bool _openUpgradeModal;
 
-        // Player Agents
+        // Seats and their agents; a human seat keeps a stand-in agent that plays it in Spectate mode
+        private SeatKind[] _seats = [SeatKind.MctsMedium, SeatKind.MctsMedium, SeatKind.MctsMedium, SeatKind.Human];
         private Agent[] _agents;
-        private readonly string[] _agentTypes = ["RandomAgent", "SimpleAgent", "BuilderAgent", "GreedyAgent", "MCTSAgent"];
-        private int[] _selectedAgentTypes;
-        private const int MCTS_AGENT_TYPE = 4;
         private float _mctsThinkingSeconds = 0.5f;
         // Search budget per decision: thinking time or a number of iterations (~250k iterations per second on the GPU)
-        private readonly string[] _mctsBudgetTypes = ["Time", "Iterations"];
+        private readonly string[] _mctsBudgetTypes = ["Seat presets", "Time", "Iterations"];
         private int _selectedMctsBudget = 0;
         private int _mctsIterations = 125_000;
         private readonly string[] _opponentModels = Enum.GetNames<OpponentModel>();
@@ -98,23 +109,29 @@ namespace Client
         private bool _agentMovePlaySound;
         private readonly System.Diagnostics.Stopwatch _agentMoveClock = new();
 
-        // Keep playing agent moves until the game ends or autoplay is stopped (Start/Stop Autoplay [E])
-        private bool _autoplay;
-        // E toggles once per press, the key is polled every frame
-        private bool _fullPlayoutKeyDown;
+        // Agents move on their own in Play mode and while playback runs in Spectate mode, with a pause between moves so the
+        // game can be followed
+        private bool _spectatePlaying = true;
+        private float _botPaceSeconds = 0.6f;
+        private readonly System.Diagnostics.Stopwatch _sinceLastMove = System.Diagnostics.Stopwatch.StartNew();
+
         private int _randomPlayoutCount = 1000;
         private int _randomPlayoutThreadCount = Environment.ProcessorCount / 2; // Usually optimal, since the playouts are not CPU-bound
 
         // State value network for win rate evaluation
         // Null when the model file is missing (it is not tracked in git), the net evaluation is unavailable then
         private StateValueNet? _stateValueNet = StateValueNet.IsDefaultModelAvailable ? new StateValueNet(StateValueNet.DefaultModelFile) : null;
-        private readonly string[] _valuationTypes = ["State Value Network", "Simple Agent"];
-        private int _selectedValuationType = 0;
         private float[] _valuation = new float[PLAYER_COUNT];
+        // Win chances after each move, for the eval bar's history
+        private List<float[]> _valuationHistory = [];
+
+        // Developer window (the old menu) and the window size it was opened at
+        private bool _showDeveloperWindow;
 
         static GameScreen()
         {
             Font = new Font(@"..\..\..\res\Open_Sans\static\OpenSans-Regular.ttf");
+            BoldFont = new Font(@"..\..\..\res\Open_Sans\static\OpenSans-Bold.ttf");
         }
 
         public GameScreen(RenderWindow window)
@@ -122,23 +139,20 @@ namespace Client
             _window = window;
 
             _state = new GameState(MapGenerator.GenerateRandomClassic(), PLAYER_COUNT);
-            _playedActions = [];
-            _undoHistory = [];
+            _history = [];
+            _redo = [];
 
             _renderer = new BoardRenderer(_state.Board, 120, 20);
-            _cardWidget = new CardWidget(window, _state.Players[_playerIndex]);
+            _overlay = new BoardOverlay(_renderer);
             _diceWidget = new DiceWidget(window);
             _diceWidget.Active = true;
 
-            // Without the value net, fall back to the heuristic evaluation
             if (_stateValueNet == null)
             {
                 Console.WriteLine($"Value net not found at \"{StateValueNet.DefaultModelPath}\": net evaluation, GreedyAgent and MCTSAgent are unavailable.");
-                _selectedValuationType = 1;
+                for (int i = 0; i < PLAYER_COUNT; i++)
+                    if (_seats[i] != SeatKind.Human) _seats[i] = SeatKind.Builder;
             }
-
-            // Recalculate valuation
-            UpdateValuation();
 
             _eventLog = new EventLog();
             _actionLogger = new ActionLogger(_eventLog);
@@ -148,32 +162,20 @@ namespace Client
             // Padded for symmetric plotting with correct indices
             _rollDistribution = new float[15];
 
-            _intersectionHitbox = new CircleShape(_renderer.SideLength / 4, 32);
-            _intersectionHitbox.Origin = new Vector2f(_intersectionHitbox.Radius, _intersectionHitbox.Radius);
-
-            _edgeHitbox = new RectangleShape(new Vector2f(_renderer.SideLength * 0.35f, _renderer.SideLength));
-            _edgeHitbox.Origin = _edgeHitbox.Size / 2;
-
-            _centerHitbox = new CircleShape(_renderer.SideLength * 0.85f, 32);
-            _centerHitbox.Origin = new Vector2f(_centerHitbox.Radius, _centerHitbox.Radius);
-
             _placeSound = new Sound(Sounds.Place);
             _placeSound.Volume = 40f;
 
             _diceRollSound = new Sound(Sounds.DiceRolling);
             _diceRollSound.Volume = 50f;
 
-            _selectedAgentTypes = new int[PLAYER_COUNT];
             _agents = new Agent[PLAYER_COUNT];
+            for (sbyte i = 0; i < PLAYER_COUNT; i++)
+                _agents[i] = CreateAgent(_seats[i], i);
 
-            // MCTSAgent by default, SimpleAgent without the value net
-            for(sbyte i = 0; i < PLAYER_COUNT; i++)
-            {
-                _selectedAgentTypes[i] = _stateValueNet != null ? MCTS_AGENT_TYPE : 1;
-                _agents[i] = CreateAgent(_selectedAgentTypes[i], i);
-            }
+            UpdateValuation();
+            _valuationHistory.Add((float[])_valuation.Clone());
 
-            _mapView = new View(ClientUtils.RoundVec2f(_renderer.GetTileCenter(3, 3)), new Vector2f(window.Size.X, window.Size.Y)); ;
+            _mapView = new View(ClientUtils.RoundVec2f(_renderer.GetTileCenter(3, 3)), new Vector2f(window.Size.X, window.Size.Y));
             _uiView = new View(new Vector2f(0, 0), _mapView.Size);
 
             _window.SetView(_mapView);
@@ -182,36 +184,118 @@ namespace Client
             _window.Resized += Window_Resized;
             _window.KeyPressed += Window_KeyPressed;
             _window.MouseButtonPressed += Window_MouseButtonPressed;
+            _window.MouseButtonReleased += Window_MouseButtonReleased;
         }
 
-        private Agent CreateAgent(int agentType, sbyte agentIdx)
+        #region Seats and agents
+        public static string SeatName(SeatKind kind) => kind switch
         {
-            return agentType switch
+            SeatKind.Human => "Human",
+            SeatKind.MctsEasy => "MCTS · Easy",
+            SeatKind.MctsMedium => "MCTS · Medium",
+            SeatKind.MctsHard => "MCTS · Hard",
+            SeatKind.Greedy => "Greedy",
+            SeatKind.Builder => "Builder",
+            SeatKind.Simple => "Simple",
+            SeatKind.Random => "Random",
+            _ => kind.ToString()
+        };
+
+        private static bool NeedsValueNet(SeatKind kind) => kind is SeatKind.MctsEasy or SeatKind.MctsMedium or SeatKind.MctsHard or SeatKind.Greedy or SeatKind.Human;
+
+        private static float PresetSeconds(SeatKind kind) => kind switch
+        {
+            SeatKind.MctsEasy => 0.1f,
+            SeatKind.MctsHard => 2f,
+            _ => 0.5f
+        };
+
+        private Agent CreateAgent(SeatKind kind, sbyte seat)
+        {
+            // The stand-in for a human seat plays like the medium preset; without the net it falls back to the builder
+            if (kind == SeatKind.Human) kind = _stateValueNet != null ? SeatKind.MctsMedium : SeatKind.Builder;
+
+            return kind switch
             {
-                0 => new RandomAgent(agentIdx),
-                1 => new SimpleAgent(agentIdx),
-                2 => new BuilderAgent(agentIdx),
-                3 => new GreedyAgent(agentIdx),
-                MCTS_AGENT_TYPE => new MCTSAgent(agentIdx, _state, timeLimitSeconds: _mctsThinkingSeconds, opponentModel: (OpponentModel)_selectedOpponentModel,
-                    iterationLimit: MctsIterationLimit),
-                _ => throw new InvalidOperationException()
+                SeatKind.Random => new RandomAgent(seat),
+                SeatKind.Simple => new SimpleAgent(seat),
+                SeatKind.Builder => new BuilderAgent(seat),
+                SeatKind.Greedy => new GreedyAgent(seat),
+                _ => new MCTSAgent(seat, _state, timeLimitSeconds: MctsSeconds(kind), opponentModel: (OpponentModel)_selectedOpponentModel,
+                    iterationLimit: MctsIterationLimit)
             };
         }
 
+        private double MctsSeconds(SeatKind kind) => _selectedMctsBudget == 1 ? _mctsThinkingSeconds : PresetSeconds(kind);
+
         // 0 searches for the thinking time
-        private long MctsIterationLimit => _selectedMctsBudget == 1 ? _mctsIterations : 0;
+        private long MctsIterationLimit => _selectedMctsBudget == 2 ? _mctsIterations : 0;
 
         private void ApplyMctsBudget()
         {
-            foreach (Agent agent in _agents)
+            for (int seat = 0; seat < PLAYER_COUNT; seat++)
             {
-                if (agent is MCTSAgent mctsAgent)
+                if (_agents[seat] is MCTSAgent mctsAgent)
                 {
-                    mctsAgent.TimeLimitSeconds = _mctsThinkingSeconds;
+                    mctsAgent.TimeLimitSeconds = MctsSeconds(_seats[seat]);
                     mctsAgent.IterationLimit = MctsIterationLimit;
                 }
             }
         }
+
+        private void SetSeat(int seat, SeatKind kind)
+        {
+            if (NeedsValueNet(kind) && kind != SeatKind.Human && _stateValueNet == null)
+            {
+                _eventLog.WriteLine(new ColoredStrEntry($"{SeatName(kind)} needs the value net {StateValueNet.DefaultModelFile}, which is missing", Color.Red));
+                return;
+            }
+
+            CancelAgentMove();
+            _seats[seat] = kind;
+            _agents[seat] = CreateAgent(kind, (sbyte)seat);
+            ClearHumanInput();
+        }
+
+        private bool IsHuman(int seat) => _seats[seat] == SeatKind.Human;
+
+        /// <summary>
+        /// The player who has to act now, or -1 once the game has ended
+        /// </summary>
+        private int ActingPlayer
+        {
+            get
+            {
+                if (_state.HasEnded) return -1;
+                for (int playerIdx = 0; playerIdx < PLAYER_COUNT; playerIdx++)
+                {
+                    if (_state.CanPlayerAct(playerIdx))
+                        return playerIdx;
+                }
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Whose hidden information the screen shows: in Play mode the human who acts (or the first human seat), everything
+        /// (null) in Spectate and Edit mode and once the game is over
+        /// </summary>
+        private int? Viewer
+        {
+            get
+            {
+                if (_mode != InteractionMode.Play || _state.HasEnded) return null;
+                int acting = ActingPlayer;
+                if (acting >= 0 && IsHuman(acting)) return acting;
+                if (_lastHumanViewer is int last && IsHuman(last)) return last;
+                for (int seat = 0; seat < PLAYER_COUNT; seat++)
+                    if (IsHuman(seat)) return seat;
+                return null;
+            }
+        }
+
+        private int? _lastHumanViewer;
+        #endregion
 
         public void Draw(Time deltaTime)
         {
@@ -219,386 +303,18 @@ namespace Client
 
             // Draw map
             _window.SetView(_mapView);
-
-            //_window.Draw(_renderer);
-            _renderer.Draw(_window, RenderStates.Default, _state, (sbyte)_playerIndex);
+            _renderer.Draw(_window, RenderStates.Default, _state, (sbyte)Math.Max(0, ActingPlayer));
+            PrepareOverlay();
+            _overlay.Draw(_window, _state.Board);
 
             // Draw UI
             _window.SetView(_uiView);
-
-            _window.Draw(_cardWidget);
             _window.Draw(_diceWidget);
 
-            // Evaluation bar
-            if(_showEvaluationBar)
-            {
-                var sortedValuation = _valuation.Select((val, idx) => (val, idx)).OrderByDescending(x => (x.val, x.idx));
-
-                // Draw outline
-                RectangleShape valuationBar = new RectangleShape();
-                valuationBar.Position = new Vector2f(_window.Size.X / 2 - 220, -_window.Size.Y / 2 + 20);
-                valuationBar.OutlineColor = new Color(10, 10, 10);
-                valuationBar.OutlineThickness = 6;
-                valuationBar.Size = new Vector2f(200, 25);
-
-                _window.Draw(valuationBar);
-
-                valuationBar.OutlineThickness = 0;
-
-                // Player bars
-                foreach ((float val, int playerIdx) in sortedValuation)
-                {
-                    valuationBar.Size = new Vector2f(200 * val, 25);
-                    valuationBar.FillColor = ColorPalette.GetPlayerColor(playerIdx);
-
-                    _window.Draw(valuationBar);
-                    valuationBar.Position += new Vector2f(200 * val, 0);
-                }
-            }
-
-            // ImGui Windows
-            ImGui.Begin("Menu", ImGuiWindowFlags.AlwaysAutoResize);
-
-            ImGui.Text($"FPS: {Math.Floor(1 / _latestAvgFrameTime)}");
-            ImGui.Text($"Frametime: {_latestAvgFrameTime * 1000.0f:0.000}ms");
-
-            ImGui.Separator();
-
-            using (new ImGuiTextColor(ColorPalette.GetPlayerColor(_playerIndex)))
-                if (ImGui.InputInt("Player", ref _playerIndex))
-                {
-                    if (_playerIndex < 0)
-                    {
-                        _playerIndex = PLAYER_COUNT - 1;
-                    }
-                    else if (_playerIndex > PLAYER_COUNT - 1)
-                    {
-                        _playerIndex = 0;
-                    }
-
-                    _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
-
-                    _eventLog.WriteLine(new SeparatorEntry());
-                    _eventLog.WriteLine(new StrEntry("Switching to"), new PlayerEntry(_playerIndex));
-                }
-
-            ImGui.Checkbox("Spectator Mode", ref _spectatorMode);
-            ImGui.Checkbox("Edit Mode", ref _editMode);
-
-            ImGui.Separator();
-
-            ImGui.Text("Map Generation:");
-            ImGui.Checkbox("Center Desert", ref _centerDesert);
-
-            if (ImGui.Button("Generate [Space]"))
-            {
-                RegenerateMap();
-            }
-
-            ImGui.SameLine();
-
-            if (ImGui.Button("Clear [C]"))
-            {
-                ClearMap();
-            }
-
-            ImGui.Separator();
-
-            // ReadSaveFile found an older file: ask before converting it
-            if (_openUpgradeModal)
-            {
-                ImGui.OpenPopup(upgradeSaveModalId);
-                _openUpgradeModal = false;
-            }
-
-            bool isUpgradeModalOpen = true;
-            if (ImGui.BeginPopupModal(upgradeSaveModalId, ref isUpgradeModalOpen, ImGuiWindowFlags.AlwaysAutoResize))
-            {
-                ImGui.Text($"\"{Path.GetFileName(_pendingUpgradePath)}\" is a version {_pendingUpgradeVersion} save file.");
-                ImGui.Text($"This build reads version {SaveFile.CurrentVersion}. Upgrade and load it?");
-                ImGui.TextDisabled("The file on disk stays unchanged. Use Save Game afterwards to keep the upgraded copy.");
-                ImGui.Separator();
-
-                if (ImGui.Button("Upgrade and load"))
-                {
-                    UpgradeAndLoadSaveFile(_pendingUpgradePath!);
-                    ImGui.CloseCurrentPopup();
-                }
-
-                ImGui.SameLine();
-
-                if (ImGui.Button("Cancel"))
-                {
-                    ImGui.CloseCurrentPopup();
-                }
-
-                ImGui.EndPopup();
-            }
-
-            if (ImGui.TreeNode("Save Files"))
-            {
-                if (ImGui.Button("Save Game"))
-                {
-                    ImGui.OpenPopup(saveFileModalId);
-                }
-
-                ImGui.SameLine();
-
-                if (ImGui.Button("Load Game"))
-                {
-                    ImGui.OpenPopup(loadFileModalId);
-                }
-
-                bool isSaveModalOpen = true;
-                if (ImGui.BeginPopupModal(saveFileModalId, ref isSaveModalOpen, ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.AlwaysAutoResize))
-                {
-                    string defaultFileName = string.Format("gamestate_dump_{0}.yaml", DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss"));
-                    var picker = FilePicker.GetFilePicker(this, Path.Combine(Environment.CurrentDirectory, ""), true, ".yaml", false, defaultFileName);
-                    if (picker.Draw())
-                    {
-                        Console.WriteLine(picker.GetSaveFilePath());
-                        WriteSaveFile(picker.GetSaveFilePath());
-                        FilePicker.RemoveFilePicker(this);
-                    }
-                    ImGui.EndPopup();
-                }
-
-                bool isLoadModalOpen = true;
-                if (ImGui.BeginPopupModal(loadFileModalId, ref isLoadModalOpen, ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.AlwaysAutoResize))
-                {
-                    var picker = FilePicker.GetFilePicker(this, Path.Combine(Environment.CurrentDirectory, ""), false, ".yaml");
-                    if (picker.Draw())
-                    {
-                        Console.WriteLine(picker.SelectedFile);
-                        ReadSaveFile(picker.SelectedFile);
-                        FilePicker.RemoveFilePicker(this);
-                    }
-                    ImGui.EndPopup();
-                }
-
-                if (ImGui.Button("Quick Reload"))
-                {
-                    SerializeLoop();
-                }
-
-                ImGui.TreePop();
-            }
-
-            if (ImGui.TreeNode("Debug"))
-            {
-                ImGui.Text($"State Hash: {_state.GetHashCode().ToString("X")}");
-
-                if (ImGui.Button("Find Inconsistent Hashes [O]"))
-                {
-                    FindInconsistentHashes();
-                }
-
-                ImGui.Checkbox("Silent Quick Playouts", ref _muteQuickPlayouts);
-                ImGui.Checkbox("Show Yield Points", ref _renderer.DrawYieldPoints);
-                ImGui.Checkbox("Show Shadows", ref _renderer.DrawTokenShadows);
-                ImGui.Checkbox("Show Intersections", ref _renderer.DrawIntersectionMarkers);
-                ImGui.Checkbox("Show Edges", ref _renderer.DrawEdgeMarkers);
-                ImGui.Checkbox("Show Centers", ref _renderer.DrawCenterMarkers);
-
-                ImGui.TreePop();
-            }
-
-            if (ImGui.TreeNode("Agents"))
-            {
-                for (sbyte agentIdx = 0; agentIdx < _agents.Length; agentIdx++)
-                {
-                    using (new ImGuiTextColor(ColorPalette.GetPlayerColor(agentIdx)))
-                        ImGui.Text($"Player {agentIdx}:");
-
-                    int previousAgentType = _selectedAgentTypes[agentIdx];
-                    if (ImGui.Combo($"##Agent {agentIdx}", ref _selectedAgentTypes[agentIdx], _agentTypes, _agentTypes.Length))
-                    {
-                        // GreedyAgent and MCTSAgent evaluate states with the value net
-                        if (_selectedAgentTypes[agentIdx] is 3 or MCTS_AGENT_TYPE && _stateValueNet == null)
-                        {
-                            _eventLog.WriteLine(new ColoredStrEntry($"{_agentTypes[_selectedAgentTypes[agentIdx]]} needs the value net {StateValueNet.DefaultModelFile}, which is missing", Color.Red));
-                            _selectedAgentTypes[agentIdx] = previousAgentType;
-                        }
-                        else
-                        {
-                            CancelAgentMove();
-                            _agents[agentIdx] = CreateAgent(_selectedAgentTypes[agentIdx], agentIdx);
-                        }
-                    }
-                }
-
-                ImGui.Separator();
-
-                // All apply to the MCTS agents already selected as well, from their next decision on
-                ImGui.SetNextItemWidth(120);
-                if (ImGui.Combo("MCTS Budget", ref _selectedMctsBudget, _mctsBudgetTypes, _mctsBudgetTypes.Length))
-                {
-                    ApplyMctsBudget();
-                }
-
-                ImGui.SetNextItemWidth(120);
-                if (_selectedMctsBudget == 0)
-                {
-                    if (ImGui.InputFloat("MCTS Thinking Time (s)", ref _mctsThinkingSeconds, 0.5f, 5f, "%.2f"))
-                    {
-                        _mctsThinkingSeconds = Math.Clamp(_mctsThinkingSeconds, 0.05f, 600f);
-                        ApplyMctsBudget();
-                    }
-                }
-                else if (ImGui.InputInt("MCTS Iterations", ref _mctsIterations, 10_000, 100_000))
-                {
-                    _mctsIterations = Math.Clamp(_mctsIterations, 256, 100_000_000);
-                    ApplyMctsBudget();
-                }
-
-                ImGui.SetNextItemWidth(120);
-                if (ImGui.Combo("Opponent Model", ref _selectedOpponentModel, _opponentModels, _opponentModels.Length))
-                {
-                    foreach (Agent agent in _agents)
-                    {
-                        if (agent is MCTSAgent mctsAgent)
-                            mctsAgent.OpponentModel = (OpponentModel)_selectedOpponentModel;
-                    }
-                }
-
-                ImGui.Separator();
-
-                ImGui.InputInt("Playouts", ref _randomPlayoutCount);
-                ImGui.InputInt("Threads", ref _randomPlayoutThreadCount);
-
-                if (ImGui.Button("Simulate Random Playouts"))
-                {
-                    // The playouts copy a snapshot: _state keeps changing on the UI thread (e.g. during autoplay) while they run
-                    GameState startState = new GameState(_state);
-                    Task.Run(() => SimulateRandomRollouts(startState, _randomPlayoutCount, _randomPlayoutThreadCount));
-                }
-
-                ImGui.TreePop();
-            }
-
-            if (ImGui.TreeNode("Analytics"))
-            {
-                ImGui.Checkbox("Show Evaluation Bar", ref _showEvaluationBar);
-                if (ImGui.Combo("##Evaluation Type", ref _selectedValuationType, _valuationTypes, _valuationTypes.Length))
-                {
-                    if (_selectedValuationType == 0 && _stateValueNet == null)
-                    {
-                        _eventLog.WriteLine(new ColoredStrEntry($"The net evaluation needs the value net {StateValueNet.DefaultModelFile}, which is missing", Color.Red));
-                        _selectedValuationType = 1;
-                    }
-
-                    UpdateValuation();
-                }
-
-                ImGui.Separator();
-
-                ImGui.TextUnformatted("Roll Result Distribution:");
-                ImGui.PlotHistogram(string.Empty, ref _rollDistribution[0], _rollDistribution.Length, 0, string.Empty, 0, _rollDistribution.Max(), new System.Numerics.Vector2(225, 100));
-
-                ImGui.TreePop();
-            }
-
-            if (ImGui.TreeNode("Event Log"))
-            {
-                ImGui.TreePop();
-                _eventLog.Draw();
-            }
-
-            ImGui.End();
-
-            // Legal action window
-            ImGui.Begin("Scoreboard", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.AlwaysVerticalScrollbar);
-
-            ImGui.Text($"Round: {_state.Turn.RoundCounter}");
-            using (new ImGuiTextColor(ColorPalette.GetPlayerColor(_state.Turn.PlayerIndex)))
-                ImGui.Text($"Player: {_state.Turn.PlayerIndex}'s Turn");
-            ImGui.Text($"RoundType: {_state.Turn.TypeOfRound}");
-            ImGui.Text($"MustRoll: {_state.Turn.MustRoll}");
-            ImGui.Text($"MustDiscard: {_state.Turn.MustDiscard} ({_state.Turn.AwaitedPlayerDiscards.Count(x => x)} players)");
-            ImGui.Text($"MustMoveRobber: {_state.Turn.MustMoveRobber}");
-
-            ImGui.Separator();
-
-            for(int playerIdx = 0; playerIdx < _state.Players.Length; playerIdx++)
-            {
-                using (new ImGuiTextColor(ColorPalette.GetPlayerColor(playerIdx)))
-                    ImGui.Text($"Player {playerIdx}:");
-
-                ImGui.SameLine();
-
-                ImGui.Text($"{_state.Players[playerIdx].VictoryPoints.Total}/{_state.Settings.VictoryPoints} VPs");
-
-                bool hasLongestRoad = _state.Players[playerIdx].VictoryPoints.LongestRoadPoints > 0;
-                bool hasLargestArmy = _state.Players[playerIdx].VictoryPoints.LargestArmyPoints > 0;
-
-                using (new ImGuiTextColor(Color.Yellow, hasLongestRoad))
-                    ImGui.Text($"Road: {_state.Players[playerIdx].LongestRoadLength}");
-
-                ImGui.SameLine();
-
-                using (new ImGuiTextColor(Color.Yellow, hasLargestArmy))
-                    ImGui.Text($"Knights: {_state.Players[playerIdx].PlayedKnights}");
-            }
-
-            ImGui.Separator();
-
-            /*if(ImGui.Button("Recalculate"))
-            {
-                _legalActions = LegalActionProvider.GetActionsForState(_state);
-            }*/
-
-            if (ImGui.Button("Play Action [R]"))
-            {
-                StartAgentMove();
-            }
-
-            ImGui.SameLine();
-
-            if (ImGui.Button(_autoplay || _agentMove != null ? "Stop Autoplay [E]" : "Start Autoplay [E]"))
-            {
-                ToggleAutoplay();
-            }
-
-            if (ImGui.Button("Undo Action [U]"))
-            {
-                UndoAction();
-            }
-
-            ImGui.SameLine();
-
-            bool redoPossible = _undoHistory.Count > 0;
-            if (!redoPossible)
-                ImGui.PushStyleVar(ImGuiStyleVar.Alpha, 0.5f);
-            if (ImGui.Button("Redo Action [I]") && redoPossible)
-            {
-                RedoAction();
-            }
-            if (!redoPossible)
-                ImGui.PopStyleVar();
-
-            if (_agentMove != null && _movingAgent != null)
-            {
-                using (new ImGuiTextColor(ColorPalette.GetPlayerColor(_movingAgent.PlayerIndex)))
-                    ImGui.Text($"Player {_movingAgent.PlayerIndex} thinking: {_agentMoveClock.Elapsed.TotalSeconds:F1}s");
-            }
-
-            /*ImGui.Text($"{_legalActions.Count} Legal Actions");
-
-            foreach (Action action in _legalActions)
-            {
-                if (ImGui.Button(action.ToString()))
-                {
-                    action.Apply(_state);
-                    // TODO: Forward action to agents
-                    _legalActions = LegalActionProvider.GetActionsForState(_state);
-                    _renderer.Update();
-                    UpdateValuation();
-                }
-            }*/
-
-            ImGui.End();
+            DrawHud();
 
             GuiImpl.Render(_window);
+            CaptureScreenshot();
 
             _window.Display();
         }
@@ -610,117 +326,29 @@ namespace Client
                 return;
 
             Vector2f moveDelta = new Vector2f();
-            if (Keyboard.IsKeyPressed(Keyboard.Key.W))
-            {
-                moveDelta.Y -= 1;
-            }
-            if (Keyboard.IsKeyPressed(Keyboard.Key.S))
-            {
-                moveDelta.Y += 1;
-            }
-            if (Keyboard.IsKeyPressed(Keyboard.Key.A))
-            {
-                moveDelta.X -= 1;
-            }
-            if (Keyboard.IsKeyPressed(Keyboard.Key.D))
-            {
-                moveDelta.X += 1;
-            }
+            if (Keyboard.IsKeyPressed(Keyboard.Key.W)) moveDelta.Y -= 1;
+            if (Keyboard.IsKeyPressed(Keyboard.Key.S)) moveDelta.Y += 1;
+            if (Keyboard.IsKeyPressed(Keyboard.Key.A)) moveDelta.X -= 1;
+            if (Keyboard.IsKeyPressed(Keyboard.Key.D)) moveDelta.X += 1;
             moveDelta *= deltaTime.AsSeconds() * _moveSpeed * _viewZoom;
             _mapView.Move(moveDelta);
 
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Space))
+            // Right mouse button drags the board
+            if (_panStart is Vector2i start)
             {
-                RegenerateMap();
-            }
-            
-            if (Keyboard.IsKeyPressed(Keyboard.Key.C))
-            {
-                ClearMap();
-            }
-
-            if (Keyboard.IsKeyPressed(Keyboard.Key.R)
-                || Keyboard.IsKeyPressed(Keyboard.Key.Right))
-            {
-                StartAgentMove(!_muteQuickPlayouts);
-            }
-
-            if (Keyboard.IsKeyPressed(Keyboard.Key.U))
-            {
-                UndoAction();
-            }
-
-            if (Keyboard.IsKeyPressed(Keyboard.Key.I))
-            {
-                RedoAction(!_muteQuickPlayouts);
-            }
-
-            bool fullPlayoutKeyDown = Keyboard.IsKeyPressed(Keyboard.Key.E);
-            if (fullPlayoutKeyDown && !_fullPlayoutKeyDown)
-            {
-                ToggleAutoplay();
-            }
-            _fullPlayoutKeyDown = fullPlayoutKeyDown;
-
-            if (Keyboard.IsKeyPressed(Keyboard.Key.B))
-            {
-                BenchmarkPlayouts(10000);
-            }
-
-            if (Keyboard.IsKeyPressed(Keyboard.Key.O))
-            {
-                FindInconsistentHashes();
-            }
-            // Profile GameState Memory Usage
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Add))
-            {
-                long pre = GC.GetTotalMemory(true);
-                Console.WriteLine("Pre: " + pre);
-                List<GameState> storedStates = new();
-                for (int i = 0; i < 1_000_000; i++)
-                {
-                    storedStates.Add(new GameState(_state));
-                }
-                long post = GC.GetTotalMemory(true);
-                Console.WriteLine("Post: " + post);
-                Console.WriteLine("Diff: " + (post - pre));
-            }
-            // YAML Serialization Test
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Subtract))
-            {
-                string yaml = SaveFileSerializer.Serialize(_state);
-
-                // Write YAML to file for inspection
-                string filename = string.Format("gamestate_dump_{0}.yaml", DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss"));
-                File.WriteAllText(filename, yaml);
-
-                GameState? loadedState = SaveFileSerializer.Deserialize<GameState>(yaml);
-                if (loadedState == null || !_state.Equals(loadedState))
-                {
-                    Console.WriteLine("YAML Serialization Test Failed!");
-
-                    string diffFilename = string.Format("gamestate_diff_{0}.txt", DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss"));
-                    string diffYaml = SaveFileSerializer.Serialize(loadedState);
-                    File.WriteAllText(diffFilename, diffYaml);
-                }
-                else
-                {
-                    Console.WriteLine("YAML Serialization Test Succeeded!");
-                }
-            }
-            // Print state valuation network output
-            if (Keyboard.IsKeyPressed(Keyboard.Key.Enter) && _stateValueNet != null)
-            {
-                float[] winProbabilities = _stateValueNet.Run(StateVectorizer.For(_stateValueNet).Vectorize(_state));
-                Console.WriteLine("Win Probabilities: " + string.Join(", ", winProbabilities.Select(p => p.ToString("P5"))));
+                Vector2i now = Mouse.GetPosition(_window);
+                _mapView.Move(new Vector2f(start.X - now.X, start.Y - now.Y) * _viewZoom);
+                _panStart = now;
             }
         }
 
         public void Update(Time deltaTime)
         {
+            float seconds = deltaTime.AsSeconds();
+
             // Update FPS counter every 0.5s. Is initialized on the first frame
             _frameTimeCount++;
-            _frameTimeSum += deltaTime.AsSeconds();
+            _frameTimeSum += seconds;
             if (_frameTimeSum > 0.5f || _latestAvgFrameTime <= 0.000001f)
             {
                 _latestAvgFrameTime = _frameTimeSum / _frameTimeCount;
@@ -728,27 +356,181 @@ namespace Client
                 _frameTimeCount = 0;
             }
 
-            Vector2f uiMousePos = _window.MapPixelToCoords(Mouse.GetPosition(_window), _uiView);
-            _cardWidget.Update(deltaTime.AsSeconds(), uiMousePos);
-
             _window.DispatchEvents();
             GuiImpl.Update(_window, deltaTime);
 
+            _overlay.Update(seconds);
+            _particles.Update(seconds);
+
             PollAgentMove();
+            AdvanceAgents();
+            UpdateAnalysis();
         }
 
-        private void ProgressAgentsByAction(Action action)
+        /// <summary>
+        /// Starts the next agent move when it is an agent's turn: in Play mode for agent seats, in Spectate mode for all seats
+        /// while playback runs; after the pause between moves
+        /// </summary>
+        private void AdvanceAgents()
         {
-            // Agents are only used by one thread at a time; a move applied by autoplay itself is already done, so autoplay goes on
-            if (_agentMove != null)
-                CancelAgentMove();
+            if (_agentMove != null || _state.HasEnded) return;
+            if (_sinceLastMove.Elapsed.TotalSeconds < _botPaceSeconds) return;
 
-            foreach (Agent agent in _agents)
+            int acting = ActingPlayer;
+            if (acting < 0) return;
+
+            bool agentTurn = _mode switch
             {
+                InteractionMode.Play => !IsHuman(acting),
+                InteractionMode.Spectate => _spectatePlaying,
+                _ => false
+            };
+            if (agentTurn) StartAgentMove(!_muteQuickPlayouts);
+        }
+
+        #region Moves and history
+        /// <summary>
+        /// Plays a move on the current position: agents, history, log, sounds, roll effects and the visuals follow
+        /// </summary>
+        private void ApplyMove(Action action, bool playSound, bool keepRedo = false)
+        {
+            action.Apply(_state);
+
+            // Agents are only used by one thread at a time; a move applied by an agent itself is already done
+            if (_agentMove != null) CancelAgentMove();
+            foreach (Agent agent in _agents)
                 agent.HandleAction(action);
+
+            _history.Push(new HistoryEntry(action, null));
+            if (!keepRedo) _redo.Clear();
+
+            if (action is RollAction rollAction)
+            {
+                _rollDistribution[rollAction.History!.RollResult.Total]++;
+                ShowRollEffects(rollAction);
+            }
+            else if (action is EndTurnAction)
+            {
+                _overlay.ClearRoll();
+            }
+
+            _actionLogger.Log(action, _state);
+
+            if (playSound)
+                PlaySoundForAction(action);
+
+            AfterPositionChanged();
+            _valuationHistory.Add((float[])_valuation.Clone());
+            _sinceLastMove.Restart();
+        }
+
+        /// <summary>
+        /// Goes one entry back: reverts a move, or restores the position before an edit
+        /// </summary>
+        private void UndoAction()
+        {
+            if (_history.Count == 0) return;
+            CancelAgentMove();
+
+            HistoryEntry entry = _history.Pop();
+            if (entry.Action is Action action)
+            {
+                action.Revert(_state);
+                if (action is RollAction rollAction)
+                    _rollDistribution[rollAction.History!.RollResult.Total]--;
+            }
+            else if (entry.Edit is BoardEdit edit)
+            {
+                ReplaceState(edit.Before);
+            }
+
+            ResetAgents();
+            _redo.Push(entry);
+
+            // Remove latest section from log
+            _eventLog.PopSection();
+            _actionLogger.UpdateTracking(_state);
+
+            _overlay.ClearRoll();
+            _particles.Clear();
+            if (_valuationHistory.Count > 1) _valuationHistory.RemoveAt(_valuationHistory.Count - 1);
+            AfterPositionChanged();
+        }
+
+        private void RedoAction(bool playSound = true)
+        {
+            if (_redo.Count == 0) return;
+
+            HistoryEntry entry = _redo.Peek();
+            if (entry.Action is Action action)
+            {
+                if (_state.HasEnded || !action.IsValidFor(_state)) return;
+                _redo.Pop();
+                ApplyMove(action, playSound, keepRedo: true);
+            }
+            else if (entry.Edit is BoardEdit edit)
+            {
+                _redo.Pop();
+                ApplyEdit(edit, keepRedo: true);
             }
         }
 
+        /// <summary>
+        /// Replaces the position (load, edits), keeping the renderer and agents in step
+        /// </summary>
+        private void ReplaceState(GameState state)
+        {
+            _state = state;
+            _renderer.Board = _state.Board;
+            ResetAgents();
+        }
+
+        /// <summary>
+        /// Everything that follows from a changed position: board geometry, win chances, dice, cached legal moves
+        /// </summary>
+        private void AfterPositionChanged()
+        {
+            _stateVersion++;
+            _renderer.Update();
+            UpdateValuation();
+
+            _diceWidget.Active = _state.Turn.MustRoll;
+            _diceWidget.RollResult = _state.Turn.LastRoll;
+            _diceWidget.UpdateSprites();
+
+            int acting = ActingPlayer;
+            if (acting >= 0 && IsHuman(acting)) _lastHumanViewer = acting;
+            ClearHumanInput();
+        }
+
+        /// <summary>
+        /// The played moves since the last edit, oldest first: what a save file can replay
+        /// </summary>
+        private List<Action> ActionsSinceLastEdit()
+        {
+            List<Action> actions = [];
+            foreach (HistoryEntry entry in _history)
+            {
+                if (entry.Edit != null) break;
+                actions.Add(entry.Action!);
+            }
+            actions.Reverse();
+            return actions;
+        }
+
+        private List<Action> RedoActions()
+        {
+            List<Action> actions = [];
+            foreach (HistoryEntry entry in _redo)
+            {
+                if (entry.Edit != null) break;
+                actions.Add(entry.Action!);
+            }
+            return actions;
+        }
+        #endregion
+
+        #region Agents
         private void ResetAgents()
         {
             // Agents are only used by one thread at a time
@@ -760,168 +542,6 @@ namespace Client
             }
         }
 
-        private int FindActingPlayer()
-        {
-            // First player that is allowed to act on state
-            for (int playerIdx = 0; playerIdx < PLAYER_COUNT; playerIdx++)
-            {
-                if (_state.CanPlayerAct(playerIdx))
-                    return playerIdx;
-            }
-
-            throw new InvalidOperationException();
-        }
-
-        private void BenchmarkPlayouts(int matches, bool verbose = true)
-        {
-            if (_state.HasEnded) return;
-
-            ResetAgents();
-            _undoHistory.Clear();
-            Agent[] agents = _agents;
-
-            Clock playoutClock = new Clock();
-            int playedActions = 0;
-            int playedRounds = 0;
-            float ms = 0;
-
-            for (int it = 0; it < matches; it++)
-            {
-                playoutClock.Restart();
-
-                while (!_state.HasEnded)
-                {
-                    // Query agent for current state
-                    Action playedAction = agents[FindActingPlayer()].Act(_state);
-
-                    if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
-
-                    // Apply action to state
-                    playedAction.Apply(_state);
-
-                    // Update agents
-                    foreach (Agent agent in agents)
-                        agent.HandleAction(playedAction);
-
-                    // Push to action stack
-                    _playedActions.Push(playedAction);
-
-                    // Track distribution of rolls
-                    if (playedAction is RollAction rollAction)
-                    {
-                        _rollDistribution[rollAction.History!.RollResult.Total]++;
-                    }
-
-                    // Write entry to event log
-                    _actionLogger.Log(playedAction, _state);
-
-                    playedActions++;
-                }
-
-                // Track played rounds and elapsed time
-                playedRounds += _state.Turn.RoundCounter;
-                ms += playoutClock.ElapsedTime.AsSeconds() * 1000f;
-
-                // Generate new map
-                _state.Board = MapGenerator.GenerateRandomClassic(_centerDesert);
-                _state.Reset();
-
-                _playedActions.Clear();
-
-                // Reset internal agent state
-                foreach (Agent agent in agents)
-                    agent.ResetToState(_state);
-
-                _eventLog.Clear();
-                _actionLogger.Init();
-
-                _rollDistribution = new float[_rollDistribution.Length];
-            }
-
-            ResetAgents();
-
-            if (verbose)
-            {
-                Console.WriteLine($"\nFull playout of {matches:n0} matches ({playedRounds:n0} rounds, {playedActions:n0} actions) took {ms:n} ms");
-                Console.WriteLine($"Avg. {ms / matches} ms/match, {ms / playedRounds} ms/round, {ms / playedActions} ms/action");
-                Console.WriteLine($"Avg. {playedRounds / matches} rounds/match, {playedActions / matches} actions/match, {playedActions / playedRounds} actions/round\n");
-            }
-
-            // Update visuals
-            _renderer.Board = _state.Board;
-            _renderer.Update();
-
-            // Recalculate valuation
-            UpdateValuation();
-
-            _playerIndex = _state.Turn.PlayerIndex;
-            _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
-
-            _diceWidget.Active = _state.Turn.MustRoll;
-            _diceWidget.RollResult = _state.Turn.LastRoll;
-            _diceWidget.UpdateSprites();
-        }
-
-        /// <summary>
-        /// Plays the game to its end at once, blocking (for FindInconsistentHashes; autoplay [E] plays live in the background)
-        /// </summary>
-        private void PlayFullAgentPlayout(Agent[] agents, bool verbose = true)
-        {
-            if (_state.HasEnded) return;
-
-            ResetAgents();
-            _undoHistory.Clear();
-            foreach (Agent agent in agents)
-                agent.ResetToState(_state);
-
-            Clock playoutClock = new Clock();
-
-            while (!_state.HasEnded)
-            {
-                // Query agent for current state
-                Action playedAction = agents[FindActingPlayer()].Act(_state);
-
-                if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
-
-                // Apply action to state
-                playedAction.Apply(_state);
-
-                // Update agents
-                foreach (Agent agent in agents)
-                    agent.HandleAction(playedAction);
-
-                // Push to action stack
-                _playedActions.Push(playedAction);
-
-                // Track distribution of rolls
-                if (playedAction is RollAction rollAction)
-                {
-                    _rollDistribution[rollAction.History!.RollResult.Total]++;
-                }
-
-                // Write entry to event log
-                _actionLogger.Log(playedAction, _state);
-            }
-
-            float ms = playoutClock.ElapsedTime.AsSeconds() * 1000f;
-
-            if (verbose)
-                Console.WriteLine($"Full playout of {_state.Turn.RoundCounter:n0} rounds ({_playedActions.Count:n0} actions) took {ms:n} ms ({ms / _state.Turn.RoundCounter} ms/round, {ms / _playedActions.Count} ms/action)");
-
-            // Update visuals
-            _renderer.Update();
-
-            // Recalculate valuation
-            UpdateValuation();
-
-            _playerIndex = _state.Turn.PlayerIndex;
-            _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
-
-            _diceWidget.Active = _state.Turn.MustRoll;
-            _diceWidget.RollResult = _state.Turn.LastRoll;
-            _diceWidget.UpdateSprites();
-        }
-
         /// <summary>
         /// Lets the acting player's agent compute its move in the background (see PollAgentMove); nothing if one is already thinking
         /// </summary>
@@ -929,7 +549,10 @@ namespace Client
         {
             if (_agentMove != null || _state.HasEnded) return;
 
-            Agent agent = _agents[FindActingPlayer()];
+            int acting = ActingPlayer;
+            if (acting < 0) return;
+
+            Agent agent = _agents[acting];
             GameState snapshot = new GameState(_state);
             CancellationTokenSource cancellation = new();
 
@@ -942,8 +565,7 @@ namespace Client
         }
 
         /// <summary>
-        /// Plays the background move once it is done, unless it was cancelled or the game changed meanwhile; with autoplay
-        /// starts the next one
+        /// Plays the background move once it is done, unless it was cancelled or the game changed meanwhile
         /// </summary>
         private void PollAgentMove()
         {
@@ -958,45 +580,37 @@ namespace Client
 
             if (move.IsFaulted)
             {
-                _autoplay = false;
+                _spectatePlaying = false;
                 string message = move.Exception!.GetBaseException().Message;
                 Console.WriteLine($"Agent of player {agent.PlayerIndex} failed: {move.Exception}");
-                _eventLog.WriteLine(new ColoredStrEntry($"Agent of player {agent.PlayerIndex} failed: {message}", Color.Red));
+                _eventLog.WriteLine(new ColoredStrEntry($"Agent of {Theme.PlayerName(agent.PlayerIndex)} failed: {message}", Color.Red));
                 return;
             }
 
             // A move for another state or by a replaced agent is dropped
             if (cancelled || !ReferenceEquals(_agents[agent.PlayerIndex], agent) || !_state.Equals(startState))
-            {
-                _autoplay = false;
                 return;
-            }
 
             Action playedAction = move.Result;
             if (!playedAction.IsValidFor(_state))
             {
-                _autoplay = false;
-                _eventLog.WriteLine(new ColoredStrEntry($"Agent of player {agent.PlayerIndex} returned an invalid move: {playedAction}", Color.Red));
+                _spectatePlaying = false;
+                _eventLog.WriteLine(new ColoredStrEntry($"Agent of {Theme.PlayerName(agent.PlayerIndex)} returned an invalid move: {playedAction}", Color.Red));
                 return;
             }
 
-            _undoHistory.Clear();
-            ApplyAgentAction(playedAction, playSound);
+            // The search behind the move, for the heat map of the position it was made in
+            if (agent is MCTSAgent mcts) KeepSearch(mcts, startState);
 
-            if (_autoplay)
-            {
-                if (_state.HasEnded) _autoplay = false;
-                else StartAgentMove(playSound);
-            }
+            ApplyMove(playedAction, playSound);
         }
 
         /// <summary>
         /// Stops the agent move in progress (agents stop searching early if they support it) and waits for it, so the agents
-        /// are free again; also ends autoplay
+        /// are free again
         /// </summary>
         private void CancelAgentMove()
         {
-            _autoplay = false;
             if (_agentMove == null) return;
 
             _agentMoveCancellation!.Cancel();
@@ -1019,151 +633,61 @@ namespace Client
             _movingAgent = null;
             _agentMoveStartState = null;
         }
+        #endregion
 
+        #region Roll effects
         /// <summary>
-        /// Plays agent moves in the background until the game ends, or stops the moves in progress
+        /// Rings on the producing tiles and a card flying to each receiving player per yield
         /// </summary>
-        private void ToggleAutoplay()
+        private void ShowRollEffects(RollAction roll)
         {
-            if (_autoplay || _agentMove != null)
+            RollAction.RollActionHistory outcome = roll.History!;
+            int total = outcome.RollResult.Total;
+            Board board = _state.Board;
+
+            List<int> tiles = [];
+            for (int tileIdx = 0; tileIdx < board.Map.Length; tileIdx++)
             {
-                CancelAgentMove();
-                return;
+                Tile tile = board.Map.Values[tileIdx];
+                if (tile.HasYield() && tile.Number == total && !board.HasRobber(tile)) tiles.Add(tileIdx);
             }
+            _overlay.ShowRoll(tiles);
 
-            if (_state.HasEnded) return;
-            _autoplay = true;
-            StartAgentMove(!_muteQuickPlayouts);
-        }
+            if (outcome.TriggeredRobber || outcome.AwardedYields == null) return;
 
-        private void ApplyAgentAction(Action playedAction, bool playSound)
-        {
-            // Apply action to state
-            playedAction.Apply(_state);
-
-            // Update agents
-            ProgressAgentsByAction(playedAction);
-
-            // Push to action stack
-            _playedActions.Push(playedAction);
-
-            // Track distribution of rolls
-            if (playedAction is RollAction rollAction)
+            // One card per yield from its tile to the player, as far as the bank paid it out
+            uint[,] awarded = outcome.AwardedYields;
+            uint[,] sent = new uint[PLAYER_COUNT, CardSet<ResourceCardType>.Values.Count];
+            float delay = 0;
+            foreach (int tileIdx in tiles)
             {
-                _rollDistribution[rollAction.History!.RollResult.Total]++;
+                Tile tile = board.Map.Values[tileIdx];
+                ResourceCardType resource = tile.Type.ToCardType();
+                int resourceIdx = CardSet<ResourceCardType>.ToInt(resource);
+                Vector2f tileCenter = _renderer.GetTileCenter(tile);
+                foreach (Intersection intersection in board.Adjacency.GetIntersections(tile))
+                {
+                    if (!board.HasBuilding(intersection.Index)) continue;
+                    int owner = board.GetBuildingOwner(intersection.Index);
+                    int amount = board.GetBuilding(intersection.Index) == Intersection.BuildingType.City ? 2 : 1;
+                    for (int i = 0; i < amount && sent[owner, resourceIdx] < awarded[owner, resourceIdx]; i++)
+                    {
+                        sent[owner, resourceIdx]++;
+                        Vector2i from = _window.MapCoordsToPixel(tileCenter, _mapView);
+                        _particles.Add(resource, new System.Numerics.Vector2(from.X, from.Y), CardDestination(owner, resource), delay);
+                        delay += 0.12f;
+                    }
+                }
             }
-
-            // Write entry to event log
-            _actionLogger.Log(playedAction, _state);
-
-            // Play associated sound
-            if (playSound)
-                PlaySoundForAction(playedAction);
-
-            // Update visuals
-            _renderer.Update();
-
-            // Recalculate valuation
-            UpdateValuation();
-
-            _playerIndex = _state.Turn.PlayerIndex;
-            _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
-
-            _diceWidget.Active = _state.Turn.MustRoll;
-            _diceWidget.RollResult = _state.Turn.LastRoll;
-            _diceWidget.UpdateSprites();
         }
+        #endregion
 
-        private void UndoAction()
-        {
-            if (_playedActions.Count == 0) return;
-
-            // Get most recent action
-            Action playedAction = _playedActions.Pop();
-
-            // Revert action
-            playedAction.Revert(_state);
-
-            // Reset internal agent state
-            ResetAgents();
-
-            // Add to undo history
-            _undoHistory.Push(playedAction);
-
-            // Remove from roll distribution tracking
-            if (playedAction is RollAction rollAction)
-            {
-                _rollDistribution[rollAction.History!.RollResult.Total]--;
-            }
-
-            // Remove latest section from log
-            _eventLog.PopSection();
-            _actionLogger.UpdateTracking(_state);
-
-            // Update visuals
-            _renderer.Update();
-
-            // Recalculate valuation
-            UpdateValuation();
-
-            _playerIndex = _state.Turn.PlayerIndex;
-            _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
-
-            _diceWidget.Active = _state.Turn.MustRoll;
-            _diceWidget.RollResult = _state.Turn.LastRoll;
-            _diceWidget.UpdateSprites();
-        }
-
-        private void RedoAction(bool playSound = true)
-        {
-            if (_state.HasEnded || _undoHistory.Count == 0) return;
-
-            // Get latest undone action
-            Action playedAction = _undoHistory.Pop();
-
-            if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
-
-            // Apply action to state
-            playedAction.Apply(_state);
-
-            // Update agents
-            ProgressAgentsByAction(playedAction);
-
-            // Push to action stack
-            _playedActions.Push(playedAction);
-
-            // Track distribution of rolls
-            if (playedAction is RollAction rollAction)
-            {
-                _rollDistribution[rollAction.History!.RollResult.Total]++;
-            }
-
-            // Write entry to event log
-            _actionLogger.Log(playedAction, _state);
-
-            // Play associated sound
-            if (playSound)
-                PlaySoundForAction(playedAction);
-
-            // Update visuals
-            _renderer.Update();
-
-            // Recalculate valuation
-            UpdateValuation();
-
-            _playerIndex = _state.Turn.PlayerIndex;
-            _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
-
-            _diceWidget.Active = _state.Turn.MustRoll;
-            _diceWidget.RollResult = _state.Turn.LastRoll;
-            _diceWidget.UpdateSprites();
-        }
-
+        #region Developer tools
         private void FindInconsistentHashes()
         {
             PlayFullAgentPlayout(_agents, false);
 
-            while (_playedActions.Count > 0)
+            while (_history.Count > 0)
             {
                 int prevHash = _state.GetHashCode();
                 int prevPlayerHash = HashCode.Combine(_state.Players[0], _state.Players[1], _state.Players[2], _state.Players[3]);
@@ -1187,10 +711,10 @@ namespace Client
 
                 if (prevHash != postHash)
                 {
-                    Console.WriteLine($"{_playedActions.Peek().GetType().Name} mismatched: pre {prevHash.ToString("X")}, post {postHash.ToString("X")}");
+                    Console.WriteLine($"{_history.Peek().Action?.GetType().Name} mismatched: pre {prevHash.ToString("X")}, post {postHash.ToString("X")}");
 
-                    if (_undoHistory.Count > 0)
-                        Console.WriteLine("\t- Previous: " + _undoHistory.Peek().GetType().Name);
+                    if (_redo.Count > 0)
+                        Console.WriteLine("\t- Previous: " + _redo.Peek().Action?.GetType().Name);
 
                     if (prevPlayerHash != postPlayerHash)
                         Console.WriteLine("\t- PlayerState");
@@ -1208,6 +732,62 @@ namespace Client
 
                 UndoAction();
             }
+        }
+
+        /// <summary>
+        /// Plays the game to its end at once, blocking (for FindInconsistentHashes)
+        /// </summary>
+        private void PlayFullAgentPlayout(Agent[] agents, bool verbose = true)
+        {
+            if (_state.HasEnded) return;
+
+            ResetAgents();
+            _redo.Clear();
+
+            Clock playoutClock = new Clock();
+            int moves = 0;
+
+            while (!_state.HasEnded)
+            {
+                Action playedAction = agents[ActingPlayer].Act(_state);
+                if (!playedAction.IsValidFor(_state)) throw new InvalidOperationException();
+                ApplyMove(playedAction, false);
+                moves++;
+            }
+
+            float ms = playoutClock.ElapsedTime.AsSeconds() * 1000f;
+
+            if (verbose)
+                Console.WriteLine($"Full playout of {_state.Turn.RoundCounter:n0} rounds ({moves:n0} actions) took {ms:n} ms ({ms / _state.Turn.RoundCounter} ms/round, {ms / moves} ms/action)");
+        }
+
+        private void BenchmarkPlayouts(int matches)
+        {
+            if (_state.HasEnded) return;
+
+            Agent[] agents = new Agent[PLAYER_COUNT];
+            for (sbyte i = 0; i < PLAYER_COUNT; i++) agents[i] = new RandomAgent(i);
+
+            Clock playoutClock = new Clock();
+            int playedActions = 0;
+            int playedRounds = 0;
+
+            for (int it = 0; it < matches; it++)
+            {
+                GameState state = new GameState(MapGenerator.GenerateRandomClassic(_centerDesert), PLAYER_COUNT);
+                while (!state.HasEnded)
+                {
+                    int acting = 0;
+                    while (!state.CanPlayerAct(acting)) acting++;
+                    agents[acting].Act(state).Apply(state);
+                    playedActions++;
+                }
+                playedRounds += state.Turn.RoundCounter;
+            }
+
+            float ms = playoutClock.ElapsedTime.AsSeconds() * 1000f;
+            Console.WriteLine($"\nRandom playout of {matches:n0} matches ({playedRounds:n0} rounds, {playedActions:n0} actions) took {ms:n} ms");
+            Console.WriteLine($"Avg. {ms / matches} ms/match, {ms / playedRounds} ms/round, {ms / playedActions} ms/action\n");
         }
 
         private async Task SimulateRandomRollouts(GameState startState, int playoutCount, int threadCount)
@@ -1293,75 +873,59 @@ namespace Client
                 Console.WriteLine($"Player {i} won {timesWon[i]:n0} times ({(float)timesWon[i] / playoutCount:P2})");
             }
         }
+        #endregion
 
-        private void RegenerateMap()
+        #region New game and map
+        /// <summary>
+        /// Starts over on a new map (or a cleared board) with the current seats
+        /// </summary>
+        private void NewGame(bool clearBoard = false)
         {
-            _state.Board = MapGenerator.GenerateRandomClassic(_centerDesert);
-            _state.Reset();
+            CancelAgentMove();
+            if (clearBoard)
+            {
+                _state.Board.Clear();
+                _state.Reset();
+            }
+            else
+            {
+                _state = new GameState(MapGenerator.GenerateRandomClassic(_centerDesert), PLAYER_COUNT);
+            }
 
-            _playedActions.Clear();
-            _undoHistory.Clear();
-
-            // Reset internal agent state
-            ResetAgents();
-
-            _eventLog.Clear();
-            _actionLogger.Init();
-
-            _rollDistribution = new float[_rollDistribution.Length];
-
+            ResetHistory();
             _renderer.Board = _state.Board;
-            _renderer.Update();
-
-            // Recalculate valuation
-            UpdateValuation();
-
-            _playerIndex = 0;
-            _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
-
-            _diceWidget.Active = _state.Turn.MustRoll;
-            _diceWidget.RollResult = _state.Turn.LastRoll;
-            _diceWidget.UpdateSprites();
+            ResetAgents();
+            AfterPositionChanged();
+            _valuationHistory = [(float[])_valuation.Clone()];
+            _lastHumanViewer = null;
+            _sinceLastMove.Restart();
         }
 
-        private void ClearMap()
+        private void ResetHistory()
         {
-            _state.Board.Clear();
-            _state.Reset();
-
-            _playedActions.Clear();
-            _undoHistory.Clear();
-
-            // Reset internal agent state
-            ResetAgents();
-
+            _history.Clear();
+            _redo.Clear();
             _eventLog.Clear();
             _actionLogger.Init();
-
             _rollDistribution = new float[_rollDistribution.Length];
-
-            _renderer.Board = _state.Board;
-            _renderer.Update();
-
-            // Recalculate valuation
-            UpdateValuation();
-
-            _playerIndex = 0;
-            _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
-
-            _diceWidget.Active = _state.Turn.MustRoll;
-            _diceWidget.RollResult = _state.Turn.LastRoll;
-            _diceWidget.UpdateSprites();
+            _overlay.ClearRoll();
+            _particles.Clear();
+            ClearAnalysis();
         }
+        #endregion
 
         private void UpdateValuation()
         {
-            _valuation = _selectedValuationType switch
+            _valuation = _stateValueNet != null
+                ? _stateValueNet.Run(StateVectorizer.For(_stateValueNet).Vectorize(_state))
+                : SimpleAgent.StateValueFunc(_state);
+
+            // The net rates a finished game by its position; the result itself is certain
+            if (_state.HasEnded)
             {
-                0 when _stateValueNet != null => _stateValueNet.Run(StateVectorizer.For(_stateValueNet).Vectorize(_state)),
-                0 or 1 => SimpleAgent.StateValueFunc(_state),
-                _ => throw new NotImplementedException()
-            };
+                for (int i = 0; i < _valuation.Length; i++)
+                    _valuation[i] = i == _state.Turn.PlayerIndex ? 1 : 0;
+            }
         }
 
         private void Window_MouseWheelScrolled(object? sender, MouseWheelScrollEventArgs e)
@@ -1379,190 +943,17 @@ namespace Client
 
         private void Window_Resized(object? sender, SizeEventArgs e)
         {
-            _mapView.Size = new Vector2f(e.Width, e.Height);
+            _mapView.Size = new Vector2f(e.Width, e.Height) * _viewZoom;
             _uiView.Size = new Vector2f(e.Width, e.Height);
-        }
-
-        private void Window_KeyPressed(object? sender, KeyEventArgs e)
-        {
-            /*if (e.Code == Keyboard.Key.Enter)
-            {
-                if (_spectatorMode) return;
-
-                RollDice();
-            }*/
-        }
-
-        private void Window_MouseButtonPressed(object? sender, MouseButtonEventArgs e)
-        {
-            // Mouse pos in UI view
-            Vector2f uiMousePos = _window.MapPixelToCoords(new Vector2i(e.X, e.Y), _uiView);
-
-            // Dice widget click to roll interaction
-            /*if (!_spectatorMode && e.Button == Mouse.Button.Left && _diceWidget.Contains(uiMousePos.X, uiMousePos.Y))
-            {
-                RollDice();
-                return;
-            }*/
-
-
-            // >> Edit mode click interactions <<
-            if (!_editMode) return;
-
-            // Mouse pos in map view
-            Vector2f mapMousePos = _window.MapPixelToCoords(new Vector2i(e.X, e.Y), _mapView);
-
-            // Intersection clicking
-            foreach (Intersection intersection in _state.Board.Intersections)
-            {
-                _intersectionHitbox.Position = _renderer.GetIntersectionCenter(intersection, _state.Board);
-
-                float dist = MathF.Sqrt(
-                    MathF.Pow(mapMousePos.X - _intersectionHitbox.Position.X, 2)
-                    + MathF.Pow(mapMousePos.Y - _intersectionHitbox.Position.Y, 2)
-                );
-
-                // Click was on intersection
-                if (e.Button == Mouse.Button.Left && dist < _intersectionHitbox.Radius)
-                {
-                    Intersection.BuildingType building = _state.Board.GetBuilding(intersection.Index);
-
-                    // Clear previous buildings
-                    if(_state.Board.GetBuildingOwner(intersection.Index) != _playerIndex && building != Intersection.BuildingType.None)
-                    {
-                        building = Intersection.BuildingType.None;
-                    }
-                    // Cycle own buildings
-                    else
-                    {
-                        building = building switch
-                        {
-                            Intersection.BuildingType.None => Intersection.BuildingType.Settlement,
-                            Intersection.BuildingType.Settlement => Intersection.BuildingType.City,
-                            Intersection.BuildingType.City => Intersection.BuildingType.None,
-                            _ => throw new InvalidOperationException()
-                        };
-
-                        if (building == Intersection.BuildingType.Settlement)
-                        {
-                            _eventLog.WriteLine(new PlayerEntry(_playerIndex), new StrEntry("placed a settlement"));
-                        }
-                        else if(building == Intersection.BuildingType.City)
-                        {
-                            _eventLog.WriteLine(new PlayerEntry(_playerIndex), new StrEntry("promoted a settlement to a city"));
-                        }
-                    }
-
-                    // Claim intersection for current player
-                    _state.Board.SetBuilding(intersection.Index, building, (sbyte)_playerIndex);
-
-                    // Play place sound
-                    _placeSound.Play();
-
-                    // Rebuild geometry
-                    _renderer.Update();
-
-                    // Recalculate valuation
-                    UpdateValuation();
-
-                    return;
-                }
-            }
-
-            // Edge clicking
-            foreach (Edge edge in _state.Board.Edges)
-            {
-                // Transform hitbox
-                (Vector2f left, Vector2f right) = _renderer.GetEdgePoints(edge);
-
-                _edgeHitbox.Position = (left + right) / 2f;
-
-                _edgeHitbox.Rotation = edge.Direction switch
-                {
-                    Direction.Edge.UpDown => 0f,
-                    Direction.Edge.LeftTop => -60f,
-                    Direction.Edge.RightTop => 60f,
-                    _ => throw new InvalidOperationException()
-                };
-
-                // Apply inverse transform to mouse pos for local AABB alignment
-                Vector2f transformedMousePos = _edgeHitbox.InverseTransform.TransformPoint(mapMousePos);
-
-                // Click was on edge
-                if (e.Button == Mouse.Button.Left && _edgeHitbox.GetLocalBounds().Contains(transformedMousePos.X, transformedMousePos.Y))
-                {
-                    Edge.BuildingType road = _state.Board.GetRoad(edge.Index);
-
-                    // Clear previous roads
-                    if(_state.Board.GetRoadOwner(edge.Index) != _playerIndex && road == Edge.BuildingType.Road)
-                    {
-                        road = Edge.BuildingType.None;
-                    }
-                    // Toggle own roads
-                    else
-                    {
-                        road = road switch
-                        {
-                            Edge.BuildingType.None => Edge.BuildingType.Road,
-                            Edge.BuildingType.Road => Edge.BuildingType.None,
-                            _ => throw new InvalidOperationException(),
-                        };
-
-                        if(road == Edge.BuildingType.Road)
-                        {
-                            _eventLog.WriteLine(new PlayerEntry(_playerIndex), new StrEntry("placed a road"));
-                        }
-                    }
-
-                    // Claim edge for current player
-                    _state.Board.SetRoad(edge.Index, road, (sbyte)_playerIndex);
-
-                    // Play place sound
-                    _placeSound.Play();
-
-                    // Rebuild geometry
-                    _renderer.Update();
-
-                    // Recalculate valuation
-                    UpdateValuation();
-
-                    return;
-                }
-            }
-
-            // Center clicking
-            foreach(Tile tile in _state.Board.Map.Where(x => x.IsLandTile()))
-            {
-                _centerHitbox.Position = _renderer.GetTileCenter(tile);
-
-                float dist = MathF.Sqrt(
-                    MathF.Pow(mapMousePos.X - _centerHitbox.Position.X, 2)
-                    + MathF.Pow(mapMousePos.Y - _centerHitbox.Position.Y, 2)
-                );
-
-                // Click was on intersection
-                if (e.Button == Mouse.Button.Left && dist < _centerHitbox.Radius)
-                {
-                    // Move robber
-                    _state.Board.Robber = tile;
-
-                    // Play place sound
-                    _placeSound.Play();
-
-                    _eventLog.WriteLine(new PlayerEntry(_playerIndex), new StrEntry("moved the robber"));
-
-                    return;
-                }
-            }
         }
 
         public void PlaySoundForAction(Action action)
         {
-            if(action is RollAction && _diceRollSound.Status != SoundStatus.Playing)
+            if (action is RollAction && _diceRollSound.Status != SoundStatus.Playing)
             {
                 _diceRollSound.Play();
             }
-            else if((action is SettlementAction 
+            else if ((action is SettlementAction
                 || action is CityAction
                 || action is RoadAction
                 || action is FirstInitialRoadAction
@@ -1576,6 +967,7 @@ namespace Client
             }
         }
 
+        #region Save files
         public void ReadSaveFile(string filepath)
         {
             SaveFile saveFile;
@@ -1627,29 +1019,19 @@ namespace Client
 
         private void ApplySaveFile(SaveFile saveFile)
         {
-            _state = saveFile.GameState;
-            _playedActions = new(saveFile.PlayedActions);
-            _undoHistory = new(saveFile.UndoHistory);
-
-            // Reset internal agent state
-            ResetAgents();
+            CancelAgentMove();
+            ReplaceState(saveFile.GameState);
+            _history = new(saveFile.PlayedActions.Select(action => new HistoryEntry(action, null)));
+            _redo = new(saveFile.UndoHistory.Select(action => new HistoryEntry(action, null)));
 
             // Log and roll histogram of the loaded game instead of the previous one's
+            _overlay.ClearRoll();
+            _particles.Clear();
+            ClearAnalysis();
             RebuildLogAndRollDistribution();
 
-            // Update visuals
-            _renderer.Board = _state.Board;
-            _renderer.Update();
-
-            // Recalculate valuation
-            UpdateValuation();
-
-            _playerIndex = _state.Turn.PlayerIndex;
-            _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
-
-            _diceWidget.Active = _state.Turn.MustRoll;
-            _diceWidget.RollResult = _state.Turn.LastRoll;
-            _diceWidget.UpdateSprites();
+            AfterPositionChanged();
+            _valuationHistory = [(float[])_valuation.Clone()];
         }
 
         /// <summary>
@@ -1662,8 +1044,7 @@ namespace Client
             _actionLogger.Init();
             _rollDistribution = new float[_rollDistribution.Length];
 
-            // The stack enumerates the latest action first
-            Action[] actions = _playedActions.Reverse().ToArray();
+            Action[] actions = ActionsSinceLastEdit().ToArray();
             foreach (Action action in actions)
             {
                 if (action is RollAction rollAction && rollAction.History != null)
@@ -1694,36 +1075,21 @@ namespace Client
 
         public void WriteSaveFile(string filepath)
         {
-            SaveFile saveFile = new SaveFile(_state, _playedActions.Reverse().ToList(), _undoHistory.Reverse().ToList());
+            // Edits change the position outside the rules, so only the moves since the last edit can be replayed from the file
+            if (_history.Any(entry => entry.Edit != null))
+                _eventLog.WriteLine(new ColoredStrEntry("The save keeps the edited position and the moves since the last edit", Color.Yellow));
+
+            SaveFile saveFile = new SaveFile(_state, ActionsSinceLastEdit(), RedoActions().AsEnumerable().Reverse().ToList());
             string saveData = SaveFileSerializer.Serialize(saveFile);
             File.WriteAllText(filepath, saveData);
         }
 
         public void SerializeLoop()
         {
-            SaveFile saveFile = new SaveFile(_state, _playedActions.Reverse().ToList(), _undoHistory.Reverse().ToList());
+            SaveFile saveFile = new SaveFile(_state, ActionsSinceLastEdit(), RedoActions().AsEnumerable().Reverse().ToList());
             string saveData = SaveFileSerializer.Serialize(saveFile);
-            saveFile = SaveFileSerializer.Deserialize(saveData);
-            _state = saveFile.GameState;
-            _playedActions = new(saveFile.PlayedActions);
-            _undoHistory = new(saveFile.UndoHistory);
-
-            // Reset internal agent state
-            ResetAgents();
-
-            // Update visuals
-            _renderer.Board = _state.Board;
-            _renderer.Update();
-
-            // Recalculate valuation
-            UpdateValuation();
-
-            _playerIndex = _state.Turn.PlayerIndex;
-            _cardWidget.SetPlayerState(_state.Players[_playerIndex]);
-
-            _diceWidget.Active = _state.Turn.MustRoll;
-            _diceWidget.RollResult = _state.Turn.LastRoll;
-            _diceWidget.UpdateSprites();
+            ApplySaveFile(SaveFileSerializer.Deserialize(saveData));
         }
+        #endregion
     }
 }

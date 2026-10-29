@@ -9,7 +9,9 @@ namespace Client
     {
         private RectangleShape _firstDie;
         private RectangleShape _secondDie;
-        private static readonly int _size = 180;
+        // Size of a die in pixels
+        public const int Size = 120;
+        private const int _size = Size;
         private static readonly Color _inactiveColor = new Color(255, 255, 255, 85);
         private bool _active;
 
@@ -61,8 +63,8 @@ namespace Client
         private void UpdatePosition(RenderWindow window)
         {
             // Position at the bottom right corner of view coordinate system (center = 0, 0)
-            _firstDie.Position = new Vector2f(window.Size.X / 2 - 2*_size - 25, window.Size.Y / 2 - _size - 25);
-            _secondDie.Position = new Vector2f(window.Size.X / 2 - _size - 25, window.Size.Y / 2 - _size - 25);
+            _firstDie.Position = new Vector2f(window.Size.X / 2 - 2 * _size - 40, window.Size.Y / 2 - _size - 20);
+            _secondDie.Position = new Vector2f(window.Size.X / 2 - _size - 20, window.Size.Y / 2 - _size - 20);
         }
 
         public void UpdateSprites()

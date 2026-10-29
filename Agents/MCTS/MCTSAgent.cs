@@ -187,6 +187,33 @@ namespace Agents.MCTS
             _tree = null;
         }
 
+        /// <summary>
+        /// A root move of the search: its visits, its prior and its mean value for each player
+        /// </summary>
+        public sealed record RootMove(Action Move, uint Visits, float Prior, double[] MeanValues);
+
+        /// <summary>
+        /// The root moves of the current tree and the state they belong to, for showing the search (also while it runs: the
+        /// counts are read without a lock, so they can lag a batch behind); empty without a tree or for a chance node
+        /// </summary>
+        public (GameState? state, IReadOnlyList<RootMove> moves) GetRootMoves()
+        {
+            MCTSTree? tree = _tree;
+            if (tree == null) return (null, []);
+
+            List<RootMove> moves = [];
+            foreach (MCTSNode child in tree.RootNode.Children)
+            {
+                if (child.LastAction == null) return (tree.RootState, []);
+                uint resolved = child.ResolvedVisitCount;
+                double[] means = new double[MCTSNode.PlayerCount];
+                for (int player = 0; player < means.Length; player++)
+                    means[player] = resolved == 0 ? 0 : child.PlayerScore(player) / resolved;
+                moves.Add(new RootMove(child.LastAction, child.VisitCount, child.Prior, means));
+            }
+            return (tree.RootState, moves);
+        }
+
         public void RunIterations(int iterations)
         {
             Console.WriteLine($"Running {iterations} MCTS iterations:");

@@ -264,6 +264,11 @@ namespace Client
         [DllImport("RenderDataImpl.dll", CharSet = CharSet.Unicode, CallingConvention = CallingConvention.Cdecl)]
         private static extern void RenderDrawLists(ImDrawDataPtr drawData, ImGuiIOPtr io);
 
+        /// <summary>
+        /// The ImGui texture ID of an SFML texture, for images on draw lists
+        /// </summary>
+        public static IntPtr TextureId(Texture texture) => ConvertGlTextureHandleToImTextureId(texture.NativeHandle);
+
         private static unsafe IntPtr ConvertGlTextureHandleToImTextureId(uint glTextureHandle)
         {
             var imTexId = 0;
