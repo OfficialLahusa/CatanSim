@@ -6,14 +6,16 @@ namespace Client.UI
 {
     /// <summary>
     /// Yields of a roll as small cards flying in an arc from the producing tile to the receiving player's hand or seat panel,
-    /// with a fading streak behind them and a flash on arrival. Positions are in screen pixels.
+    /// with a fading streak behind them and a flash on arrival. Positions are in HUD units. The destination is asked for every
+    /// frame, since the panels it points into may not be laid out yet when a card starts (a roll before the first frame).
     /// </summary>
     public class Particles
     {
         private sealed class Particle
         {
             public ResourceCardType Card;
-            public Vector2 From, Control, To;
+            public Vector2 From;
+            public Func<Vector2> To = () => Vector2.Zero;
             public float Delay, Age;
         }
 
@@ -32,15 +34,11 @@ namespace Client.UI
         public bool IsEmpty => _particles.Count == 0 && _flashes.Count == 0;
 
         /// <summary>
-        /// A card flying from one screen point to another, starting after a delay
+        /// A card flying from a point to a destination, starting after a delay
         /// </summary>
-        public void Add(ResourceCardType card, Vector2 from, Vector2 to, float delay)
+        public void Add(ResourceCardType card, Vector2 from, Func<Vector2> to, float delay)
         {
-            // Arc above the straight line, higher for longer flights
-            Vector2 mid = (from + to) / 2;
-            float distance = Vector2.Distance(from, to);
-            Vector2 control = mid + new Vector2(0, -0.35f * distance);
-            _particles.Add(new Particle { Card = card, From = from, Control = control, To = to, Delay = delay });
+            _particles.Add(new Particle { Card = card, From = from, To = to, Delay = delay });
         }
 
         public void Clear()
@@ -56,7 +54,7 @@ namespace Client.UI
 
             foreach (Particle p in _particles.Where(p => p.Age - p.Delay >= FlightSeconds).ToList())
             {
-                _flashes.Add(new Flash { At = p.To, Color = ColorPalette.GetCardColor(p.Card) });
+                _flashes.Add(new Flash { At = p.To(), Color = ColorPalette.GetCardColor(p.Card) });
                 _particles.Remove(p);
             }
             _flashes.RemoveAll(f => f.Age >= FlashSeconds);
@@ -68,6 +66,7 @@ namespace Client.UI
             {
                 float u = (p.Age - p.Delay) / FlightSeconds;
                 if (u < 0) continue;
+                Vector2 to = p.To();
 
                 float eased = 0.5f - 0.5f * MathF.Cos(MathF.PI * u);
                 float opacity = u < 0.88f ? 1 : (1 - u) / 0.12f;
@@ -79,13 +78,13 @@ namespace Client.UI
                 {
                     float a = MathF.Max(0, eased - Streak * (i + 1) / segments), b = MathF.Max(0, eased - Streak * i / segments);
                     float fade = 1 - (float)i / segments;
-                    dl.AddLine(Bezier(p, a), Bezier(p, b), Theme.U32(Theme.WithAlpha(color, 0.55f * opacity * fade)), 7 * fade + 1);
+                    dl.AddLine(Bezier(p.From, to, a), Bezier(p.From, to, b), Theme.U32(Theme.WithAlpha(color, 0.55f * opacity * fade)), 7 * fade + 1);
                 }
 
                 // The card grows on the way up and shrinks into the destination
                 float scale = u < 0.45f ? 0.5f + 0.75f * MathF.Sin(MathF.PI * u / 0.9f) : 1.25f - 0.65f * (u - 0.45f) / 0.55f;
                 Vector2 size = new Vector2(24, 32) * scale;
-                Theme.ResourceCard(dl, p.Card, Bezier(p, eased) - size / 2, size, true, opacity);
+                Theme.ResourceCard(dl, p.Card, Bezier(p.From, to, eased) - size / 2, size, true, opacity);
             }
 
             foreach (Flash f in _flashes)
@@ -95,9 +94,13 @@ namespace Client.UI
             }
         }
 
-        private static Vector2 Bezier(Particle p, float t)
+        /// <summary>
+        /// A point on the arc above the straight line, higher for longer flights
+        /// </summary>
+        private static Vector2 Bezier(Vector2 from, Vector2 to, float t)
         {
-            return (1 - t) * (1 - t) * p.From + 2 * (1 - t) * t * p.Control + t * t * p.To;
+            Vector2 control = (from + to) / 2 + new Vector2(0, -0.35f * Vector2.Distance(from, to));
+            return (1 - t) * (1 - t) * from + 2 * (1 - t) * t * control + t * t * to;
         }
     }
 }

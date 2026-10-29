@@ -94,6 +94,11 @@ namespace Client
             _rollAge = 0;
         }
 
+        public void ClearPlacements()
+        {
+            _placements.Clear();
+        }
+
         public void ClearRoll()
         {
             _rolledTiles.Clear();

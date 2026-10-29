@@ -155,17 +155,28 @@ namespace Client
                     if (_stateValueNet != null)
                         for (int seat = 0; seat < 3; seat++) Send(new Simulation.SetSeat(seat, SeatKind.MctsHard));
                     SetMode(InteractionMode.Spectate);
+                    ClearSceneEffects();
                     Send(new SetPlayback(new PlaybackState(false, true, 0.3f)));
                     return;
-                    break;
 
                 case "end":
                     PlayUntil(() => State.HasEnded, 20000);
                     break;
             }
 
+            ClearSceneEffects();
+
             // The agents play their seats again (none in Edit mode)
             ApplyPlaybackForMode(playing: false);
+        }
+
+        /// <summary>
+        /// The moves a scene played through all ran before the first frame: their flying cards and placement rings are stale
+        /// </summary>
+        private void ClearSceneEffects()
+        {
+            _particles.Clear();
+            _overlay.ClearPlacements();
         }
 
         /// <summary>

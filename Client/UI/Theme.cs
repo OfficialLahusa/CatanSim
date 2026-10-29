@@ -180,6 +180,7 @@ namespace Client.UI
         /// </summary>
         public static void RoundRectFilled(this ImDrawListPtr dl, Vector2 min, Vector2 max, uint color, float rounding = 0, ImDrawCornerFlags corners = ImDrawCornerFlags.All)
         {
+            (min, max) = SnapToPixels(min, max);
             if (rounding <= 0 || corners == ImDrawCornerFlags.None)
             {
                 dl.AddRectFilled(min, max, color);
@@ -194,14 +195,28 @@ namespace Client.UI
         /// </summary>
         public static void RoundRect(this ImDrawListPtr dl, Vector2 min, Vector2 max, uint color, float rounding = 0, ImDrawCornerFlags corners = ImDrawCornerFlags.All, float thickness = 1f)
         {
+            // The outline covers whole pixels on screen: snapped to the pixel grid and as many pixels thick as the scaled thickness
+            // rounds to, so at a fractional UI scale a 1 unit border doesn't fall between two pixels and turn faint on some sides
+            (min, max) = SnapToPixels(min, max);
+            float pixels = MathF.Max(1, MathF.Round(thickness * GuiImpl.UiScale));
+            thickness = pixels / GuiImpl.UiScale;
+            Vector2 half = new Vector2(thickness / 2);
             if (rounding <= 0 || corners == ImDrawCornerFlags.None)
             {
-                dl.AddRect(min, max, color, 0, corners, thickness);
+                dl.AddRect(min + half, max - half, color, 0, corners, thickness);
                 return;
             }
-            // As ImGui does: the outline runs through the pixel centers
-            PathRoundRect(dl, min + new Vector2(0.5f), max - new Vector2(0.5f), rounding, corners);
+            PathRoundRect(dl, min + half, max - half, rounding, corners);
             dl.PathStroke(color, true, thickness);
+        }
+
+        /// <summary>
+        /// A rect in HUD units moved to the nearest whole pixels of the scaled screen
+        /// </summary>
+        private static (Vector2 min, Vector2 max) SnapToPixels(Vector2 min, Vector2 max)
+        {
+            float scale = GuiImpl.UiScale;
+            return (Vector2.Round(min * scale) / scale, Vector2.Round(max * scale) / scale);
         }
 
         /// <summary>
@@ -399,17 +414,23 @@ namespace Client.UI
         public const ImGuiWindowFlags HudFlags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoMove
             | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBringToFrontOnFocus | ImGuiWindowFlags.NoNav;
 
+        private const float HudBleed = 4f;
+
         /// <summary>
         /// Opens a borderless, transparent window covering a screen rect, for a panel drawn on its draw list; close with ImGui.End
         /// </summary>
         public static ImDrawListPtr BeginHud(string id, Vector2 min, Vector2 size)
         {
-            ImGui.SetNextWindowPos(min);
-            ImGui.SetNextWindowSize(size);
+            // The window reaches a few units past the rect, so outlines and their anti-aliased edges on the rect's border aren't
+            // clipped (a panel drawn at the window's edge got a thinner top border); the cursor still starts at the rect
+            Vector2 bleed = new Vector2(HudBleed);
+            ImGui.SetNextWindowPos(min - bleed);
+            ImGui.SetNextWindowSize(size + 2 * bleed);
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
             ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 0f);
             ImGui.Begin(id, HudFlags);
             ImGui.PopStyleVar(2);
+            ImGui.SetCursorScreenPos(min);
             return ImGui.GetWindowDrawList();
         }
 

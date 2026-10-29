@@ -508,7 +508,7 @@ namespace Client
                     {
                         sent[owner, resourceIdx]++;
                         Vector2i from = _window.MapCoordsToPixel(tileCenter, _mapView);
-                        _particles.Add(resource, new System.Numerics.Vector2(from.X, from.Y) / GuiImpl.UiScale, CardDestination(owner, resource), delay);
+                        _particles.Add(resource, new System.Numerics.Vector2(from.X, from.Y) / GuiImpl.UiScale, () => CardDestination(owner, resource), delay);
                         delay += 0.12f;
                     }
                 }
