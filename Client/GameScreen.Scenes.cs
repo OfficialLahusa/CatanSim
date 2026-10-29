@@ -54,7 +54,7 @@ namespace Client
         private static extern void glReadPixels(int x, int y, int width, int height, uint format, uint type, byte[] pixels);
 
         public static readonly string[] Scenes = ["setup", "main", "road", "city", "roll", "discard", "robber", "victim", "trade", "devcards", "plenty",
-            "monopoly", "newgame", "save", "developer", "curtain", "offer", "tradeanswer", "tradepick", "spectate", "edit", "end", "hand"];
+            "monopoly", "newgame", "save", "developer", "curtain", "offer", "tradeanswer", "tradepick", "spectate", "edit", "end", "hand", "rolls"];
 
         /// <summary>
         /// Plays fast agent moves up to a situation and sets the mode for it. Seat 4 (Orange) is the human.
@@ -97,6 +97,7 @@ namespace Client
                 case "tradepick":
                 case "edit":
                 case "hand":
+                case "rolls":
                     PlayUntil(() => HumanMainPhase(4));
                     if (scene == "road")
                     {
@@ -129,6 +130,10 @@ namespace Client
                         after.DevelopmentBank.Remove(DevelopmentCardType.YearOfPlenty, 1);
                         SendEdit(new BoardEdit("gave Orange development cards", 3, State, after));
                         _dialog = Dialog.DevelopmentCard;
+                    }
+                    else if (scene == "rolls")
+                    {
+                        _rollChartPinned = true;
                     }
                     else if (scene == "hand")
                     {

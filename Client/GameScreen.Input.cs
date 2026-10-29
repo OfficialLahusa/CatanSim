@@ -326,11 +326,12 @@ namespace Client
 
             if (e.Button != Mouse.Button.Left || ImGui.GetIO().WantCaptureMouse) return;
 
-            // The dice roll for a human who has to roll
+            // The dice roll for a human who has to roll; otherwise a click pins the roll chart or closes it
             Vector2f uiMousePos = _window.MapPixelToCoords(new Vector2i(e.X, e.Y), _uiView);
-            if (_mode == InteractionMode.Play && _diceWidget.Contains(uiMousePos.X, uiMousePos.Y))
+            if (_diceWidget.Contains(uiMousePos.X, uiMousePos.Y))
             {
-                if (HumanToAct is int player && HasLegal<RollAction>(player)) PlayFirst<RollAction>(player);
+                if (_mode == InteractionMode.Play && HumanToAct is int player && HasLegal<RollAction>(player)) PlayFirst<RollAction>(player);
+                else _rollChartPinned = !_rollChartPinned;
                 return;
             }
 

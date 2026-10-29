@@ -28,6 +28,7 @@ namespace Client
         private readonly Vector2[] _seatCardAnchor = new Vector2[PLAYER_COUNT];
         private readonly Dictionary<ResourceCardType, Vector2> _handStackCenter = [];
         private readonly Dictionary<DevelopmentCardType, Vector2> _handDevelopmentStackCenter = [];
+        private bool _rollChartPinned;
         private Vector2 _handAnchor;
 
         // Hover animation of the hand's card stacks
@@ -69,6 +70,7 @@ namespace Client
             }
 
             DrawRollLabel();
+            DrawRollChart();
             DrawGhostTooltip();
             DrawDialogs();
             DrawEndScreen();
@@ -494,6 +496,57 @@ namespace Client
             Theme.DrawText(dl, Theme.Regular17, center - new Vector2((tw + nw) / 2, 11), new Color(223, 231, 255), text);
             Theme.DrawText(dl, Theme.Bold17, center - new Vector2((tw + nw) / 2 - tw, 11), Theme.Highlight, number);
             ImGui.End();
+        }
+
+        /// <summary>
+        /// The rolls so far as one bar per total with a line at the count expected after as many rolls, above the dice while
+        /// they or the roll label are hovered, or until the dice are clicked again after a click that didn't roll pinned it
+        /// </summary>
+        private void DrawRollChart()
+        {
+            float diceTop = Display.Y - Margin - DiceWidget.Size;
+            Vector2 area = new Vector2(Display.X - 2 * Margin - 2 * DiceWidget.Size, diceTop - 32);
+            Vector2 mouse = ImGui.GetIO().MousePos;
+            bool hovered = mouse.X >= area.X && mouse.Y >= area.Y && mouse.X <= Display.X - Margin && mouse.Y <= Display.Y - Margin;
+            if (!hovered && !_rollChartPinned) return;
+
+            int rolls = (int)_rollDistribution.Sum();
+            Vector2 size = new Vector2(ColumnWidth, 220);
+            Vector2 min = new Vector2(Display.X - Margin - ColumnWidth, area.Y - 10 - size.Y);
+            ImDrawListPtr dl = ImGui.GetForegroundDrawList();
+            Theme.DrawPanel(dl, min, min + size, Theme.BorderLight, 12, new Color(15, 33, 86));
+            Theme.DrawText(dl, Theme.Bold15, min + new Vector2(16, 12), Theme.Text, "Rolls");
+            Theme.DrawText(dl, Theme.Regular13, min + new Vector2(22 + Theme.TextSize(Theme.Bold15, "Rolls").X, 14), Theme.TextMuted, $"({rolls} so far)");
+
+            // Legend for the expected counts
+            float legendX = min.X + size.X - 16 - Theme.TextSize(Theme.Regular13, "expected").X;
+            Theme.DrawText(dl, Theme.Regular13, new Vector2(legendX, min.Y + 14), Theme.TextMuted, "expected");
+            dl.AddLine(new Vector2(legendX - 26, min.Y + 23), new Vector2(legendX - 6, min.Y + 23), Theme.U32(Theme.WithAlpha(Color.White, 0.75f)), 2);
+
+            float left = min.X + 16, baseline = min.Y + size.Y - 34, top = min.Y + 60;
+            float slot = (size.X - 32) / 11;
+            if (rolls == 0) Theme.TextCentered(dl, Theme.Regular15, new Vector2(min.X + size.X / 2, (top + baseline) / 2), Theme.TextMuted, "No rolls yet");
+
+            static float Expected(int total, int rolls) => rolls * (6 - Math.Abs(total - 7)) / 36f;
+            float scale = Math.Max(1, Enumerable.Range(2, 11).Max(t => Math.Max(_rollDistribution[t], Expected(t, rolls))));
+            Color red = new Color(232, 64, 64);
+            for (int total = 2; total <= 12; total++)
+            {
+                float x = left + (total - 2) * slot;
+                int count = (int)_rollDistribution[total];
+                // The 7 in gray: those rolls moved the robber instead of paying out
+                Color color = total == 7 ? new Color(150, 158, 180) : total is 6 or 8 ? red : new Color(88, 140, 255);
+                float height = (baseline - top) * count / scale;
+                float expected = MathF.Round(baseline - (baseline - top) * Expected(total, rolls) / scale);
+                if (count > 0) dl.RoundRectFilled(new Vector2(x + 6, baseline - height), new Vector2(x + slot - 6, baseline), Theme.U32(color), 3, ImDrawCornerFlags.Top);
+                if (rolls > 0) dl.AddLine(new Vector2(x + 2, expected), new Vector2(x + slot - 2, expected), Theme.U32(Theme.WithAlpha(Color.White, 0.75f)), 2);
+                // The count above the bar, and above the expected line where that is close to the bar's top
+                float labelY = baseline - height - 10;
+                if (rolls > 0 && labelY + 8 > expected - 1) labelY = Math.Min(labelY, expected - 10);
+                if (count > 0) Theme.TextCentered(dl, Theme.Bold13, new Vector2(x + slot / 2, labelY), Theme.Text, count.ToString());
+                Theme.TextCentered(dl, Theme.Bold15, new Vector2(x + slot / 2, baseline + 16), total is 6 or 8 ? red : Theme.TextSoft, total.ToString());
+            }
+            dl.AddLine(new Vector2(left, baseline + 0.5f), new Vector2(left + 11 * slot, baseline + 0.5f), Theme.U32(Theme.BorderLight), 1);
         }
 
         /// <summary>
