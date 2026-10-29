@@ -54,7 +54,7 @@ namespace Client
         private static extern void glReadPixels(int x, int y, int width, int height, uint format, uint type, byte[] pixels);
 
         public static readonly string[] Scenes = ["setup", "main", "road", "city", "roll", "discard", "robber", "victim", "trade", "devcards", "plenty",
-            "monopoly", "newgame", "save", "developer", "curtain", "offer", "tradeanswer", "tradepick", "spectate", "edit", "end"];
+            "monopoly", "newgame", "save", "developer", "curtain", "offer", "tradeanswer", "tradepick", "spectate", "edit", "end", "hand"];
 
         /// <summary>
         /// Plays fast agent moves up to a situation and sets the mode for it. Seat 4 (Orange) is the human.
@@ -96,6 +96,7 @@ namespace Client
                 case "offer":
                 case "tradepick":
                 case "edit":
+                case "hand":
                     PlayUntil(() => HumanMainPhase(4));
                     if (scene == "road")
                     {
@@ -128,6 +129,22 @@ namespace Client
                         after.DevelopmentBank.Remove(DevelopmentCardType.YearOfPlenty, 1);
                         SendEdit(new BoardEdit("gave Orange development cards", 3, State, after));
                         _dialog = Dialog.DevelopmentCard;
+                    }
+                    else if (scene == "hand")
+                    {
+                        // A big hand with playable development cards, one bought this turn and a victory point
+                        foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes) GiveCards(3, type, 5);
+                        GameState after = new GameState(State);
+                        (DevelopmentCardType type, uint amount)[] cards = [(DevelopmentCardType.Knight, 3), (DevelopmentCardType.Monopoly, 1),
+                            (DevelopmentCardType.YearOfPlenty, 2), (DevelopmentCardType.VictoryPoint, 2)];
+                        foreach ((DevelopmentCardType type, uint wanted) in cards)
+                        {
+                            uint amount = Math.Min(wanted, after.DevelopmentBank.Get(type));
+                            after.Players[3].DevelopmentCards.Add(type, amount);
+                            after.DevelopmentBank.Remove(type, amount);
+                        }
+                        after.Players[3].NewDevelopmentCards.Add(DevelopmentCardType.YearOfPlenty, 1);
+                        SendEdit(new BoardEdit("gave Orange development cards", 3, State, after));
                     }
                     else if (scene is "plenty" or "monopoly")
                     {

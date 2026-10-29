@@ -519,6 +519,21 @@ namespace Client
             if (viewer is not int seat || seat < 0) return;
 
             PlayerState player = State.Players[seat];
+
+            // Stacks as in the client's card widget: each further card of a type behind it, to the left. The panel grows for
+            // big hands up to the right column, beyond that the cards in a stack move closer together
+            Vector2 cardSize = new Vector2(80, 120);
+            const float gap = 12;
+            uint[] counts = [.. CardTypeExtensions.ResourceTypes.Select(t => player.ResourceCards.Get(t)),
+                .. CardSet<DevelopmentCardType>.Values.Select(t => player.DevelopmentCards.Get(t))];
+            bool anyDev = player.DevelopmentCards.Count() > 0;
+            int stacks = counts.Count(c => c > 0);
+            float extra = counts.Where(c => c > 0).Sum(c => c - 1f);
+            float fixedWidth = 32 + stacks * (cardSize.X + gap) + (anyDev ? 0 : 88);
+            float maxWidth = Math.Max(size.X, Display.X - 3 * Margin - ColumnWidth - 12);
+            float shift = extra == 0 ? 16 : Math.Clamp((maxWidth - fixedWidth) / extra, 4, 16);
+            size.X = Math.Clamp(fixedWidth + extra * shift, size.X, maxWidth);
+
             ImDrawListPtr dl = Theme.BeginHud("##hand", min - new Vector2(0, 30), size + new Vector2(0, 38));
             Theme.DrawPanel(dl, min, min + size, Theme.PlayerColor(seat), 16, null, 2);
             dl.AddCircleFilled(min + new Vector2(26, 28), 10, Theme.U32(Theme.PlayerColor(seat)), 24);
@@ -529,9 +544,6 @@ namespace Client
             Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 16, 21), Theme.TextMuted,
                 $"{stock.RemainingRoads} roads · {stock.RemainingSettlements} settl. · {stock.RemainingCities} cities left");
 
-            // Stacks as in the client's card widget: each further card of a type behind it, to the left
-            const float shift = 16;
-            Vector2 cardSize = new Vector2(80, 120);
             float x = min.X + 16;
             float top = min.Y + 56;
             float dt = ImGui.GetIO().DeltaTime;
@@ -554,27 +566,34 @@ namespace Client
                 if (hovered) DrawTooltip(dl, new Vector2(x + width / 2, top - lift - 16), count > 1 ? $"{count} {type.GetName()}" : type.GetName());
 
                 _handStackCenter[type] = new Vector2(x + width - cardSize.X / 2, top + cardSize.Y / 2);
-                x += width + 12;
+                x += width + gap;
             }
 
-            // Development cards: the ones bought this turn (also counted in DevelopmentCards) are muted, they can't be played yet
-            bool anyDev = false;
+            // Development cards: the ones bought this turn (also counted in DevelopmentCards) are muted, they can't be played
+            // yet; a click on a playable one plays it as in the development card dialog
             foreach (DevelopmentCardType type in CardSet<DevelopmentCardType>.Values)
             {
                 uint count = player.DevelopmentCards.Get(type), fresh = player.NewDevelopmentCards.Get(type);
                 uint playable = count - fresh;
                 int hoverIdx = stackIdx++;
                 if (count == 0) continue;
-                anyDev = true;
 
+                bool legal = HumanToAct == seat && CanPlayDevelopmentCard(seat, type);
                 float width = cardSize.X + (count - 1) * shift;
-                Theme.HitArea($"dev{type}", new Vector2(x, top - 10), new Vector2(width, cardSize.Y + 10), out bool hovered);
+                bool clicked = Theme.HitArea($"dev{type}", new Vector2(x, top - 10), new Vector2(width, cardSize.Y + 10), out bool hovered);
                 _stackHover[hoverIdx] = Math.Clamp(_stackHover[hoverIdx] + (hovered ? 5f : -5f) * dt, 0, 1);
                 float lift = Easing.ExpOut(_stackHover[hoverIdx]) * 12;
+                Vector2 front = new Vector2(x + (count - 1) * shift, top - lift);
+                if (hovered && legal) Theme.Glow(dl, front, front + cardSize, Color.White, 6, 1);
                 for (uint i = 0; i < count; i++)
                     Theme.DevelopmentCard(dl, type, new Vector2(x + i * shift, top - lift), cardSize, i == count - 1, 1, i >= playable);
-                if (hovered) DrawTooltip(dl, new Vector2(x + width / 2, top - lift - 16), fresh > 0 ? $"{type.GetName()} ({fresh} new)" : type.GetName());
-                x += width + 12;
+                if (hovered)
+                {
+                    string tip = fresh > 0 ? $"{type.GetName()} ({fresh} new)" : type.GetName();
+                    DrawTooltip(dl, new Vector2(x + width / 2, top - lift - 16), legal ? $"{tip} · click to play" : tip);
+                }
+                if (clicked && legal) PlayDevelopmentCard(seat, type);
+                x += width + gap;
             }
 
             if (!anyDev && x + 88 < min.X + size.X)
@@ -808,16 +827,39 @@ namespace Client
             ImGui.End();
         }
 
+        private bool CanPlayDevelopmentCard(int player, DevelopmentCardType type) => type switch
+        {
+            DevelopmentCardType.Knight => HasLegal<KnightAction>(player),
+            DevelopmentCardType.RoadBuilding => HasLegal<RoadBuildingAction>(player),
+            DevelopmentCardType.YearOfPlenty => HasLegal<YearOfPlentyAction>(player),
+            DevelopmentCardType.Monopoly => HasLegal<MonopolyAction>(player),
+            _ => false,
+        };
+
+        /// <summary>
+        /// Plays a development card, or opens the dialog for its choice (year of plenty, monopoly)
+        /// </summary>
+        private void PlayDevelopmentCard(int player, DevelopmentCardType type)
+        {
+            switch (type)
+            {
+                case DevelopmentCardType.Knight: PlayFirst<KnightAction>(player); break;
+                case DevelopmentCardType.RoadBuilding: PlayFirst<RoadBuildingAction>(player); break;
+                case DevelopmentCardType.YearOfPlenty: _dialog = Dialog.YearOfPlenty; break;
+                case DevelopmentCardType.Monopoly: _dialog = Dialog.Monopoly; break;
+            }
+        }
+
         private void DrawDevelopmentDialog()
         {
             if (HumanToAct is not int player || !HasDevelopmentMoves(player)) { _dialog = Dialog.None; return; }
 
             (DevelopmentCardType type, bool legal, string what)[] cards =
             [
-                (DevelopmentCardType.Knight, HasLegal<KnightAction>(player), "Move the robber and steal a card"),
-                (DevelopmentCardType.RoadBuilding, HasLegal<RoadBuildingAction>(player), "Place two free roads"),
-                (DevelopmentCardType.YearOfPlenty, HasLegal<YearOfPlentyAction>(player), "Take two cards from the bank"),
-                (DevelopmentCardType.Monopoly, HasLegal<MonopolyAction>(player), "Take all cards of one resource"),
+                (DevelopmentCardType.Knight, CanPlayDevelopmentCard(player, DevelopmentCardType.Knight), "Move the robber and steal a card"),
+                (DevelopmentCardType.RoadBuilding, CanPlayDevelopmentCard(player, DevelopmentCardType.RoadBuilding), "Place two free roads"),
+                (DevelopmentCardType.YearOfPlenty, CanPlayDevelopmentCard(player, DevelopmentCardType.YearOfPlenty), "Take two cards from the bank"),
+                (DevelopmentCardType.Monopoly, CanPlayDevelopmentCard(player, DevelopmentCardType.Monopoly), "Take all cards of one resource"),
             ];
 
             ImDrawListPtr dl = BeginDialog("##devcards", new Vector2(600, 360), "Play a development card", "One per turn; cards bought this turn have to wait.", player, out Vector2 min);
@@ -842,16 +884,7 @@ namespace Client
                     : State.Turn.HasPlayedDevelopmentCard ? "Already played one"
                     : "Not playable now";
                 if (status != null) Theme.TextCentered(dl, Theme.Bold13, pos + new Vector2(64, 186), Theme.TextMuted, status);
-                if (clicked && card.legal)
-                {
-                    switch (card.type)
-                    {
-                        case DevelopmentCardType.Knight: PlayFirst<KnightAction>(player); break;
-                        case DevelopmentCardType.RoadBuilding: PlayFirst<RoadBuildingAction>(player); break;
-                        case DevelopmentCardType.YearOfPlenty: _dialog = Dialog.YearOfPlenty; break;
-                        case DevelopmentCardType.Monopoly: _dialog = Dialog.Monopoly; break;
-                    }
-                }
+                if (clicked && card.legal) PlayDevelopmentCard(player, card.type);
             }
             if (DrawButton(dl, "devcancel", min + new Vector2(600 - 24 - 120, 360 - 20 - 34), new Vector2(120, 34), "Cancel", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))
                 ClearHumanInput();
