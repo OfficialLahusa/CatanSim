@@ -179,6 +179,7 @@
 	- Umgesetzt: Bibliothek Simulation (Match mit History/Undo/Edits, AgentRunner, Event-Stream, LocalSimulation/RemoteSimulation), Protokoll JSON über WebSocket (States/Actions als Save-File-YAML), Server-Exe mit Admin-Konsole, Rollen Admin/Player/Agent/Spectator mit gehashten Tokens und Reconnect; Client spielt immer über ISimulation, hostet oder tritt bei; Admin-Panel im Client (Sitze, Playback, Verbindungen, Tokens anlegen/widerrufen, Optionen), TLS mit gepinntem Fingerprint, Login-Sperre nach Fehlversuchen, Admins nur lokal (AllowRemoteAdmins), Origin-Check, Größen- und Verbindungslimits; Server würfelt selbst (Client-History wird verworfen)
 	- Offen: Events pro Session nach Hidden Information filtern (braucht StateView, s. oben; bis dahin sehen Clients den vollen State), Bench als Headless-Kommandos (Builder-Checks, Statistik), mehrere Matches pro Server und Lobby
 	- Agent Bridge als eigenes Projekt: Konsolen-App verbindet sich mit Agent-Token für einen Sitz und spielt ihn mit lokalem Agent (MCTS mit beliebigem Net) oder reicht die Entscheidungen per JSON über stdin/stdout an externe Bots weiter (Python, Catanatron)
+- Share Links: Klick öffnet direkt ein Replay, eine Position oder ein Match mit gegebener Konfiguration (Sitze, Regeln, Agents), z.B. per URL-Schema im Client oder Web-Client
 - Interface für JSettlers Agents/Server
 - Tabletalking über LLMs
 	- Zusätzlich zu Value Functions von einem Basisbot
