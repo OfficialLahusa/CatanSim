@@ -51,7 +51,47 @@ namespace Client
 
         static TextureAtlas()
         {
-            Texture = new Texture(@"..\..\..\res\atlas.png");
+            using Image image = new Image(@"..\..\..\res\atlas.png");
+            using Image bled = BleedColors(image);
+            Texture = new Texture(bled);
+        }
+
+        /// <summary>
+        /// The atlas with every fully transparent pixel colored like the nearest visible one. The file's transparent pixels are
+        /// black, which smoothing and mipmaps mixed into the edges of the tinted icons as a dark rim (most visible on light
+        /// icons like the sheep). A breadth-first fill from the visible pixels, so each transparent pixel takes its color from
+        /// one a shortest step path away.
+        /// </summary>
+        private static Image BleedColors(Image image)
+        {
+            int width = (int)image.Size.X, height = (int)image.Size.Y, count = width * height;
+            byte[] pixels = image.Pixels;
+            bool[] colored = new bool[count];
+            int[] queue = new int[count];
+            int head = 0, tail = 0;
+            for (int i = 0; i < count; i++)
+            {
+                if (pixels[4 * i + 3] == 0) continue;
+                colored[i] = true;
+                queue[tail++] = i;
+            }
+
+            while (head < tail)
+            {
+                int from = queue[head++];
+                int x = from % width, y = from / width;
+                for (int n = 0; n < 4; n++)
+                {
+                    int to = n switch { 0 => x > 0 ? from - 1 : -1, 1 => x < width - 1 ? from + 1 : -1, 2 => y > 0 ? from - width : -1, _ => y < height - 1 ? from + width : -1 };
+                    if (to < 0 || colored[to]) continue;
+                    colored[to] = true;
+                    pixels[4 * to] = pixels[4 * from];
+                    pixels[4 * to + 1] = pixels[4 * from + 1];
+                    pixels[4 * to + 2] = pixels[4 * from + 2];
+                    queue[tail++] = to;
+                }
+            }
+            return new Image((uint)width, (uint)height, pixels);
         }
 
         public static IntRect GetTextureRect(this Sprite sprite)
