@@ -175,7 +175,7 @@ namespace Client
             Theme.DrawPanel(dl, min, min + size);
             Theme.DrawText(dl, Theme.Bold17, min + new Vector2(20, 12), Theme.Text, "Win chances");
             string source = _evalSource == EvalSource.Search && _searchMoves.Count > 0 && _mode == InteractionMode.Spectate ? "search" : "value net";
-            Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 20, 16), Theme.TextMuted, $"{source} · after move {History.Count}");
+            Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 20, 16), Theme.TextMuted, $"{source}, after move {History.Count}");
 
             // The bar: one segment per player in seat order
             Vector2 bar = min + new Vector2(16, 44);
@@ -336,8 +336,8 @@ namespace Client
             Theme.DrawPanel(dl, min, min + size, Theme.PlayerColor(acting), 16, null, 2);
             dl.AddCircleFilled(min + new Vector2(26, 28), 10, Theme.U32(Theme.PlayerColor(acting)), 24);
             Theme.DrawText(dl, Theme.Bold20, min + new Vector2(44, 15), Theme.Text, Theme.PlayerName(acting));
-            Theme.DrawText(dl, Theme.Regular17, min + new Vector2(44 + Theme.TextSize(Theme.Bold20, Theme.PlayerName(acting)).X, 17), Theme.TextMuted, "  ·  policy");
-            string info = hasVisits ? $"{analysis.Count} moves · {(long)_searchMoves.Sum(m => (double)m.Visits) / 1000.0:0.#}k visits" : $"{analysis.Count} moves · net only";
+            Theme.DrawText(dl, Theme.Regular17, min + new Vector2(44 + Theme.TextSize(Theme.Bold20, Theme.PlayerName(acting)).X, 17), Theme.TextMuted, " (policy)");
+            string info = hasVisits ? $"{analysis.Count} moves, {(long)_searchMoves.Sum(m => (double)m.Visits) / 1000.0:0.#}k visits" : $"{analysis.Count} moves, net only";
             Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 16, 21), Theme.TextMuted, info);
 
             if (_stateValueNet?.Policy == null && !hasVisits)
@@ -391,7 +391,7 @@ namespace Client
             }
             static int TileCountOnEdge(IEnumerable<Tile?> tiles) => tiles.Count(t => t != null && t.IsLandTile());
             string EdgeName(int edge) => Tiles([board.Adjacency.GetWestTile(board.Edges[edge]), board.Adjacency.GetEastTile(board.Edges[edge])]);
-            string CornerName(int intersection) => string.Join(" · ", board.Adjacency.GetTiles(board.Intersections[intersection]).Where(t => t.IsLandTile())
+            string CornerName(int intersection) => string.Join(" | ", board.Adjacency.GetTiles(board.Intersections[intersection]).Where(t => t.IsLandTile())
                 .Select(t => t.HasYield() ? t.Number.ToString() : t.Type.ToString().ToLower()).DefaultIfEmpty("coast"));
             string Card(ResourceCardType type) => type.GetName().ToLower();
 
@@ -448,7 +448,7 @@ namespace Client
             ImDrawListPtr dl = Theme.BeginHud("##edittools", min, size + new Vector2(0, 8));
             Theme.DrawPanel(dl, min, min + size);
             Theme.DrawText(dl, Theme.Bold17, min + new Vector2(20, 14), Theme.Text, "Edit");
-            Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 20, 18), Theme.TextMuted, $"for {Theme.PlayerName(_editPlayer)} · click a seat to switch");
+            Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 20, 18), Theme.TextMuted, $"for {Theme.PlayerName(_editPlayer)} (click a seat to switch)");
 
             (EditTool tool, TextureAtlas.Sprite sprite, string label)[] tools =
             [

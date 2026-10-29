@@ -44,9 +44,9 @@ namespace Simulation
         public static string Name(SeatKind kind) => kind switch
         {
             SeatKind.Human => "Human",
-            SeatKind.MctsEasy => "MCTS · Easy",
-            SeatKind.MctsMedium => "MCTS · Medium",
-            SeatKind.MctsHard => "MCTS · Hard",
+            SeatKind.MctsEasy => "MCTS Easy",
+            SeatKind.MctsMedium => "MCTS Medium",
+            SeatKind.MctsHard => "MCTS Hard",
             SeatKind.Greedy => "Greedy",
             SeatKind.Builder => "Builder",
             SeatKind.Simple => "Simple",

@@ -13,7 +13,7 @@ namespace Server
     {
         public static async Task<int> Main(string[] args)
         {
-            // The status lines use characters outside the console's code page (seat names like "MCTS · Medium")
+            // The status lines may show names outside the console's code page (players name themselves)
             Console.OutputEncoding = System.Text.Encoding.UTF8;
             string? Option(string name) => Array.IndexOf(args, name) is int i && i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
             string path = Option("--config") ?? "server.json";

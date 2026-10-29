@@ -190,8 +190,8 @@ namespace Client
                 // Name, who plays it and what it is doing
                 string name = viewer == seat ? "You" : Theme.PlayerName(seat);
                 Theme.DrawText(dl, Theme.Bold22, min + new Vector2(80, 10), Theme.Text, name);
-                string who = viewer == seat ? $"{Theme.PlayerName(seat)} · human" : Simulation.Seats.Name(Seats[seat]);
-                if (_mode == InteractionMode.Spectate && IsHuman(seat)) who = "Human · stand-in agent";
+                string who = viewer == seat ? $"{Theme.PlayerName(seat)}, human" : Simulation.Seats.Name(Seats[seat]);
+                if (_mode == InteractionMode.Spectate && IsHuman(seat)) who = "Human (stand-in agent)";
                 Theme.DrawText(dl, Theme.Regular15, min + new Vector2(80, 41), Theme.TextMuted, who);
 
                 string? tag = SeatTag(seat, isActing);
@@ -299,37 +299,37 @@ namespace Client
             {
                 colorSeat = State.Turn.PlayerIndex;
                 headline = $"{Theme.PlayerName(colorSeat)} won the game";
-                detail = $" · {State.Players[colorSeat].VictoryPoints.Total} victory points";
+                detail = $" with {State.Players[colorSeat].VictoryPoints.Total} victory points";
             }
             else if (_mode == InteractionMode.Edit)
             {
                 colorSeat = _editPlayer;
                 headline = "Edit mode";
-                detail = $" · {EditToolName(_editTool)} for {Theme.PlayerName(_editPlayer)} · Ctrl+Z undoes";
+                detail = $" | {EditToolName(_editTool)} for {Theme.PlayerName(_editPlayer)} (Ctrl+Z undoes)";
             }
             else if (_mode == InteractionMode.Play && _curtainFor is int next)
             {
                 colorSeat = next;
                 headline = $"{Theme.PlayerName(next)}'s turn";
-                detail = " · pass the screen, then show the hand";
+                detail = " | Pass the screen, then show the hand";
             }
             else if (HumanToAct is int human)
             {
                 headline = HumanCount() > 1 ? $"{Theme.PlayerName(human)}'s turn" : "Your turn";
-                detail = " · " + HumanPrompt(human);
+                detail = " | " + HumanPrompt(human);
                 if (_buildMode != BuildMode.None) chip = "Esc";
             }
             else if (_sim.Game.ThinkingSeat is int thinkingSeat)
             {
                 headline = $"{Theme.PlayerName(thinkingSeat)} is thinking";
-                detail = $" · {Simulation.Seats.Name(Seats[thinkingSeat] == SeatKind.Human ? SeatKind.MctsMedium : Seats[thinkingSeat])}";
-                if (_mode == InteractionMode.Spectate && _liveIterations > 0) detail += $" · {_liveIterations / 1000.0:0.#}k iterations";
+                string agent = Simulation.Seats.Name(Seats[thinkingSeat] == SeatKind.Human ? SeatKind.MctsMedium : Seats[thinkingSeat]);
+                detail = _mode == InteractionMode.Spectate && _liveIterations > 0 ? $" ({agent}, {_liveIterations / 1000.0:0.#}k iterations)" : $" ({agent})";
                 chip = $"{_thinkingClock.Elapsed.TotalSeconds:0.0} s";
             }
             else if (_mode == InteractionMode.Spectate && !SpectatePlaying)
             {
                 headline = "Paused";
-                detail = acting >= 0 ? $" · {Theme.PlayerName(acting)} to move" : "";
+                detail = acting >= 0 ? $", {Theme.PlayerName(acting)} to move" : "";
             }
             else
             {
@@ -406,7 +406,7 @@ namespace Client
             int player = human ?? (Viewer is int viewing && viewing >= 0 ? viewing : 0);
 
             ImDrawListPtr dl = Theme.BeginHud("##actions", new Vector2(x - 8, buildTop - 26), new Vector2(ColumnWidth + 16, endTop + 72 - (buildTop - 26)));
-            Theme.TextCentered(dl, Theme.Regular13, new Vector2(x + ColumnWidth / 2, buildTop - 12), Theme.TextFaint, "Build  ·  keys 1-4");
+            Theme.TextCentered(dl, Theme.Regular13, new Vector2(x + ColumnWidth / 2, buildTop - 12), Theme.TextFaint, "Build (keys 1-4)");
 
             (string label, TextureAtlas.Sprite sprite, ResourceCardType[] cost, bool available, bool active, System.Action onClick)[] buttons =
             [
@@ -541,7 +541,7 @@ namespace Client
             dl.AddCircleFilled(min + new Vector2(26, 28), 10, Theme.U32(Theme.PlayerColor(seat)), 24);
             dl.AddCircle(min + new Vector2(26, 28), 10, Theme.U32(Color.White), 24, 2);
             Theme.DrawText(dl, Theme.Bold20, min + new Vector2(44, 15), Theme.Text, "Your hand");
-            Theme.DrawText(dl, Theme.Regular17, min + new Vector2(44 + Theme.TextSize(Theme.Bold20, "Your hand").X, 17), Theme.TextMuted, $"  ·  {player.ResourceCards.Count()} cards");
+            Theme.DrawText(dl, Theme.Regular17, min + new Vector2(44 + Theme.TextSize(Theme.Bold20, "Your hand").X, 17), Theme.TextMuted, $" ({player.ResourceCards.Count()} cards)");
             BuildingStock stock = player.BuildingStock;
             Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 16, 21), Theme.TextMuted,
                 $"{stock.RemainingRoads} roads, {stock.RemainingSettlements} settlements, {stock.RemainingCities} cities left");
@@ -592,8 +592,8 @@ namespace Client
                     Theme.DevelopmentCard(dl, type, new Vector2(x + i * shift, top - lift), cardSize, i == count - 1, 1, i >= playable);
                 if (hovered)
                 {
-                    string tip = fresh > 0 ? $"{type.GetName()} ({fresh} new)" : type.GetName();
-                    DrawTooltip(dl, new Vector2(x + width / 2, top - lift - 16), legal ? $"{tip} · click to play" : tip);
+                    string[] notes = [.. new[] { fresh > 0 ? $"{fresh} new" : null, legal ? "click to play" : null }.OfType<string>()];
+                    DrawTooltip(dl, new Vector2(x + width / 2, top - lift - 16), notes.Length > 0 ? $"{type.GetName()} ({string.Join(", ", notes)})" : type.GetName());
                 }
                 if (clicked && legal) PlayDevelopmentCard(seat, type);
                 _handDevelopmentStackCenter[type] = front + cardSize / 2;
@@ -658,7 +658,7 @@ namespace Client
             };
             string detail = move is RobberAction
                 ? moves.All(m => ((RobberAction)m).TargetPlayerIndex == null) ? "nobody to rob" : "rob " + string.Join(" or ", moves.Select(m => ((RobberAction)m).TargetPlayerIndex).OfType<sbyte>().Select(v => Theme.PlayerName(v)))
-                : cost.Length > 0 ? "click  ·  costs" : "click";
+                : cost.Length > 0 ? "click to pay" : "click";
 
             Vector2f mapPos = _overlay.Position(State.Board, hovered);
             Vector2i pixel = _window.MapCoordsToPixel(mapPos, _mapView);
@@ -1008,7 +1008,7 @@ namespace Client
 
             int winner = State.Turn.PlayerIndex;
             ImDrawListPtr dl = BeginDialog("##endscreen", new Vector2(620, 380), $"{Theme.PlayerName(winner)} wins!",
-                $"after {State.Turn.RoundCounter} rounds · {(IsHuman(winner) ? "a human seat" : Simulation.Seats.Name(Seats[winner]))}", winner, out Vector2 min);
+                $"after {State.Turn.RoundCounter} rounds, played by {(IsHuman(winner) ? "a human" : Simulation.Seats.Name(Seats[winner]))}", winner, out Vector2 min);
 
             string[] headers = ["", "VP", "Settl.", "Cities", "VP cards", "Road", "Army"];
             float[] columns = [24, 190, 250, 320, 390, 480, 545];

@@ -51,13 +51,13 @@ namespace Client
         {
             RemoteSimulation remote when remote.IsConnected => remote.Session?.Role switch
             {
-                Role.Player => $"Online · seat {remote.Session.Seat + 1}",
-                Role.Agent => $"Online · bridge for seat {remote.Session.Seat + 1}",
-                Role.Admin => "Online · admin",
-                _ => "Online · watching"
+                Role.Player => $"Online as seat {remote.Session.Seat + 1}",
+                Role.Agent => $"Online as bridge for seat {remote.Session.Seat + 1}",
+                Role.Admin => "Online as admin",
+                _ => "Watching online"
             },
             RemoteSimulation => "Disconnected",
-            _ when _hostServer != null => $"Hosting · {_hostServer.Sessions.Count} connected",
+            _ when _hostServer != null => $"Hosting ({_hostServer.Sessions.Count} connected)",
             _ => "Local game"
         };
 
@@ -416,7 +416,7 @@ namespace Client
             if (JoinRoleValues[_joinRole] is Role.Player or Role.Agent)
             {
                 ImGui.SetNextItemWidth(160);
-                string[] seats = Enumerable.Range(0, PLAYER_COUNT).Select(s => $"{s + 1} · {Theme.PlayerName(s)}").ToArray();
+                string[] seats = Enumerable.Range(0, PLAYER_COUNT).Select(s => $"{Theme.PlayerName(s)} (seat {s + 1})").ToArray();
                 ImGui.Combo("Seat", ref _joinSeat, seats, seats.Length);
             }
             ImGui.SetNextItemWidth(260);

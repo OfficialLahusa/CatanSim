@@ -122,7 +122,7 @@ namespace Client
             for (int seat = 0; seat < PLAYER_COUNT; seat++)
             {
                 using (new ImGuiTextColor(Theme.PlayerTextColor(seat)))
-                    ImGui.TextUnformatted($"{seat + 1} · {Theme.PlayerName(seat)}");
+                    ImGui.TextUnformatted($"{Theme.PlayerName(seat)} (seat {seat + 1})");
                 ImGui.SameLine(130);
                 ImGui.SetNextItemWidth(170);
                 int current = Array.IndexOf(SeatKinds, Seats[seat]);
@@ -226,7 +226,7 @@ namespace Client
             {
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(120);
-                string[] seats = Enumerable.Range(0, PLAYER_COUNT).Select(s => $"{s + 1} · {Theme.PlayerName(s)}").ToArray();
+                string[] seats = Enumerable.Range(0, PLAYER_COUNT).Select(s => $"{Theme.PlayerName(s)} (seat {s + 1})").ToArray();
                 ImGui.Combo("##tokenseat", ref _tokenSeat, seats, seats.Length);
             }
             ImGui.SameLine();
