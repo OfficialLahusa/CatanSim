@@ -28,9 +28,9 @@ namespace Client
         public const float PulsePeriod = 1.6f;
         private const float MinOpacity = 0.45f, MaxOpacity = 0.9f, MinScale = 0.94f, MaxScale = 1.06f;
 
-        // Road, settlement and city ghosts share one bright color that no player, tile or heat map step uses, so the legal
-        // spots stand out from the pieces; only the hovered one shows the piece in the player's color
-        public static readonly Color GhostColor = new Color(64, 232, 255);
+        // Road, settlement and city ghosts share one light gray that no player color uses, so the legal spots stand out from
+        // the pieces; only the hovered one shows the piece in the player's color
+        public static readonly Color GhostColor = new Color(222, 224, 230);
 
         private readonly BoardRenderer _renderer;
         private float _time;
@@ -176,9 +176,10 @@ namespace Client
                         }
                         else if (ghost.Sprite == TextureAtlas.Sprite.City)
                         {
-                            // A ring around the settlement that would become a city, with a light fill, so the settlement
-                            // stays visible under it
-                            DrawDisc(target, center, radius * 1.45f * scale, Theme.WithAlpha(GhostColor, opacity * 0.3f));
+                            // A ring around the settlement that would become a city, filled enough to stand out from it while
+                            // its outline still shows through
+                            DrawDisc(target, center, radius * 1.45f * scale + 2, new Color(8, 25, 76, (byte)(160 * opacity)));
+                            DrawDisc(target, center, radius * 1.45f * scale, Theme.WithAlpha(GhostColor, 0.35f + 0.4f * opacity));
                             DrawRing(target, center, radius * 1.45f * scale, 5, Theme.WithAlpha(GhostColor, 0.5f + 0.5f * opacity));
                         }
                         else
