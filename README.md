@@ -7,7 +7,7 @@ Settlers of Catan simulator and AI agent sandbox featuring ML-based and handcraf
 
 ![Watching the agents in the midgame in Spectate mode: win chances, the thinking agent's search as a heat map and its policy.](screenshot-spectate.png)
 
-*Spectating four bots: the heat map on the board shows which moves the thinking bot's search explores and how much, next to its policy and everyone's win chances.*
+*Watching four bots in Spectate mode: the heat map shows where the thinking bot's search spends its time, and the panels show its candidate moves and everyone's win chances.*
 
 ## Structure
 The codebase is divided into several projects:
