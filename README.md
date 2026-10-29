@@ -42,7 +42,7 @@ Developed by Lasse Huber-Saffer. Since 2026, development has been supported by A
 
 Based upon "CATAN", a creation and design of Klaus Teuber and property of CATAN GmbH.
 
-The client depends on [SFML.Net](https://www.sfml-dev.org/), [ImGui.Net](https://github.com/ImGuiNET/ImGui.NET), and [ImGuiSFML](https://www.nuget.org/packages/Saffron.Util.ImGuiSFML/1.3.0/).
+Built with [.NET](https://dotnet.microsoft.com/), [SFML.Net](https://www.sfml-dev.org/), [Dear ImGui](https://github.com/ocornut/imgui) ([ImGui.NET](https://github.com/ImGuiNET/ImGui.NET) with [ImGuiSFML](https://www.nuget.org/packages/Saffron.Util.ImGuiSFML/1.3.0/)), [ONNX Runtime](https://onnxruntime.ai/) and [YamlDotNet](https://github.com/aaubry/YamlDotNet); the nets are trained with [PyTorch](https://pytorch.org/) and [Lightning](https://lightning.ai/).
 
 Icons are provided by [Game-Icons.net](https://game-icons.net/) as [CC-BY](https://creativecommons.org/licenses/by/4.0/deed): 
 - "backup", "cash", "folded-paper", "galleon", "hourglass", "pine-tree", "stone-crafting", "uncertainty", "wheat" by Lorc
