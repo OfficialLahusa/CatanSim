@@ -54,7 +54,7 @@ namespace Client
         private static extern void glReadPixels(int x, int y, int width, int height, uint format, uint type, byte[] pixels);
 
         public static readonly string[] Scenes = ["setup", "main", "road", "city", "roll", "discard", "robber", "victim", "trade", "devcards", "plenty",
-            "monopoly", "newgame", "save", "developer", "curtain", "offer", "tradeanswer", "tradepick", "spectate", "edit", "end", "hand", "rolls"];
+            "monopoly", "newgame", "save", "developer", "curtain", "offer", "tradeanswer", "tradepick", "spectate", "edit", "end", "hand", "rolls", "banktrade"];
 
         /// <summary>
         /// Plays fast agent moves up to a situation and sets the mode for it. Seat 4 (Orange) is the human.
@@ -98,6 +98,7 @@ namespace Client
                 case "edit":
                 case "hand":
                 case "rolls":
+                case "banktrade":
                     PlayUntil(() => HumanMainPhase(4));
                     if (scene == "road")
                     {
@@ -130,6 +131,10 @@ namespace Client
                         after.DevelopmentBank.Remove(DevelopmentCardType.YearOfPlenty, 1);
                         SendEdit(new BoardEdit("gave Orange development cards", 3, State, after));
                         _dialog = Dialog.DevelopmentCard;
+                    }
+                    else if (scene == "banktrade")
+                    {
+                        GiveCards(3, ResourceCardType.Lumber, 4);
                     }
                     else if (scene == "rolls")
                     {
@@ -273,6 +278,9 @@ namespace Client
             }
 
             ClearSceneEffects();
+
+            // A trade with the bank right as the scene starts, so its cards are in flight
+            if (scene == "banktrade") PlayFirst<FourToOneTradeAction>(3);
 
             // The agents play their seats again (none in Edit mode)
             ApplyPlaybackForMode(playing: false);

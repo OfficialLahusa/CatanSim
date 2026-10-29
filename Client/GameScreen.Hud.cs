@@ -29,6 +29,7 @@ namespace Client
         private readonly Dictionary<ResourceCardType, Vector2> _handStackCenter = [];
         private readonly Dictionary<DevelopmentCardType, Vector2> _handDevelopmentStackCenter = [];
         private bool _rollChartPinned;
+        private Vector2 _tradeButtonCenter;
         private Vector2 _handAnchor;
 
         // Hover animation of the hand's card stacks
@@ -446,6 +447,7 @@ namespace Client
             bool canEnd = human is int e && HasLegal<EndTurnAction>(e);
             bool mustRoll = human is int r && HasLegal<RollAction>(r);
             float half = (ColumnWidth - 10) / 2;
+            _tradeButtonCenter = new Vector2(x + half / 2, tradeTop + 24);
             if (DrawButton(dl, "trade", new Vector2(x, tradeTop), new Vector2(half, 48), "Trade", canTrade, Theme.PanelRaised, Theme.BorderLight, Theme.Bold17))
                 OpenTradeDialog(human!.Value);
             if (DrawButton(dl, "devcard", new Vector2(x + half + 10, tradeTop), new Vector2(half, 48), "Play dev card", canPlayDev, Theme.PanelRaised, Theme.BorderLight, Theme.Bold17))

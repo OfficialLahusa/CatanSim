@@ -563,11 +563,17 @@ namespace Client
             {
                 foreach (ResourceCardType card in cards) Fly(card, Hand(player, card), to, 0.08f);
             }
-            void BankTrade(ResourceCardType input, int ratio, ResourceCardType output)
+            // Trades with the bank go through the Trade button, port trades through the port
+            void BankTrade(ResourceCardType input, int ratio, ResourceCardType output, Func<System.Numerics.Vector2> place)
             {
-                Pay(BankPosition, [.. Enumerable.Repeat(input, ratio)]);
+                Pay(place, [.. Enumerable.Repeat(input, ratio)]);
                 delay += 0.15f;
-                Fly(output, BankPosition, Hand(player, output));
+                Fly(output, place, Hand(player, output));
+            }
+            Func<System.Numerics.Vector2> PortOf(Port.TradeType type)
+            {
+                if (PortPosition(player, type) is not Vector2f point) return BankPosition;
+                return () => ScreenPosition(point);
             }
             bool Sees(params int[] players) => EventLog.Viewer is not int viewer || players.Contains(viewer);
             static IEnumerable<ResourceCardType> Each(CardSet<ResourceCardType> cards) =>
@@ -636,15 +642,15 @@ namespace Client
                     break;
 
                 case FourToOneTradeAction trade:
-                    BankTrade(trade.InputType, 4, trade.OutputType);
+                    BankTrade(trade.InputType, 4, trade.OutputType, TradeButtonPosition);
                     break;
 
                 case ThreeToOneTradeAction trade:
-                    BankTrade(trade.InputType, 3, trade.OutputType);
+                    BankTrade(trade.InputType, 3, trade.OutputType, PortOf(Port.TradeType.Generic));
                     break;
 
                 case TwoToOneTradeAction trade:
-                    BankTrade(trade.InputType, 2, trade.OutputType);
+                    BankTrade(trade.InputType, 2, trade.OutputType, PortOf(Enum.Parse<Port.TradeType>(trade.InputType.ToString())));
                     break;
 
                 case ConfirmTradeAction confirm when confirm.History?.TermsWith(confirm.Partner) is { } terms:
@@ -652,6 +658,32 @@ namespace Client
                     foreach (ResourceCardType card in Each(terms.get)) Fly(card, Hand(confirm.Partner, card), Hand(player, card), 0.08f);
                     break;
             }
+        }
+
+        /// <summary>
+        /// Where cards of a trade with the bank go: the Trade button where there is one (Play mode), else the bank
+        /// </summary>
+        private System.Numerics.Vector2 TradeButtonPosition() => _mode == InteractionMode.Play ? _tradeButtonCenter : BankPosition();
+
+        /// <summary>
+        /// The label of a port of a type in map coordinates, preferring one the player has a building at; null if the board has none
+        /// </summary>
+        private Vector2f? PortPosition(int player, Port.TradeType type)
+        {
+            Board board = State.Board;
+            Port? best = null;
+            foreach (Port port in board.Ports.Where(p => p.Type == type))
+            {
+                best ??= port;
+                Tile land = board.Adjacency.GetTile(board.Map.GetTile(port.AnchorTileX, port.AnchorTileY), port.AnchorDirection)!;
+                (Intersection top, Intersection bottom) = board.Adjacency.GetIntersections(board.Adjacency.GetEdge(land, port.AnchorDirection.Mirror())!);
+                if (new[] { top, bottom }.Any(i => board.HasBuilding(i.Index) && board.GetBuildingOwner(i.Index) == player))
+                {
+                    best = port;
+                    break;
+                }
+            }
+            return best == null ? null : _renderer.GetTileCenter(best.AnchorTileX, best.AnchorTileY);
         }
 
         /// <summary>
