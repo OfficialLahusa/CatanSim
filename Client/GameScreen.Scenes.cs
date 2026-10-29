@@ -53,7 +53,7 @@ namespace Client
         [System.Runtime.InteropServices.DllImport("opengl32.dll")]
         private static extern void glReadPixels(int x, int y, int width, int height, uint format, uint type, byte[] pixels);
 
-        public static readonly string[] Scenes = ["setup", "main", "road", "roll", "discard", "robber", "trade", "devcards", "spectate", "edit", "end"];
+        public static readonly string[] Scenes = ["setup", "main", "road", "city", "roll", "discard", "robber", "trade", "devcards", "spectate", "edit", "end"];
 
         /// <summary>
         /// Plays fast agent moves up to a situation and sets the mode for it. Seat 4 (Orange) is the human.
@@ -83,6 +83,7 @@ namespace Client
 
                 case "main":
                 case "road":
+                case "city":
                 case "trade":
                 case "devcards":
                 case "edit":
@@ -92,6 +93,12 @@ namespace Client
                         GiveCards(3, ResourceCardType.Lumber, 2);
                         GiveCards(3, ResourceCardType.Brick, 2);
                         _buildMode = BuildMode.Road;
+                    }
+                    else if (scene == "city")
+                    {
+                        GiveCards(3, ResourceCardType.Grain, 2);
+                        GiveCards(3, ResourceCardType.Ore, 3);
+                        _buildMode = BuildMode.City;
                     }
                     else if (scene == "trade")
                     {
@@ -105,6 +112,7 @@ namespace Client
                         GameState after = new GameState(State);
                         after.Players[3].DevelopmentCards.Add(DevelopmentCardType.Knight, 2);
                         after.Players[3].DevelopmentCards.Add(DevelopmentCardType.Monopoly, 1);
+                        after.Players[3].DevelopmentCards.Add(DevelopmentCardType.YearOfPlenty, 1);
                         after.Players[3].NewDevelopmentCards.Add(DevelopmentCardType.YearOfPlenty, 1);
                         after.DevelopmentBank.Remove(DevelopmentCardType.Knight, 2);
                         after.DevelopmentBank.Remove(DevelopmentCardType.Monopoly, 1);

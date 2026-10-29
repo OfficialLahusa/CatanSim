@@ -215,8 +215,8 @@ namespace Client
                 _ when _hostServer != null => new Color(80, 220, 120),
                 _ => Theme.TextFaint
             };
-            dl.AddRectFilled(min, min + new Vector2(width, 32), Theme.U32(hovered ? Theme.PanelRaised : Theme.Panel), 16);
-            dl.AddRect(min, min + new Vector2(width, 32), Theme.U32(Theme.Border), 16);
+            dl.RoundRectFilled(min, min + new Vector2(width, 32), Theme.U32(hovered ? Theme.PanelRaised : Theme.Panel), 16);
+            dl.RoundRect(min, min + new Vector2(width, 32), Theme.U32(Theme.Border), 16);
             dl.AddCircleFilled(min + new Vector2(17, 16), 5, Theme.U32(dot), 12);
             Theme.DrawText(dl, Theme.SemiBold15, min + new Vector2(29, 6), Theme.TextSoft, text);
             if (clicked) _showNetworkWindow = !_showNetworkWindow;

@@ -18,7 +18,8 @@ namespace Client.Logging
         // Open section
         private List<ILogEntry> _lines;
 
-        private bool _scrollToBottom = false;
+        // Frames left in which the log scrolls to its end
+        private int _scrollToBottom = 0;
 
         /// <summary>
         /// The player whose hidden information the log may show, or null for all of it
@@ -55,11 +56,13 @@ namespace Client.Logging
                 line.Draw();
             }
 
-            if (_scrollToBottom)
+            // A scroll target far past the end, which ImGui clamps to the end of the content at the next frame's begin. For
+            // two frames, since the end the first frame clamps to was measured before the newest lines were laid out.
+            if (_scrollToBottom > 0)
             {
-                ImGui.SetScrollHereY(1.0f);
+                ImGui.SetScrollY(1e9f);
 
-                _scrollToBottom = false;
+                _scrollToBottom--;
             }
 
             ImGui.EndChild();
@@ -76,7 +79,7 @@ namespace Client.Logging
                 _lines.Add(new ListEntry(entries));
             }
 
-            _scrollToBottom = true;
+            _scrollToBottom = 2;
         }
 
         public void PushSection()

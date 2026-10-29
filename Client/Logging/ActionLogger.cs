@@ -39,6 +39,8 @@ namespace Client.Logging
 
         private static string Card(ResourceCardType type) => type.GetName().ToLower();
 
+        private static string Article(string noun) => ("aeiou".Contains(noun[0]) ? "an " : "a ") + noun;
+
         private static string Cards(uint amount, ResourceCardType type) => amount == 1 ? $"1 {Card(type)}" : $"{amount} {Card(type)}";
 
         public void Log(Action action, GameState state)
@@ -101,7 +103,7 @@ namespace Client.Logging
                         if (outcome.StolenCard.HasValue && robberAction.TargetPlayerIndex is sbyte victim)
                         {
                             _log.WriteLine(new SentenceEntry(
-                                [Name(player), Plain($" stole a {Card(outcome.StolenCard.Value)} from "), Name(victim)],
+                                [Name(player), Plain($" stole {Article(Card(outcome.StolenCard.Value))} from "), Name(victim)],
                                 [Name(player), Plain(" stole a card from "), Name(victim)],
                                 player, victim));
                         }

@@ -185,7 +185,7 @@ namespace Client
             {
                 float w = width * values[seat] / total;
                 ImDrawCornerFlags corners = seat == 0 ? ImDrawCornerFlags.Left : seat == PLAYER_COUNT - 1 ? ImDrawCornerFlags.Right : ImDrawCornerFlags.None;
-                dl.AddRectFilled(bar + new Vector2(offset, 0), bar + new Vector2(offset + w, 26), Theme.U32(Theme.PlayerColor(seat)), 8, corners);
+                dl.RoundRectFilled(bar + new Vector2(offset, 0), bar + new Vector2(offset + w, 26), Theme.U32(Theme.PlayerColor(seat)), 8, corners);
                 if (w > 34) Theme.TextCentered(dl, Theme.Bold15, bar + new Vector2(offset + w / 2, 13), Theme.TextOnPlayer(seat), $"{values[seat] / total * 100:0}%");
                 offset += w;
             }
@@ -248,8 +248,8 @@ namespace Client
 
             // Move history: back and forward through the played moves
             Vector2 nav = min + new Vector2(16, 112);
-            dl.AddRectFilled(nav, nav + new Vector2(size.X - 32, 44), Theme.U32(Theme.PanelRaised), 12);
-            dl.AddRect(nav, nav + new Vector2(size.X - 32, 44), Theme.U32(Theme.BorderLight), 12);
+            dl.RoundRectFilled(nav, nav + new Vector2(size.X - 32, 44), Theme.U32(Theme.PanelRaised), 12);
+            dl.RoundRect(nav, nav + new Vector2(size.X - 32, 44), Theme.U32(Theme.BorderLight), 12);
             int total = History.Count + Redo.Count;
             Theme.TextCentered(dl, Theme.Bold17, nav + new Vector2((size.X - 32) / 2, 22), Theme.Text, $"Move {History.Count} / {total}");
             // One command per step: over the network the history only changes once the server's events are back
@@ -278,22 +278,22 @@ namespace Client
         private static bool NavButton(ImDrawListPtr dl, string id, Vector2 min, string label, bool enabled)
         {
             bool clicked = Theme.HitArea(id, min, new Vector2(36, 36), out bool hovered);
-            if (hovered && enabled) dl.AddRectFilled(min, min + new Vector2(36, 36), Theme.U32(Theme.PanelActive), 8);
+            if (hovered && enabled) dl.RoundRectFilled(min, min + new Vector2(36, 36), Theme.U32(Theme.PanelActive), 8);
             Theme.TextCentered(dl, Theme.Bold17, min + new Vector2(18, 18), enabled ? Theme.TextSoft : Theme.TextFaint, label);
             return clicked && enabled;
         }
 
         private static void DrawSegmented(ImDrawListPtr dl, string id, Vector2 min, Vector2 size, string[] labels, int selected, Action<int> select)
         {
-            dl.AddRectFilled(min, min + size, Theme.U32(new Color(11, 22, 64)), size.Y / 2);
-            dl.AddRect(min, min + size, Theme.U32(Theme.Border), size.Y / 2);
+            dl.RoundRectFilled(min, min + size, Theme.U32(new Color(11, 22, 64)), size.Y / 2);
+            dl.RoundRect(min, min + size, Theme.U32(Theme.Border), size.Y / 2);
             float w = (size.X - 6) / labels.Length;
             for (int i = 0; i < labels.Length; i++)
             {
                 Vector2 a = min + new Vector2(3 + i * w, 3);
                 bool clicked = Theme.HitArea($"{id}{i}", a, new Vector2(w, size.Y - 6), out bool hovered);
-                if (i == selected) dl.AddRectFilled(a, a + new Vector2(w, size.Y - 6), Theme.U32(Theme.PlayerColor(3)), (size.Y - 6) / 2);
-                else if (hovered) dl.AddRectFilled(a, a + new Vector2(w, size.Y - 6), Theme.U32(Theme.PanelRaised), (size.Y - 6) / 2);
+                if (i == selected) dl.RoundRectFilled(a, a + new Vector2(w, size.Y - 6), Theme.U32(Theme.PlayerColor(3)), (size.Y - 6) / 2);
+                else if (hovered) dl.RoundRectFilled(a, a + new Vector2(w, size.Y - 6), Theme.U32(Theme.PanelRaised), (size.Y - 6) / 2);
                 Theme.TextCentered(dl, Theme.Bold13, a + new Vector2(w / 2, (size.Y - 6) / 2), i == selected ? new Color(58, 38, 0) : Theme.TextMuted, labels[i]);
                 if (clicked) select(i);
             }
@@ -366,12 +366,12 @@ namespace Client
                 }
                 Theme.DrawText(dl, top ? Theme.Bold13 : Theme.Regular13, new Vector2(min.X + 24, y - 8), top ? Theme.Text : Theme.TextSoft, label);
                 float pw = 100 * move.Prior / maxShare;
-                dl.AddRectFilled(new Vector2(min.X + 300, y - 5), new Vector2(min.X + 300 + pw, y + 5), Theme.U32(Theme.TextFaint), 3);
+                dl.RoundRectFilled(new Vector2(min.X + 300, y - 5), new Vector2(min.X + 300 + pw, y + 5), Theme.U32(Theme.TextFaint), 3);
                 Theme.DrawText(dl, Theme.Regular13, new Vector2(min.X + 306 + pw, y - 9), Theme.TextMuted, $"{move.Prior * 100:0}%");
                 if (move.Visits is float v)
                 {
                     float vw = 100 * v / maxShare;
-                    dl.AddRectFilled(new Vector2(min.X + 450, y - 5), new Vector2(min.X + 450 + vw, y + 5), Theme.U32(Theme.Heat(MathF.Sqrt(v / maxShare))), 3);
+                    dl.RoundRectFilled(new Vector2(min.X + 450, y - 5), new Vector2(min.X + 450 + vw, y + 5), Theme.U32(Theme.Heat(MathF.Sqrt(v / maxShare))), 3);
                     Theme.DrawText(dl, Theme.Regular13, new Vector2(min.X + 456 + vw, y - 9), Theme.TextSoft, $"{v * 100:0}%");
                 }
             }

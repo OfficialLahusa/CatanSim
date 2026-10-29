@@ -93,16 +93,16 @@ namespace Client
 
             // Mode switch
             Vector2 s = o + new Vector2(58, 2);
-            dl.AddRectFilled(s, s + new Vector2(270, 42), Theme.U32(Theme.Panel), 21);
-            dl.AddRect(s, s + new Vector2(270, 42), Theme.U32(Theme.Border), 21);
+            dl.RoundRectFilled(s, s + new Vector2(270, 42), Theme.U32(Theme.Panel), 21);
+            dl.RoundRect(s, s + new Vector2(270, 42), Theme.U32(Theme.Border), 21);
             string[] labels = ["Play", "Spectate", "Edit"];
             for (int i = 0; i < 3; i++)
             {
                 Vector2 min = s + new Vector2(4 + 88 * i, 4);
                 bool clicked = Theme.HitArea($"mode{i}", min, new Vector2(86, 34), out bool hovered);
                 bool active = (int)_mode == i;
-                if (active) dl.AddRectFilled(min, min + new Vector2(86, 34), Theme.U32(Theme.PlayerColor(3)), 17);
-                else if (hovered) dl.AddRectFilled(min, min + new Vector2(86, 34), Theme.U32(Theme.PanelRaised), 17);
+                if (active) dl.RoundRectFilled(min, min + new Vector2(86, 34), Theme.U32(Theme.PlayerColor(3)), 17);
+                else if (hovered) dl.RoundRectFilled(min, min + new Vector2(86, 34), Theme.U32(Theme.PanelRaised), 17);
                 Theme.TextCentered(dl, Theme.Bold15, min + new Vector2(43, 17), active ? new Color(58, 38, 0) : Theme.TextMuted, labels[i]);
                 if (clicked) SetMode((InteractionMode)i);
             }
@@ -123,10 +123,10 @@ namespace Client
         {
             float width = 48 + Theme.TextSize(Theme.Regular15, label).X;
             if (Theme.HitArea(id, min, new Vector2(width, 32), out _)) value = !value;
-            dl.AddRectFilled(min, min + new Vector2(width, 32), Theme.U32(Theme.Panel), 16);
-            dl.AddRect(min, min + new Vector2(width, 32), Theme.U32(Theme.Border), 16);
+            dl.RoundRectFilled(min, min + new Vector2(width, 32), Theme.U32(Theme.Panel), 16);
+            dl.RoundRect(min, min + new Vector2(width, 32), Theme.U32(Theme.Border), 16);
             Vector2 track = min + new Vector2(9, 8);
-            dl.AddRectFilled(track, track + new Vector2(30, 16), Theme.U32(value ? new Color(138, 92, 0) : new Color(58, 74, 116)), 8);
+            dl.RoundRectFilled(track, track + new Vector2(30, 16), Theme.U32(value ? new Color(138, 92, 0) : new Color(58, 74, 116)), 8);
             dl.AddCircleFilled(track + new Vector2(value ? 22 : 8, 8), 6, Theme.U32(value ? Theme.PlayerColor(3) : Theme.TextMuted));
             Theme.DrawText(dl, Theme.Regular15, min + new Vector2(46, 6), value ? Theme.TextSoft : Theme.TextMuted, label);
             return width;
@@ -176,7 +176,7 @@ namespace Client
                 if (isActing) Theme.Glow(dl, min, max, color, Theme.Rounding, 1.2f);
                 Color border = isActing ? color : selected ? Color.White : hovered && _mode == InteractionMode.Edit ? Theme.BorderLight : Theme.Border;
                 Theme.DrawPanel(dl, min, max, border, Theme.Rounding, isActing ? Theme.PanelRaised : null, isActing || selected ? 2.5f : 1f);
-                dl.AddRectFilled(min, min + new Vector2(9, SeatHeight), Theme.U32(color), Theme.Rounding, ImDrawCornerFlags.Left);
+                dl.RoundRectFilled(min, min + new Vector2(9, SeatHeight), Theme.U32(color), Theme.Rounding, ImDrawCornerFlags.Left);
 
                 // Avatar with the seat number
                 Vector2 avatar = min + new Vector2(48, 40);
@@ -248,13 +248,15 @@ namespace Client
             if (handVisible && cards > 0)
             {
                 int i = 0;
-                float step = cards > 6 ? 54f / (cards - 1) : 9;
+                // Up to 6 cards fanned 9 apart, more squeezed into the same width, so the count after them stays clear of the
+                // development cards
+                float step = cards > 6 ? 45f / (cards - 1) : 9;
                 foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
                 {
                     for (uint n = 0; n < player.ResourceCards.Get(type); n++, i++)
                         Theme.ResourceCard(dl, type, pos + new Vector2(i * step, 1), new Vector2(15, 22), false);
                 }
-                Theme.DrawText(dl, Theme.Regular15, pos + new Vector2(Math.Min(cards - 1, 6) * step + 20, 2), Theme.TextSoft, cards.ToString());
+                Theme.DrawText(dl, Theme.Regular15, pos + new Vector2((cards - 1) * step + 20, 2), Theme.TextSoft, cards.ToString());
             }
             else
             {
@@ -265,7 +267,7 @@ namespace Client
             _seatCardAnchor[seat] = pos + new Vector2(14, 12);
 
             // Development cards, knights and road length; the holders of the bonuses in yellow
-            uint devCards = player.DevelopmentCards.Count() + player.NewDevelopmentCards.Count();
+            uint devCards = player.DevelopmentCards.Count();
             float x = 92;
             Theme.Card(dl, ColorPalette.DevelopmentCardPurple, ColorPalette.DevelopmentCardDarkPurple, TextureAtlas.Sprite.Development, pos + new Vector2(x, 0), new Vector2(17, 24), true, 1);
             Theme.DrawText(dl, Theme.Regular15, pos + new Vector2(x + 24, 2), Theme.TextSoft, devCards.ToString());
@@ -356,8 +358,8 @@ namespace Client
             if (chip != null)
             {
                 Vector2 c = new Vector2(min.X + width - 16 - chipWidth, min.Y + 12);
-                dl.AddRectFilled(c, c + new Vector2(chipWidth, 26), Theme.U32(new Color(34, 51, 106)), 6);
-                dl.AddRect(c, c + new Vector2(chipWidth, 26), Theme.U32(Theme.BorderLight), 6);
+                dl.RoundRectFilled(c, c + new Vector2(chipWidth, 26), Theme.U32(new Color(34, 51, 106)), 6);
+                dl.RoundRect(c, c + new Vector2(chipWidth, 26), Theme.U32(Theme.BorderLight), 6);
                 Theme.TextCentered(dl, Theme.Regular13, c + new Vector2(chipWidth / 2, 13), Theme.TextSoft, chip);
             }
             ImGui.End();
@@ -465,7 +467,7 @@ namespace Client
             {
                 float kw = Theme.TextSize(Theme.Regular13, key).X + 18;
                 Vector2 k = new Vector2(min.X + size.X - kw - 14, min.Y + size.Y / 2 - 12);
-                dl.AddRectFilled(k, k + new Vector2(kw, 24), Theme.U32(Theme.WithAlpha(new Color(30, 70, 173), alpha)), 6);
+                dl.RoundRectFilled(k, k + new Vector2(kw, 24), Theme.U32(Theme.WithAlpha(new Color(30, 70, 173), alpha)), 6);
                 Theme.TextCentered(dl, Theme.Regular13, k + new Vector2(kw / 2, 12), Theme.WithAlpha(new Color(207, 220, 255), alpha), key);
             }
             return clicked && enabled;
@@ -553,12 +555,12 @@ namespace Client
                 x += width + 12;
             }
 
-            // Development cards: the ones bought this turn are dimmed, they can't be played yet
+            // Development cards: the ones bought this turn (also counted in DevelopmentCards) are muted, they can't be played yet
             bool anyDev = false;
             foreach (DevelopmentCardType type in CardSet<DevelopmentCardType>.Values)
             {
-                uint playable = player.DevelopmentCards.Get(type), fresh = player.NewDevelopmentCards.Get(type);
-                uint count = playable + fresh;
+                uint count = player.DevelopmentCards.Get(type), fresh = player.NewDevelopmentCards.Get(type);
+                uint playable = count - fresh;
                 int hoverIdx = stackIdx++;
                 if (count == 0) continue;
                 anyDev = true;
@@ -568,7 +570,7 @@ namespace Client
                 _stackHover[hoverIdx] = Math.Clamp(_stackHover[hoverIdx] + (hovered ? 5f : -5f) * dt, 0, 1);
                 float lift = Easing.ExpOut(_stackHover[hoverIdx]) * 12;
                 for (uint i = 0; i < count; i++)
-                    Theme.DevelopmentCard(dl, type, new Vector2(x + i * shift, top - lift), cardSize, i == count - 1, i >= playable ? 0.55f : 1f);
+                    Theme.DevelopmentCard(dl, type, new Vector2(x + i * shift, top - lift), cardSize, i == count - 1, 1, i >= playable);
                 if (hovered) DrawTooltip(dl, new Vector2(x + width / 2, top - lift - 16), fresh > 0 ? $"{type.GetName()} ({fresh} new)" : type.GetName());
                 x += width + 12;
             }
@@ -576,7 +578,7 @@ namespace Client
             if (!anyDev && x + 88 < min.X + size.X)
             {
                 Vector2 slot = new Vector2(x + 8, top);
-                dl.AddRect(slot, slot + cardSize, Theme.U32(new Color(91, 74, 143)), 2, ImDrawCornerFlags.All, 2);
+                dl.RoundRect(slot, slot + cardSize, Theme.U32(new Color(91, 74, 143)), 2, ImDrawCornerFlags.All, 2);
                 Theme.Card(dl, ColorPalette.DevelopmentCardPurple, ColorPalette.DevelopmentCardDarkPurple, TextureAtlas.Sprite.Development, slot + new Vector2(24, 22), new Vector2(32, 44), true, 0.5f);
                 Theme.TextCentered(dl, Theme.Regular13, slot + new Vector2(40, 84), new Color(159, 143, 208), "No dev");
                 Theme.TextCentered(dl, Theme.Regular13, slot + new Vector2(40, 101), new Color(159, 143, 208), "cards");
@@ -602,8 +604,8 @@ namespace Client
         {
             Vector2 size = Theme.TextSize(Theme.SemiBold15, text) + new Vector2(18, 8);
             Vector2 min = bottomCenter - new Vector2(size.X / 2, size.Y);
-            dl.AddRectFilled(min, min + size, Theme.U32(new Color(11, 22, 64, 240)), 6);
-            dl.AddRect(min, min + size, Theme.U32(Theme.BorderLight), 6);
+            dl.RoundRectFilled(min, min + size, Theme.U32(new Color(11, 22, 64, 240)), 6);
+            dl.RoundRect(min, min + size, Theme.U32(Theme.BorderLight), 6);
             Theme.TextCentered(dl, Theme.SemiBold15, min + size / 2, Theme.Text, text);
         }
         #endregion
@@ -692,7 +694,7 @@ namespace Client
             float lift = hovered && enabled ? 4 : 0;
             if (selected) Theme.Glow(dl, min - new Vector2(0, lift), min + size - new Vector2(0, lift), Color.White, 4, 1.5f);
             Theme.ResourceCard(dl, type, min - new Vector2(0, lift), size, true, enabled ? 1f : 0.3f);
-            if (selected) dl.AddRect(min - new Vector2(2, 2 + lift), min + size + new Vector2(2, 2 - lift), Theme.U32(Color.White), 3, ImDrawCornerFlags.All, 3);
+            if (selected) dl.RoundRect(min - new Vector2(2, 2 + lift), min + size + new Vector2(2, 2 - lift), Theme.U32(Color.White), 3, ImDrawCornerFlags.All, 3);
             return clicked && enabled;
         }
 
@@ -805,18 +807,28 @@ namespace Client
                 (DevelopmentCardType.Monopoly, HasLegal<MonopolyAction>(player), "Take all cards of one resource"),
             ];
 
-            ImDrawListPtr dl = BeginDialog("##devcards", new Vector2(600, 320), "Play a development card", "One per turn; cards bought this turn have to wait.", player, out Vector2 min);
+            ImDrawListPtr dl = BeginDialog("##devcards", new Vector2(600, 360), "Play a development card", "One per turn; cards bought this turn have to wait.", player, out Vector2 min);
+            PlayerState hand = State.Players[player];
             for (int i = 0; i < cards.Length; i++)
             {
                 Vector2 pos = min + new Vector2(24 + i * 140, 86);
                 var card = cards[i];
-                bool clicked = Theme.HitArea($"play{card.type}", pos, new Vector2(128, 190), out bool hovered);
-                float alpha = card.legal ? 1 : 0.35f;
-                if (hovered && card.legal) Theme.Glow(dl, pos, pos + new Vector2(128, 190), Color.White, 10, 1);
-                Theme.DrawPanel(dl, pos, pos + new Vector2(128, 190), Theme.WithAlpha(Theme.BorderLight, alpha), 10, Theme.WithAlpha(Theme.PanelRaised, alpha));
-                Theme.DevelopmentCard(dl, card.type, pos + new Vector2(34, 12), new Vector2(60, 90), true, alpha);
-                Theme.TextCentered(dl, Theme.Bold15, pos + new Vector2(64, 118), Theme.WithAlpha(Theme.Text, alpha), card.type.GetName());
-                WrapCentered(dl, Theme.Regular13, pos + new Vector2(64, 140), 112, Theme.WithAlpha(Theme.TextMuted, alpha), card.what);
+                bool clicked = Theme.HitArea($"play{card.type}", pos, new Vector2(128, 206), out bool hovered);
+                uint owned = hand.DevelopmentCards.Get(card.type), fresh = hand.NewDevelopmentCards.Get(card.type);
+                if (hovered && card.legal) Theme.Glow(dl, pos, pos + new Vector2(128, 206), Color.White, 10, 1);
+                Theme.DrawPanel(dl, pos, pos + new Vector2(128, 206), card.legal ? Theme.BorderLight : Theme.Border, 10, card.legal ? Theme.PanelRaised : Theme.Panel);
+
+                Theme.DevelopmentCard(dl, card.type, pos + new Vector2(34, 12), new Vector2(60, 90), true, 1, !card.legal);
+                if (owned > 1) Theme.Pill(dl, pos + new Vector2(86, 6), pos + new Vector2(118, 28), Theme.PlayerColor(player), Theme.Bold13, Theme.Background, $"x{owned}");
+
+                Theme.TextCentered(dl, Theme.Bold15, pos + new Vector2(64, 118), card.legal ? Theme.Text : Theme.TextSoft, card.type.GetName());
+                WrapCentered(dl, Theme.Regular13, pos + new Vector2(64, 140), 112, card.legal ? Theme.TextMuted : Theme.TextFaint, card.what);
+                string? status = card.legal ? null
+                    : owned == 0 ? "Not in hand"
+                    : owned <= fresh ? "Bought this turn"
+                    : State.Turn.HasPlayedDevelopmentCard ? "Already played one"
+                    : "Not playable now";
+                if (status != null) Theme.TextCentered(dl, Theme.Bold13, pos + new Vector2(64, 186), Theme.TextMuted, status);
                 if (clicked && card.legal)
                 {
                     switch (card.type)
@@ -828,7 +840,7 @@ namespace Client
                     }
                 }
             }
-            if (DrawButton(dl, "devcancel", min + new Vector2(600 - 24 - 120, 320 - 20 - 0 - 20), new Vector2(120, 34), "Cancel", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))
+            if (DrawButton(dl, "devcancel", min + new Vector2(600 - 24 - 120, 360 - 20 - 34), new Vector2(120, 34), "Cancel", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))
                 ClearHumanInput();
             ImGui.End();
         }
@@ -956,7 +968,7 @@ namespace Client
                 int row = Enumerable.Range(0, PLAYER_COUNT).OrderByDescending(s => State.Players[s].VictoryPoints.Total).ToList().IndexOf(seat);
                 Vector2 pos = min + new Vector2(0, 118 + row * 44);
                 VictoryPointTracker vp = State.Players[seat].VictoryPoints;
-                if (seat == winner) dl.AddRectFilled(pos + new Vector2(14, -6), pos + new Vector2(606, 32), Theme.U32(Theme.WithAlpha(Theme.PlayerColor(seat), 0.18f)), 8);
+                if (seat == winner) dl.RoundRectFilled(pos + new Vector2(14, -6), pos + new Vector2(606, 32), Theme.U32(Theme.WithAlpha(Theme.PlayerColor(seat), 0.18f)), 8);
                 dl.AddCircleFilled(pos + new Vector2(columns[0] + 12, 13), 10, Theme.U32(Theme.PlayerColor(seat)), 20);
                 Theme.DrawText(dl, Theme.Bold17, pos + new Vector2(columns[0] + 32, 2), Theme.Text, Theme.PlayerName(seat));
                 string[] values = [vp.Total.ToString(), (vp.SettlementPoints).ToString(), (vp.CityPoints / 2).ToString(), vp.DevelopmentCardPoints.ToString(),

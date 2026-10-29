@@ -163,6 +163,17 @@ namespace Client
                     {
                         // Smaller and fainter than a built piece, so many ghosts don't hide the board
                         Vector2f center = _renderer.GetIntersectionCenter(board.Intersections[ghost.Target.Index], board);
+                        if (ghost.Sprite == TextureAtlas.Sprite.City)
+                        {
+                            // A city replaces a settlement: a translucent city over it would blend the two, so the settlement is
+                            // covered by a dark disc and the city drawn nearly solid on it, pulsing only in size and a little
+                            // in opacity
+                            float citySize = hovered ? 1.1f : 0.95f * scale;
+                            DrawDisc(target, center, _renderer.SideLength * 0.3f * citySize, new Color(8, 25, 76, (byte)(hovered ? 230 : 200)));
+                            DrawRing(target, center, _renderer.SideLength * 0.3f * citySize, hovered ? 4 : 3, Theme.WithAlpha(Color.White, hovered ? 1f : 0.4f + 0.5f * opacity));
+                            DrawSprite(target, ghost.Sprite, center, citySize, Theme.WithAlpha(ghost.Color, hovered ? 1f : 0.6f + 0.4f * opacity));
+                            break;
+                        }
                         float size = hovered ? 1.1f : 0.78f;
                         float alpha = hovered ? 1f : opacity * 0.8f;
                         DrawDisc(target, center, _renderer.SideLength * 0.2f * size * scale, Theme.WithAlpha(Color.White, alpha * (hovered ? 0.5f : 0.35f)));

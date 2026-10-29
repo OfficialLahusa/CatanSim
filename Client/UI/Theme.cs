@@ -175,13 +175,84 @@ namespace Client.UI
 
         #region Drawing
         /// <summary>
+        /// Like ImDrawList.AddRectFilled, but with round corners: ImGui 1.78 draws every corner with only 3 segments, which looks
+        /// faceted at our sizes and UI scales, so the corners get as many segments as their radius on screen needs
+        /// </summary>
+        public static void RoundRectFilled(this ImDrawListPtr dl, Vector2 min, Vector2 max, uint color, float rounding = 0, ImDrawCornerFlags corners = ImDrawCornerFlags.All)
+        {
+            if (rounding <= 0 || corners == ImDrawCornerFlags.None)
+            {
+                dl.AddRectFilled(min, max, color);
+                return;
+            }
+            PathRoundRect(dl, min, max, rounding, corners);
+            dl.PathFillConvex(color);
+        }
+
+        /// <summary>
+        /// Like ImDrawList.AddRect with smooth corners (see RoundRectFilled)
+        /// </summary>
+        public static void RoundRect(this ImDrawListPtr dl, Vector2 min, Vector2 max, uint color, float rounding = 0, ImDrawCornerFlags corners = ImDrawCornerFlags.All, float thickness = 1f)
+        {
+            if (rounding <= 0 || corners == ImDrawCornerFlags.None)
+            {
+                dl.AddRect(min, max, color, 0, corners, thickness);
+                return;
+            }
+            // As ImGui does: the outline runs through the pixel centers
+            PathRoundRect(dl, min + new Vector2(0.5f), max - new Vector2(0.5f), rounding, corners);
+            dl.PathStroke(color, true, thickness);
+        }
+
+        /// <summary>
+        /// The path of ImDrawList.PathRect (the same clamping of the radius), with corner arcs of enough segments
+        /// </summary>
+        private static void PathRoundRect(ImDrawListPtr dl, Vector2 a, Vector2 b, float rounding, ImDrawCornerFlags corners)
+        {
+            bool top = (corners & ImDrawCornerFlags.Top) == ImDrawCornerFlags.Top, bottom = (corners & ImDrawCornerFlags.Bot) == ImDrawCornerFlags.Bot;
+            bool left = (corners & ImDrawCornerFlags.Left) == ImDrawCornerFlags.Left, right = (corners & ImDrawCornerFlags.Right) == ImDrawCornerFlags.Right;
+            rounding = MathF.Min(rounding, MathF.Abs(b.X - a.X) * (top || bottom ? 0.5f : 1f) - 1f);
+            rounding = MathF.Min(rounding, MathF.Abs(b.Y - a.Y) * (left || right ? 0.5f : 1f) - 1f);
+            if (rounding <= 0)
+            {
+                dl.PathLineTo(a);
+                dl.PathLineTo(new Vector2(b.X, a.Y));
+                dl.PathLineTo(b);
+                dl.PathLineTo(new Vector2(a.X, b.Y));
+                return;
+            }
+            float tl = (corners & ImDrawCornerFlags.TopLeft) != 0 ? rounding : 0, tr = (corners & ImDrawCornerFlags.TopRight) != 0 ? rounding : 0;
+            float br = (corners & ImDrawCornerFlags.BotRight) != 0 ? rounding : 0, bl = (corners & ImDrawCornerFlags.BotLeft) != 0 ? rounding : 0;
+            Corner(dl, new Vector2(a.X + tl, a.Y + tl), tl, MathF.PI, 1.5f * MathF.PI);
+            Corner(dl, new Vector2(b.X - tr, a.Y + tr), tr, 1.5f * MathF.PI, 2 * MathF.PI);
+            Corner(dl, new Vector2(b.X - br, b.Y - br), br, 0, 0.5f * MathF.PI);
+            Corner(dl, new Vector2(a.X + bl, b.Y - bl), bl, 0.5f * MathF.PI, MathF.PI);
+        }
+
+        /// <summary>
+        /// A quarter arc whose segments deviate at most a quarter pixel on screen from the circle
+        /// </summary>
+        private static void Corner(ImDrawListPtr dl, Vector2 center, float radius, float from, float to)
+        {
+            if (radius <= 0)
+            {
+                dl.PathLineTo(center);
+                return;
+            }
+            float pixels = radius * GuiImpl.UiScale;
+            float step = MathF.Acos(MathF.Max(0, 1 - 0.25f / pixels)) * 2;
+            int segments = Math.Clamp((int)MathF.Ceiling((to - from) / step), 2, 32);
+            dl.PathArcTo(center, radius, from, to, segments);
+        }
+
+        /// <summary>
         /// A rounded panel with a soft shadow and a border
         /// </summary>
         public static void DrawPanel(ImDrawListPtr dl, Vector2 min, Vector2 max, Color? border = null, float rounding = Rounding, Color? fill = null, float borderWidth = 1f)
         {
-            dl.AddRectFilled(min + new Vector2(0, 4), max + new Vector2(0, 6), U32(Shadow), rounding);
-            dl.AddRectFilled(min, max, U32(fill ?? Panel), rounding);
-            dl.AddRect(min, max, U32(border ?? Border), rounding, ImDrawCornerFlags.All, borderWidth);
+            dl.RoundRectFilled(min + new Vector2(0, 4), max + new Vector2(0, 6), U32(Shadow), rounding);
+            dl.RoundRectFilled(min, max, U32(fill ?? Panel), rounding);
+            dl.RoundRect(min, max, U32(border ?? Border), rounding, ImDrawCornerFlags.All, borderWidth);
         }
 
         /// <summary>
@@ -192,7 +263,7 @@ namespace Client.UI
             for (int i = 1; i <= 5; i++)
             {
                 float grow = i * 2f;
-                dl.AddRect(min - new Vector2(grow), max + new Vector2(grow), U32(WithAlpha(color, 0.22f * strength * (1 - i / 6f))), rounding + grow, ImDrawCornerFlags.All, 2.5f);
+                dl.RoundRect(min - new Vector2(grow), max + new Vector2(grow), U32(WithAlpha(color, 0.22f * strength * (1 - i / 6f))), rounding + grow, ImDrawCornerFlags.All, 2.5f);
             }
         }
 
@@ -249,17 +320,26 @@ namespace Client.UI
             Card(dl, ColorPalette.GetCardColor(type), ColorPalette.GetCardIconColor(type), TextureAtlas.GetSprite(type), min, size, withIcon, alpha);
         }
 
-        public static void DevelopmentCard(ImDrawListPtr dl, DevelopmentCardType type, Vector2 min, Vector2 size, bool withIcon = true, float alpha = 1f)
+        /// <summary>
+        /// A development card; muted ones (not playable) are faded toward the panel but stay opaque, so the icon keeps its contrast
+        /// </summary>
+        public static void DevelopmentCard(ImDrawListPtr dl, DevelopmentCardType type, Vector2 min, Vector2 size, bool withIcon = true, float alpha = 1f, bool muted = false)
         {
-            Card(dl, ColorPalette.GetCardColor(type), ColorPalette.GetCardIconColor(type), TextureAtlas.GetSprite(type), min, size, withIcon, alpha);
+            Color fill = ColorPalette.GetCardColor(type), icon = ColorPalette.GetCardIconColor(type);
+            if (muted)
+            {
+                fill = Lerp(fill, Panel, 0.45f);
+                icon = Lerp(icon, Panel, 0.2f);
+            }
+            Card(dl, fill, icon, TextureAtlas.GetSprite(type), min, size, withIcon, alpha);
         }
 
         public static void Card(ImDrawListPtr dl, Color fill, Color icon, TextureAtlas.Sprite sprite, Vector2 min, Vector2 size, bool withIcon, float alpha)
         {
             // The border is 6 of 80 units wide, as in Card
             float border = MathF.Max(1.5f, size.X * 6f / 80f);
-            dl.AddRectFilled(min, min + size, U32(WithAlpha(icon, alpha)), MathF.Min(2f, border));
-            dl.AddRectFilled(min + new Vector2(border), min + size - new Vector2(border), U32(WithAlpha(fill, alpha)));
+            dl.RoundRectFilled(min, min + size, U32(WithAlpha(icon, alpha)), MathF.Min(2f, border));
+            dl.RoundRectFilled(min + new Vector2(border), min + size - new Vector2(border), U32(WithAlpha(fill, alpha)));
             if (withIcon)
             {
                 float iconSize = size.X * 0.75f;
@@ -273,8 +353,8 @@ namespace Client.UI
         public static void CardBack(ImDrawListPtr dl, Vector2 min, Vector2 size, float alpha = 1f)
         {
             float border = MathF.Max(1.5f, size.X * 6f / 80f);
-            dl.AddRectFilled(min, min + size, U32(WithAlpha(new Color(201, 214, 245), alpha)), 2f);
-            dl.AddRectFilled(min + new Vector2(border), min + size - new Vector2(border), U32(WithAlpha(new Color(62, 98, 173), alpha)));
+            dl.RoundRectFilled(min, min + size, U32(WithAlpha(new Color(201, 214, 245), alpha)), 2f);
+            dl.RoundRectFilled(min + new Vector2(border), min + size - new Vector2(border), U32(WithAlpha(new Color(62, 98, 173), alpha)));
         }
 
         /// <summary>
@@ -300,8 +380,8 @@ namespace Client.UI
         public static void Pill(ImDrawListPtr dl, Vector2 min, Vector2 max, Color fill, ImFontPtr font, Color textColor, string text, Color? border = null)
         {
             float r = (max.Y - min.Y) / 2;
-            dl.AddRectFilled(min, max, U32(fill), r);
-            if (border.HasValue) dl.AddRect(min, max, U32(border.Value), r, ImDrawCornerFlags.All, 2f);
+            dl.RoundRectFilled(min, max, U32(fill), r);
+            if (border.HasValue) dl.RoundRect(min, max, U32(border.Value), r, ImDrawCornerFlags.All, 2f);
             TextCentered(dl, font, (min + max) / 2, textColor, text);
         }
         #endregion
