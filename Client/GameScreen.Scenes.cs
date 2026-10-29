@@ -54,7 +54,7 @@ namespace Client
         private static extern void glReadPixels(int x, int y, int width, int height, uint format, uint type, byte[] pixels);
 
         public static readonly string[] Scenes = ["setup", "main", "road", "city", "roll", "discard", "robber", "victim", "trade", "devcards", "plenty",
-            "monopoly", "newgame", "save", "developer", "curtain", "offer", "tradeanswer", "tradepick", "spectate", "edit", "end", "hand", "rolls", "banktrade"];
+            "monopoly", "newgame", "save", "developer", "curtain", "offer", "tradeanswer", "tradepick", "spectate", "edit", "end", "hand", "rolls", "banktrade", "endgame", "midgame"];
 
         /// <summary>
         /// Plays fast agent moves up to a situation and sets the mode for it. Seat 4 (Orange) is the human.
@@ -80,6 +80,11 @@ namespace Client
             {
                 case "setup":
                     PlayUntil(() => ActingPlayer == 3);
+                    break;
+
+                case "endgame":
+                    // The human's turn late in the game: someone is close to winning, counting only the points everyone sees
+                    PlayUntil(() => HumanMainPhase(1) && State.Players.Max(p => p.VictoryPoints.Total - p.VictoryPoints.DevelopmentCardPoints) >= 8, 30000);
                     break;
 
                 case "main":
@@ -249,7 +254,11 @@ namespace Client
                     }
 
                 case "spectate":
-                    PlayUntil(() => State.Turn.RoundCounter >= 5 && !State.Turn.MustRoll && State.Turn.TypeOfRound == TurnState.RoundType.Normal);
+                case "midgame":
+                    // The midgame scene goes on until the leader shows 5 points and an agent has its turn's choices ahead of it
+                    PlayUntil(() => (scene == "spectate" ? State.Turn.RoundCounter >= 5
+                            : State.Players.Max(p => p.VictoryPoints.Total - p.VictoryPoints.DevelopmentCardPoints) >= 5 && ActingPlayer < 3 && !State.Turn.MustDiscard && !State.Turn.MustMoveRobber)
+                        && !State.Turn.MustRoll && State.Turn.TypeOfRound == TurnState.RoundType.Normal, 20000);
                     // Hard agents think for 2 s, so the live search shows up in the heat map
                     if (_valueNetAvailable)
                         for (int seat = 0; seat < 3; seat++) Send(new Simulation.SetSeat(seat, SeatKind.MctsHard));

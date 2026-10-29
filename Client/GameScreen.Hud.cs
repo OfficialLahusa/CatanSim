@@ -649,7 +649,7 @@ namespace Client
             dl.AddCircleFilled(min + new Vector2(26, 28), 10, Theme.U32(Theme.PlayerColor(seat)), 24);
             dl.AddCircle(min + new Vector2(26, 28), 10, Theme.U32(Color.White), 24, 2);
             Theme.DrawText(dl, Theme.Bold20, min + new Vector2(44, 15), Theme.Text, "Your hand");
-            Theme.DrawText(dl, Theme.Regular17, min + new Vector2(44 + Theme.TextSize(Theme.Bold20, "Your hand").X, 17), Theme.TextMuted, $" ({player.ResourceCards.Count()} cards)");
+            Theme.DrawText(dl, Theme.Regular17, min + new Vector2(44 + Theme.TextSize(Theme.Bold20, "Your hand").X, 17), Theme.TextMuted, player.ResourceCards.Count() == 1 ? " (1 card)" : $" ({player.ResourceCards.Count()} cards)");
             BuildingStock stock = player.BuildingStock;
             Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 16, 21), Theme.TextMuted,
                 $"{stock.RemainingRoads} roads, {stock.RemainingSettlements} settlements, {stock.RemainingCities} cities left");

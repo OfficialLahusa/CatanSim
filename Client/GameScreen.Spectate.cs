@@ -277,7 +277,8 @@ namespace Client
             dl.AddCircleFilled(min + new Vector2(26, 28), 10, Theme.U32(Theme.PlayerColor(acting)), 24);
             Theme.DrawText(dl, Theme.Bold20, min + new Vector2(44, 15), Theme.Text, Theme.PlayerName(acting));
             Theme.DrawText(dl, Theme.Regular17, min + new Vector2(44 + Theme.TextSize(Theme.Bold20, Theme.PlayerName(acting)).X, 17), Theme.TextMuted, " (policy)");
-            string info = hasVisits ? $"{analysis.Count} moves, {CurrentSearch!.Iterations / 1000.0:0.#}k visits" : $"{analysis.Count} moves, net only";
+            string moves = analysis.Count == 1 ? "1 move" : $"{analysis.Count} moves";
+            string info = hasVisits ? $"{moves}, {CurrentSearch!.Iterations / 1000.0:0.#}k visits" : $"{moves}, net only";
             Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 16, 21), Theme.TextMuted, info);
 
             // No moves to show: the game is over, the match's net has no policy head, or the analysis hasn't come
