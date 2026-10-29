@@ -347,6 +347,14 @@ namespace Client
                 return;
             }
 
+            // No moves: the game is over, or the priors come with the next frame (right after switching to Spectate mode)
+            if (analysis.Count == 0)
+            {
+                Theme.DrawText(dl, Theme.Regular15, min + new Vector2(24, 70), Theme.TextMuted, State.HasEnded ? "The game is over." : "No moves to show yet.");
+                ImGui.End();
+                return;
+            }
+
             Theme.DrawText(dl, Theme.Regular13, min + new Vector2(300, 48), Theme.TextMuted, "Prior (net)");
             Theme.DrawText(dl, Theme.Regular13, min + new Vector2(450, 48), Theme.TextMuted, hasVisits ? "Visits (search)" : "Visits (no search)");
             float maxShare = Math.Max(1e-6f, analysis.Max(m => Math.Max(m.Prior, m.Visits ?? 0)));
