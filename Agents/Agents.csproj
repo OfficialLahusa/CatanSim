@@ -13,7 +13,7 @@
          program referencing Agents. -->
     <StateValueNetModel>state_value_net-mhn8ihqb.onnx</StateValueNetModel>
     <StateValueNetModelSha256>4134fe79db86ff2a63ee11b299d4602aad14c1118d8043247a0e7e84d9ee5244</StateValueNetModelSha256>
-    <StateValueNetModelUrl>https://huggingface.co/Lahusa/catansim-state-value-net/resolve/main/$(StateValueNetModel)</StateValueNetModelUrl>
+    <StateValueNetModelUrl>https://huggingface.co/Lahusa/hexfarer-state-value-net/resolve/main/$(StateValueNetModel)</StateValueNetModelUrl>
     <StateValueNetModelPath>$(MSBuildThisFileDirectory)Artifacts\$(StateValueNetModel)</StateValueNetModelPath>
     <DownloadStateValueNet Condition="'$(DownloadStateValueNet)' == ''">true</DownloadStateValueNet>
   </PropertyGroup>
