@@ -1,3 +1,4 @@
+using Client.Logging;
 using Client.UI;
 using Common;
 using Common.Actions;
@@ -6,6 +7,8 @@ using SFML.Graphics;
 using SFML.System;
 using SFML.Window;
 using Action = Common.Actions.Action;
+
+using Simulation;
 
 namespace Client
 {
@@ -40,9 +43,9 @@ namespace Client
         {
             get
             {
-                if (_mode != InteractionMode.Play || _agentMove != null || _curtainFor != null) return null;
+                if (_mode != InteractionMode.Play || _sim.Game.ThinkingSeat != null || _curtainFor != null) return null;
                 int acting = ActingPlayer;
-                return acting >= 0 && IsHuman(acting) ? acting : null;
+                return acting >= 0 && ControlsSeat(acting) ? acting : null;
             }
         }
 
@@ -50,7 +53,7 @@ namespace Client
         {
             if (_legalVersion != _stateVersion || _legalPlayer != player)
             {
-                _legal = _state.HasEnded ? [] : LegalActionProvider.GetActionsForState(_state, (sbyte)player);
+                _legal = State.HasEnded ? [] : LegalActionProvider.GetActionsForState(State, (sbyte)player);
                 _legalVersion = _stateVersion;
                 _legalPlayer = player;
             }
@@ -93,7 +96,7 @@ namespace Client
             _ => TextureAtlas.Sprite.Settlement
         };
 
-        private bool PlacingFreeRoads(int player) => _state.Players[player].BuildingStock.FreeRoads > 0;
+        private bool PlacingFreeRoads(int player) => State.Players[player].BuildingStock.FreeRoads > 0;
 
         /// <summary>
         /// The board moves the human can click now: placements of the setup and the robber always, building moves in their
@@ -125,7 +128,7 @@ namespace Client
             Vector2i mouse = Mouse.GetPosition(_window);
             if (mouse.X < 0 || mouse.Y < 0 || mouse.X >= _window.Size.X || mouse.Y >= _window.Size.Y) return null;
             Vector2f point = _window.MapPixelToCoords(mouse, _mapView);
-            return _overlay.HitTest(_state.Board, point, candidates);
+            return _overlay.HitTest(State.Board, point, candidates);
         }
 
         /// <summary>
@@ -190,8 +193,8 @@ namespace Client
 
         private void PlayHumanMove(Action action)
         {
-            if (!action.IsValidFor(_state)) return;
-            ApplyMove(action, true);
+            if (!action.IsValidFor(State)) return;
+            Send(new PlayMove(action));
         }
 
         private void ToggleBuildMode(BuildMode mode)
@@ -232,9 +235,9 @@ namespace Client
             if (legal.Any(a => a is FirstInitialSettlementAction)) return "Place your first settlement";
             if (legal.Any(a => a is SecondInitialSettlementAction)) return "Place your second settlement";
             if (legal.Any(a => a is FirstInitialRoadAction or SecondInitialRoadAction)) return "Place a road next to it";
-            if (legal.Any(a => a is DiscardAction)) return $"Discard {_state.Players[player].ResourceCards.Count() / 2} cards";
+            if (legal.Any(a => a is DiscardAction)) return $"Discard {State.Players[player].ResourceCards.Count() / 2} cards";
             if (legal.Any(a => a is RobberAction)) return _dialog == Dialog.Victim ? "Choose whom to rob" : "Move the robber: pick a tile";
-            if (PlacingFreeRoads(player)) return $"Place {_state.Players[player].BuildingStock.FreeRoads} free road" + (_state.Players[player].BuildingStock.FreeRoads > 1 ? "s" : "");
+            if (PlacingFreeRoads(player)) return $"Place {State.Players[player].BuildingStock.FreeRoads} free road" + (State.Players[player].BuildingStock.FreeRoads > 1 ? "s" : "");
             if (legal.Any(a => a is RollAction)) return "Roll the dice";
             return _buildMode switch
             {
@@ -271,8 +274,8 @@ namespace Client
                 case Keyboard.Key.F12: SaveScreenshot(); return;
             }
 
-            if (e.Control && e.Code == Keyboard.Key.Z && _mode != InteractionMode.Play) { UndoAction(); return; }
-            if (e.Control && e.Code == Keyboard.Key.Y && _mode != InteractionMode.Play) { RedoAction(); return; }
+            if (e.Control && e.Code == Keyboard.Key.Z && _mode != InteractionMode.Play && IsAdmin) { UndoAction(); return; }
+            if (e.Control && e.Code == Keyboard.Key.Y && _mode != InteractionMode.Play && IsAdmin) { RedoAction(); return; }
 
             switch (_mode)
             {
@@ -294,7 +297,7 @@ namespace Client
                     {
                         case Keyboard.Key.Space: ToggleSpectatePlaying(); break;
                         case Keyboard.Key.Right: StepSpectate(); break;
-                        case Keyboard.Key.Left: _spectatePlaying = false; UndoAction(); break;
+                        case Keyboard.Key.Left: if (IsAdmin) { SetSpectatePlaying(false); UndoAction(); } break;
                     }
                     break;
 
@@ -344,11 +347,16 @@ namespace Client
         private void SetMode(InteractionMode mode)
         {
             if (_mode == mode) return;
-            CancelAgentMove();
+            if (mode == InteractionMode.Edit && !IsAdmin)
+            {
+                _eventLog.WriteLine(new ColoredStrEntry("Only an admin of the match can edit it", Color.Red));
+                return;
+            }
             _mode = mode;
             ClearHumanInput();
-            _sinceLastMove.Restart();
-            if (mode == InteractionMode.Spectate) _spectatePlaying = false;
+
+            // Spectate starts paused; the agents play the agent seats in Play mode and nothing in Edit mode
+            ApplyPlaybackForMode(playing: false);
         }
 
         #region Trades and development cards

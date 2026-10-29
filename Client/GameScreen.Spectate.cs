@@ -10,6 +10,8 @@ using System.Numerics;
 using Action = Common.Actions.Action;
 using Color = SFML.Graphics.Color;
 
+using Simulation;
+
 namespace Client
 {
     /// <summary>
@@ -75,18 +77,18 @@ namespace Client
             }
 
             // The running search a few times per second
-            if (_agentMove != null && _movingAgent is MCTSAgent mcts && _sinceSearchRead.Elapsed.TotalSeconds > 0.2)
+            if (_sim.ThinkingAgent is MCTSAgent mcts && _sinceSearchRead.Elapsed.TotalSeconds > 0.2)
             {
                 _sinceSearchRead.Restart();
                 (GameState? root, IReadOnlyList<MCTSAgent.RootMove> moves) = mcts.GetRootMoves();
-                if (root != null && root.Equals(_state) && moves.Count > 0)
+                if (root != null && root.Equals(State) && moves.Count > 0)
                 {
                     _searchState = root;
                     _searchMoves = moves;
                     _liveIterations = moves.Sum(m => (long)m.Visits);
                 }
             }
-            else if (_agentMove == null)
+            else if (_sim.Game.ThinkingSeat == null)
             {
                 _liveIterations = 0;
             }
@@ -97,11 +99,11 @@ namespace Client
             int acting = ActingPlayer;
             if (acting < 0 || _stateValueNet?.Policy is not PolicyHead policy) return [];
 
-            List<Action> moves = MCTSTree.GetValidActions(_state);
+            List<Action> moves = MCTSTree.GetValidActions(State);
             if (moves.Count == 0) return [];
             if (moves.Count == 1) return [(moves[0], 1f)];
 
-            LeafValues values = _stateValueNet.Evaluate(StateVectorizer.For(_stateValueNet).Vectorize(_state), false, withPolicy: true);
+            LeafValues values = _stateValueNet.Evaluate(StateVectorizer.For(_stateValueNet).Vectorize(State), false, withPolicy: true);
             float[] priors = new float[moves.Count];
             ActionEncoding.Logits(values.PolicyQueries!.AsSpan(0, policy.QueryLength), policy.Embeddings, policy.Dim, moves, priors);
             ActionEncoding.Softmax(priors);
@@ -113,7 +115,7 @@ namespace Client
         /// </summary>
         private List<MoveAnalysis> Analysis()
         {
-            bool hasSearch = _searchState != null && _searchState.Equals(_state) && _searchMoves.Count > 0;
+            bool hasSearch = _searchState != null && _searchState.Equals(State) && _searchMoves.Count > 0;
             if (!hasSearch)
                 return _priors.Select(p => new MoveAnalysis(p.move, p.prior, null, null)).OrderByDescending(m => m.Prior).ToList();
 
@@ -138,7 +140,7 @@ namespace Client
         /// </summary>
         private void PrepareHeatmap()
         {
-            if (_heatSource == HeatSource.Off || _state.HasEnded) return;
+            if (_heatSource == HeatSource.Off || State.HasEnded) return;
 
             List<MoveAnalysis> analysis = Analysis();
             bool visits = _heatSource == HeatSource.Visits && analysis.Any(m => m.Visits != null);
@@ -173,7 +175,7 @@ namespace Client
             Theme.DrawPanel(dl, min, min + size);
             Theme.DrawText(dl, Theme.Bold17, min + new Vector2(20, 12), Theme.Text, "Win chances");
             string source = _evalSource == EvalSource.Search && _searchMoves.Count > 0 && _mode == InteractionMode.Spectate ? "search" : "value net";
-            Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 20, 16), Theme.TextMuted, $"{source} · after move {_history.Count}");
+            Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 20, 16), Theme.TextMuted, $"{source} · after move {History.Count}");
 
             // The bar: one segment per player in seat order
             Vector2 bar = min + new Vector2(16, 44);
@@ -211,7 +213,7 @@ namespace Client
         /// </summary>
         private float[] EvalValues()
         {
-            if (_evalSource == EvalSource.Search && _mode == InteractionMode.Spectate && _searchState != null && _searchState.Equals(_state) && _searchMoves.Count > 0)
+            if (_evalSource == EvalSource.Search && _mode == InteractionMode.Spectate && _searchState != null && _searchState.Equals(State) && _searchMoves.Count > 0)
             {
                 double totalVisits = _searchMoves.Sum(m => (double)m.Visits);
                 if (totalVisits > 0)
@@ -239,28 +241,31 @@ namespace Client
             Theme.DrawText(dl, Theme.Bold17, min + new Vector2(20, 14), Theme.Text, "Playback");
 
             float half = (size.X - 32 - 10) / 2;
-            if (DrawButton(dl, "playpause", min + new Vector2(16, 46), new Vector2(half, 54), _spectatePlaying ? "Pause" : "Play", !_state.HasEnded, Theme.Accent, Theme.AccentBorder, Theme.Bold17, "Space"))
+            if (DrawButton(dl, "playpause", min + new Vector2(16, 46), new Vector2(half, 54), SpectatePlaying ? "Pause" : "Play", IsAdmin && !State.HasEnded, Theme.Accent, Theme.AccentBorder, Theme.Bold17, "Space"))
                 ToggleSpectatePlaying();
-            if (DrawButton(dl, "step", min + new Vector2(26 + half, 46), new Vector2(half, 54), "Step", !_state.HasEnded && _agentMove == null, Theme.PanelRaised, Theme.BorderLight, Theme.Bold17, "Right"))
+            if (DrawButton(dl, "step", min + new Vector2(26 + half, 46), new Vector2(half, 54), "Step", IsAdmin && !State.HasEnded && _sim.Game.ThinkingSeat == null, Theme.PanelRaised, Theme.BorderLight, Theme.Bold17, "Right"))
                 StepSpectate();
 
             // Move history: back and forward through the played moves
             Vector2 nav = min + new Vector2(16, 112);
             dl.AddRectFilled(nav, nav + new Vector2(size.X - 32, 44), Theme.U32(Theme.PanelRaised), 12);
             dl.AddRect(nav, nav + new Vector2(size.X - 32, 44), Theme.U32(Theme.BorderLight), 12);
-            int total = _history.Count + _redo.Count;
-            Theme.TextCentered(dl, Theme.Bold17, nav + new Vector2((size.X - 32) / 2, 22), Theme.Text, $"Move {_history.Count} / {total}");
-            if (NavButton(dl, "first", nav + new Vector2(8, 4), "|<", _history.Count > 0)) { _spectatePlaying = false; while (_history.Count > 0) UndoAction(); }
-            if (NavButton(dl, "back", nav + new Vector2(48, 4), "<", _history.Count > 0)) { _spectatePlaying = false; UndoAction(); }
-            if (NavButton(dl, "forward", nav + new Vector2(size.X - 32 - 84, 4), ">", _redo.Count > 0)) { _spectatePlaying = false; RedoAction(false); }
-            if (NavButton(dl, "last", nav + new Vector2(size.X - 32 - 44, 4), ">|", _redo.Count > 0)) { _spectatePlaying = false; while (_redo.Count > 0 && RedoOne()) { } }
+            int total = History.Count + Redo.Count;
+            Theme.TextCentered(dl, Theme.Bold17, nav + new Vector2((size.X - 32) / 2, 22), Theme.Text, $"Move {History.Count} / {total}");
+            // One command per step: over the network the history only changes once the server's events are back
+            bool control = IsAdmin;
+            if (NavButton(dl, "first", nav + new Vector2(8, 4), "|<", control && History.Count > 0)) { SetSpectatePlaying(false); for (int i = History.Count; i > 0; i--) UndoAction(); }
+            if (NavButton(dl, "back", nav + new Vector2(48, 4), "<", control && History.Count > 0)) { SetSpectatePlaying(false); UndoAction(); }
+            if (NavButton(dl, "forward", nav + new Vector2(size.X - 32 - 84, 4), ">", control && Redo.Count > 0)) { SetSpectatePlaying(false); RedoAction(false); }
+            if (NavButton(dl, "last", nav + new Vector2(size.X - 32 - 44, 4), ">|", control && Redo.Count > 0)) { SetSpectatePlaying(false); for (int i = Redo.Count; i > 0; i--) RedoAction(false); }
 
             // Thinking time of the agents and the pause between moves
             ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new Vector2(6, 3));
             Theme.DrawText(dl, Theme.Regular13, min + new Vector2(20, 172), Theme.TextMuted, "Pause between moves");
             ImGui.SetCursorScreenPos(min + new Vector2(180, 168));
             ImGui.SetNextItemWidth(size.X - 200);
-            ImGui.SliderFloat("##pace", ref _botPaceSeconds, 0f, 3f, "%.1f s");
+            float pace = Playback.PaceSeconds;
+            if (ImGui.SliderFloat("##pace", ref pace, 0f, 3f, "%.1f s") && control) Send(new SetPlayback(Playback with { PaceSeconds = pace }));
 
             Theme.DrawText(dl, Theme.Regular13, min + new Vector2(20, 214), Theme.TextMuted, "Heat map");
             DrawSegmented(dl, "heat", min + new Vector2(110, 206), new Vector2(size.X - 126, 30), ["Visits", "Prior", "Off"], (int)_heatSource, i => _heatSource = (HeatSource)i);
@@ -268,13 +273,6 @@ namespace Client
             DrawSegmented(dl, "eval", min + new Vector2(110, 252), new Vector2(size.X - 126, 30), ["Value net", "Search"], (int)_evalSource, i => _evalSource = (EvalSource)i);
             ImGui.PopStyleVar();
             ImGui.End();
-        }
-
-        private bool RedoOne()
-        {
-            int before = _redo.Count;
-            RedoAction(false);
-            return _redo.Count < before;
         }
 
         private static bool NavButton(ImDrawListPtr dl, string id, Vector2 min, string label, bool enabled)
@@ -301,28 +299,25 @@ namespace Client
             }
         }
 
-        private void ToggleSpectatePlaying()
+        /// <summary>
+        /// Whether playback runs in Spectate mode: the agents (stand-ins for the human seats too) play on
+        /// </summary>
+        private bool SpectatePlaying => !Playback.Paused;
+
+        private void SetSpectatePlaying(bool playing)
         {
-            if (_spectatePlaying)
-            {
-                _spectatePlaying = false;
-                CancelAgentMove();
-            }
-            else if (!_state.HasEnded)
-            {
-                _spectatePlaying = true;
-                _sinceLastMove.Restart();
-            }
+            if (_mode == InteractionMode.Spectate) ApplyPlaybackForMode(playing && !State.HasEnded);
         }
+
+        private void ToggleSpectatePlaying() => SetSpectatePlaying(!SpectatePlaying);
 
         /// <summary>
         /// One agent move while playback is paused: the next one from the history if there is one, otherwise a new one
         /// </summary>
         private void StepSpectate()
         {
-            _spectatePlaying = false;
-            if (_redo.Count > 0) RedoAction(false);
-            else StartAgentMove(!_muteQuickPlayouts);
+            SetSpectatePlaying(false);
+            Send(new StepCommand());
         }
 
         /// <summary>
@@ -388,7 +383,7 @@ namespace Client
         /// </summary>
         private string DescribeMove(Action action)
         {
-            Board board = _state.Board;
+            Board board = State.Board;
             string Tiles(IEnumerable<Tile?> tiles)
             {
                 List<string> names = tiles.Where(t => t != null && t.IsLandTile()).Select(t => t!.HasYield() ? t.Number.ToString() : t!.Type.ToString().ToLower()).ToList();
@@ -482,9 +477,9 @@ namespace Client
             }
 
             float half = (size.X - 32 - 10) / 2;
-            if (DrawButton(dl, "undo", min + new Vector2(16, 132), new Vector2(half, 46), "Undo", _history.Count > 0, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15, "Ctrl+Z"))
+            if (DrawButton(dl, "undo", min + new Vector2(16, 132), new Vector2(half, 46), "Undo", History.Count > 0, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15, "Ctrl+Z"))
                 UndoAction();
-            if (DrawButton(dl, "redo", min + new Vector2(26 + half, 132), new Vector2(half, 46), "Redo", _redo.Count > 0, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15, "Ctrl+Y"))
+            if (DrawButton(dl, "redo", min + new Vector2(26 + half, 132), new Vector2(half, 46), "Redo", Redo.Count > 0, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15, "Ctrl+Y"))
                 RedoAction(false);
 
             Theme.DrawText(dl, Theme.Regular13, min + new Vector2(20, 196), Theme.TextMuted, "Map (starts a new game, not undoable)");
@@ -504,7 +499,7 @@ namespace Client
         {
             Vector2 min = new Vector2(Margin, Display.Y - Margin - 194);
             Vector2 size = new Vector2(590, 194);
-            PlayerState player = _state.Players[_editPlayer];
+            PlayerState player = State.Players[_editPlayer];
 
             ImDrawListPtr dl = Theme.BeginHud("##editcards", min, size + new Vector2(0, 8));
             Theme.DrawPanel(dl, min, min + size, Theme.PlayerColor(_editPlayer), 16, null, 2);
@@ -521,7 +516,7 @@ namespace Client
                 Theme.Pill(dl, pos + new Vector2(42, -6), pos + new Vector2(72, 18), new Color(11, 22, 64), Theme.Bold15, Theme.Text, count.ToString(), Color.White);
                 if (DrawButton(dl, $"minus{type}", pos + new Vector2(0, 98), new Vector2(28, 28), "-", count > 0, Theme.PanelRaised, Theme.BorderLight, Theme.Bold17))
                     EditResource(_editPlayer, type, -1);
-                if (DrawButton(dl, $"plus{type}", pos + new Vector2(32, 98), new Vector2(28, 28), "+", _state.ResourceBank.Contains(type), Theme.PanelRaised, Theme.BorderLight, Theme.Bold17))
+                if (DrawButton(dl, $"plus{type}", pos + new Vector2(32, 98), new Vector2(28, 28), "+", State.ResourceBank.Contains(type), Theme.PanelRaised, Theme.BorderLight, Theme.Bold17))
                     EditResource(_editPlayer, type, 1);
                 i++;
             }

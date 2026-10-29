@@ -26,9 +26,10 @@ namespace Simulation
         void Send(Command command);
 
         /// <summary>
-        /// Applies the events that arrived to Game and returns them, oldest first
+        /// Applies the events that arrived to Game and returns them, oldest first; afterEach sees each one right after it was
+        /// applied (for effects that need the position of that moment)
         /// </summary>
-        List<MatchEvent> ProcessEvents();
+        List<MatchEvent> ProcessEvents(Action<MatchEvent>? afterEach = null);
 
         /// <summary>
         /// The agent searching right now, when the match runs in this process (null over the network)
@@ -65,13 +66,14 @@ namespace Simulation
 
         public void Send(Command command) => Match.Handle(Session!, command);
 
-        public List<MatchEvent> ProcessEvents()
+        public List<MatchEvent> ProcessEvents(Action<MatchEvent>? afterEach = null)
         {
             List<MatchEvent> events = [];
             while (_events.TryDequeue(out MatchEvent? e))
             {
                 Game.Apply(e);
                 events.Add(e);
+                afterEach?.Invoke(e);
             }
             return events;
         }

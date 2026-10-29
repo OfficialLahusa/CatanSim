@@ -3,6 +3,8 @@ using Common;
 using Common.Actions;
 using Action = Common.Actions.Action;
 
+using Simulation;
+
 namespace Client
 {
     /// <summary>
@@ -40,36 +42,34 @@ namespace Client
         {
             Random random = new Random(seed);
             Utils.Random.SeedCurrentThread(seed);
-            _botPaceSeconds = float.MaxValue;
-            Agent[] bots = Enumerable.Range(0, PLAYER_COUNT).Select(i => (Agent)new RandomAgent((sbyte)i)).ToArray();
 
             for (int game = 0; game < games; game++)
             {
-                for (int seat = 0; seat < PLAYER_COUNT; seat++)
-                    _seats[seat] = seat == 3 ? SeatKind.Human : SeatKind.Random;
-                for (sbyte seat = 0; seat < PLAYER_COUNT; seat++)
-                    _agents[seat] = CreateAgent(_seats[seat], seat);
+                // The match's agents play the random seats without a pause; the human seat plays through the UI's paths
                 SetMode(InteractionMode.Play);
-                NewGame();
+                Send(new Simulation.NewGame([SeatKind.Random, SeatKind.Random, SeatKind.Random, SeatKind.Human], false));
+                Send(new SetPlayback(new PlaybackState(false, false, 0)));
 
-                int humanMoves = 0, moves = 0;
-                while (!_state.HasEnded && moves < 4000)
+                int humanMoves = 0, frames = 0, stalled = 0, lastCount = -1;
+                while (!State.HasEnded && History.Count < 4000)
                 {
-                    int acting = ActingPlayer;
-                    if (acting == 3)
+                    if (ActingPlayer == 3)
                     {
                         foreach (bool frame in HumanSelfTestMove(random)) yield return frame;
                         humanMoves++;
                     }
                     else
                     {
-                        ApplyMove(bots[acting].Act(_state), false);
-                        if (moves % 25 == 0) yield return true;
+                        yield return true;
                     }
-                    moves++;
+
+                    // The agents must keep the game going
+                    stalled = History.Count == lastCount ? stalled + 1 : 0;
+                    lastCount = History.Count;
+                    Check(stalled < 3000, "the game stopped moving");
 
                     // The other modes' panels now and then
-                    if (moves % 200 == 0)
+                    if (++frames % 300 == 0)
                     {
                         SetMode(InteractionMode.Spectate);
                         yield return true;
@@ -78,17 +78,18 @@ namespace Client
                         SetMode(InteractionMode.Play);
                     }
                 }
-                Console.WriteLine($"Game {game + 1}: {moves} moves, {humanMoves} by the human seat, " + (_state.HasEnded ? $"won by {UI.Theme.PlayerName(_state.Turn.PlayerIndex)}" : "stopped"));
+                int moves = History.Count;
+                Console.WriteLine($"Game {game + 1}: {moves} moves, {humanMoves} by the human seat, " + (State.HasEnded ? $"won by {UI.Theme.PlayerName(State.Turn.PlayerIndex)}" : "stopped"));
                 yield return true;
 
                 // History: back and forth through the last moves lands on the same position
                 SetMode(InteractionMode.Spectate);
-                GameState end = new GameState(_state);
-                int back = Math.Min(60, _history.Count);
+                GameState end = new GameState(State);
+                int back = Math.Min(60, History.Count);
                 for (int i = 0; i < back; i++) UndoAction();
                 yield return true;
                 for (int i = 0; i < back; i++) RedoAction(false);
-                Check(_state.Equals(end), "undo and redo of moves changed the position");
+                Check(State.Equals(end), "undo and redo of moves changed the position");
                 yield return true;
 
                 foreach (bool frame in EditSelfTest(random)) yield return frame;
@@ -189,8 +190,8 @@ namespace Client
         private IEnumerable<bool> EditSelfTest(Random random)
         {
             SetMode(InteractionMode.Edit);
-            GameState start = new GameState(_state);
-            int historyBefore = _history.Count;
+            GameState start = new GameState(State);
+            int historyBefore = History.Count;
 
             for (int i = 0; i < 80; i++)
             {
@@ -209,13 +210,13 @@ namespace Client
                 if (i % 10 == 0) yield return true;
             }
 
-            GameState end = new GameState(_state);
-            int edits = _history.Count - historyBefore;
+            GameState end = new GameState(State);
+            int edits = History.Count - historyBefore;
             for (int i = 0; i < edits; i++) UndoAction();
-            Check(_state.Equals(start), "undoing the edits did not restore the position");
+            Check(State.Equals(start), "undoing the edits did not restore the position");
             yield return true;
             for (int i = 0; i < edits; i++) RedoAction(false);
-            Check(_state.Equals(end), "redoing the edits did not restore the edited position");
+            Check(State.Equals(end), "redoing the edits did not restore the edited position");
             Console.WriteLine($"Edits: {edits} edits undone and redone");
             yield return true;
         }

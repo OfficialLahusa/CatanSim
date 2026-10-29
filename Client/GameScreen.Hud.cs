@@ -12,6 +12,8 @@ using System.Numerics;
 using Action = Common.Actions.Action;
 using Color = SFML.Graphics.Color;
 
+using Simulation;
+
 namespace Client
 {
     /// <summary>
@@ -71,6 +73,7 @@ namespace Client
             DrawEndScreen();
             DrawModals();
             if (_showDeveloperWindow) DrawDeveloperWindow();
+            DrawNetworkWindow();
 
             _particles.Draw(ImGui.GetForegroundDrawList());
         }
@@ -78,7 +81,7 @@ namespace Client
         #region Top bar
         private void DrawTopBar()
         {
-            ImDrawListPtr dl = Theme.BeginHud("##topbar", new Vector2(Margin, Margin), new Vector2(560, 50));
+            ImDrawListPtr dl = Theme.BeginHud("##topbar", new Vector2(Margin, Margin), new Vector2(860, 50));
             Vector2 o = new Vector2(Margin, Margin);
 
             // Menu button
@@ -104,17 +107,19 @@ namespace Client
                 if (clicked) SetMode((InteractionMode)i);
             }
 
-            // A switch for the mode
+            // A switch for the mode, then where the match runs
+            float x = 340;
             if (_mode == InteractionMode.Spectate)
-                DrawToggle(dl, "hands", o + new Vector2(340, 7), "Hands shown", ref _showHands);
+                x += 12 + DrawToggle(dl, "hands", o + new Vector2(x, 7), "Hands shown", ref _showHands);
             else if (_mode == InteractionMode.Edit)
-                DrawToggle(dl, "evalbar", o + new Vector2(340, 7), "Win chances", ref _showEditEval);
+                x += 12 + DrawToggle(dl, "evalbar", o + new Vector2(x, 7), "Win chances", ref _showEditEval);
+            DrawNetworkChip(dl, o + new Vector2(x, 7));
 
             DrawMainMenu();
             ImGui.End();
         }
 
-        private void DrawToggle(ImDrawListPtr dl, string id, Vector2 min, string label, ref bool value)
+        private float DrawToggle(ImDrawListPtr dl, string id, Vector2 min, string label, ref bool value)
         {
             float width = 48 + Theme.TextSize(Theme.Regular15, label).X;
             if (Theme.HitArea(id, min, new Vector2(width, 32), out _)) value = !value;
@@ -124,19 +129,22 @@ namespace Client
             dl.AddRectFilled(track, track + new Vector2(30, 16), Theme.U32(value ? new Color(138, 92, 0) : new Color(58, 74, 116)), 8);
             dl.AddCircleFilled(track + new Vector2(value ? 22 : 8, 8), 6, Theme.U32(value ? Theme.PlayerColor(3) : Theme.TextMuted));
             Theme.DrawText(dl, Theme.Regular15, min + new Vector2(46, 6), value ? Theme.TextSoft : Theme.TextMuted, label);
+            return width;
         }
 
         private void DrawMainMenu()
         {
             if (!ImGui.BeginPopup("main-menu")) return;
 
-            if (ImGui.MenuItem("New game..."))
+            if (ImGui.MenuItem("New game...", "", false, IsAdmin))
             {
-                Array.Copy(_seats, _newGameSeats, PLAYER_COUNT);
+                Array.Copy(Seats, _newGameSeats, PLAYER_COUNT);
                 _dialog = Dialog.NewGame;
             }
             if (ImGui.MenuItem("Save game...")) _openSaveModal = true;
-            if (ImGui.MenuItem("Load game...")) _openLoadModal = true;
+            if (ImGui.MenuItem("Load game...", "", false, IsAdmin)) _openLoadModal = true;
+            ImGui.Separator();
+            if (ImGui.MenuItem("Host or join a game...")) _showNetworkWindow = true;
             ImGui.Separator();
             if (ImGui.MenuItem("Developer tools", "", _showDeveloperWindow)) _showDeveloperWindow = !_showDeveloperWindow;
             ImGui.Separator();
@@ -157,7 +165,7 @@ namespace Client
             {
                 Vector2 min = new Vector2(Margin, SeatTop + seat * (SeatHeight + SeatGap));
                 Vector2 max = min + new Vector2(ColumnWidth, SeatHeight);
-                PlayerState player = _state.Players[seat];
+                PlayerState player = State.Players[seat];
                 Color color = Theme.PlayerColor(seat);
                 bool isActing = seat == acting;
                 bool selected = _mode == InteractionMode.Edit && seat == _editPlayer;
@@ -179,7 +187,7 @@ namespace Client
                 // Name, who plays it and what it is doing
                 string name = viewer == seat ? "You" : Theme.PlayerName(seat);
                 Theme.DrawText(dl, Theme.Bold22, min + new Vector2(80, 10), Theme.Text, name);
-                string who = viewer == seat ? $"{Theme.PlayerName(seat)} · human" : SeatName(_seats[seat]);
+                string who = viewer == seat ? $"{Theme.PlayerName(seat)} · human" : Simulation.Seats.Name(Seats[seat]);
                 if (_mode == InteractionMode.Spectate && IsHuman(seat)) who = "Human · stand-in agent";
                 Theme.DrawText(dl, Theme.Regular15, min + new Vector2(80, 41), Theme.TextMuted, who);
 
@@ -195,7 +203,7 @@ namespace Client
                 bool hiddenVisible = viewer == null || viewer == seat;
                 int vp = player.VictoryPoints.Total - (hiddenVisible ? 0 : player.VictoryPoints.DevelopmentCardPoints);
                 Theme.TextRight(dl, Theme.ExtraBold36, max + new Vector2(-24, -SeatHeight + 4), Theme.Text, vp.ToString());
-                Theme.TextRight(dl, Theme.Regular13, max + new Vector2(-24, -SeatHeight + 50), Theme.TextMuted, $"/ {_state.Settings.VictoryPoints} VP");
+                Theme.TextRight(dl, Theme.Regular13, max + new Vector2(-24, -SeatHeight + 50), Theme.TextMuted, $"/ {State.Settings.VictoryPoints} VP");
 
                 DrawSeatStats(dl, seat, min + new Vector2(28, 78), viewer);
 
@@ -218,16 +226,16 @@ namespace Client
 
         private string? SeatTag(int seat, bool isActing)
         {
-            if (_state.HasEnded) return seat == _state.Turn.PlayerIndex ? "WINNER" : null;
+            if (State.HasEnded) return seat == State.Turn.PlayerIndex ? "WINNER" : null;
             if (!isActing) return null;
-            if (_state.Turn.MustDiscard) return "DISCARDING";
-            if (_agentMove != null && _movingAgent?.PlayerIndex == seat) return "THINKING";
+            if (State.Turn.MustDiscard) return "DISCARDING";
+            if (_sim.Game.ThinkingSeat == seat) return "THINKING";
             return "ON TURN";
         }
 
         private void DrawSeatStats(ImDrawListPtr dl, int seat, Vector2 pos, int? viewer)
         {
-            PlayerState player = _state.Players[seat];
+            PlayerState player = State.Players[seat];
             bool handVisible = _mode switch
             {
                 InteractionMode.Play => viewer == null || viewer == seat,
@@ -282,11 +290,11 @@ namespace Client
             int colorSeat = Math.Max(0, acting);
             string? chip = null;
 
-            if (_state.HasEnded)
+            if (State.HasEnded)
             {
-                colorSeat = _state.Turn.PlayerIndex;
+                colorSeat = State.Turn.PlayerIndex;
                 headline = $"{Theme.PlayerName(colorSeat)} won the game";
-                detail = $" · {_state.Players[colorSeat].VictoryPoints.Total} victory points";
+                detail = $" · {State.Players[colorSeat].VictoryPoints.Total} victory points";
             }
             else if (_mode == InteractionMode.Edit)
             {
@@ -306,14 +314,14 @@ namespace Client
                 detail = " · " + HumanPrompt(human);
                 if (_buildMode != BuildMode.None) chip = "Esc";
             }
-            else if (_agentMove != null && _movingAgent != null)
+            else if (_sim.Game.ThinkingSeat is int thinkingSeat)
             {
-                headline = $"{Theme.PlayerName(_movingAgent.PlayerIndex)} is thinking";
-                detail = $" · {SeatName(_seats[_movingAgent.PlayerIndex] == SeatKind.Human ? SeatKind.MctsMedium : _seats[_movingAgent.PlayerIndex])}";
+                headline = $"{Theme.PlayerName(thinkingSeat)} is thinking";
+                detail = $" · {Simulation.Seats.Name(Seats[thinkingSeat] == SeatKind.Human ? SeatKind.MctsMedium : Seats[thinkingSeat])}";
                 if (_mode == InteractionMode.Spectate && _liveIterations > 0) detail += $" · {_liveIterations / 1000.0:0.#}k iterations";
-                chip = $"{_agentMoveClock.Elapsed.TotalSeconds:0.0} s";
+                chip = $"{_thinkingClock.Elapsed.TotalSeconds:0.0} s";
             }
-            else if (_mode == InteractionMode.Spectate && !_spectatePlaying)
+            else if (_mode == InteractionMode.Spectate && !SpectatePlaying)
             {
                 headline = "Paused";
                 detail = acting >= 0 ? $" · {Theme.PlayerName(acting)} to move" : "";
@@ -336,10 +344,10 @@ namespace Client
             Vector2 dot = min + new Vector2(30, 25);
             dl.AddCircleFilled(dot, 11, Theme.U32(color), 24);
             dl.AddCircle(dot, 11, Theme.U32(Color.White), 24, 2);
-            if (_agentMove != null)
+            if (_sim.Game.ThinkingSeat != null)
             {
                 // A spinner around the dot while an agent thinks
-                float start = (float)(_agentMoveClock.Elapsed.TotalSeconds * 6 % (2 * Math.PI));
+                float start = (float)(_thinkingClock.Elapsed.TotalSeconds * 6 % (2 * Math.PI));
                 dl.PathArcTo(dot, 17, start, start + 2.2f, 20);
                 dl.PathStroke(Theme.U32(color), false, 3);
             }
@@ -355,7 +363,6 @@ namespace Client
             ImGui.End();
         }
 
-        private int HumanCount() => _seats.Count(s => s == SeatKind.Human);
         #endregion
 
         #region Log
@@ -369,7 +376,7 @@ namespace Client
             ImDrawListPtr dl = Theme.BeginHud("##log", min, size + new Vector2(0, 8));
             Theme.DrawPanel(dl, min, min + size);
             Theme.DrawText(dl, Theme.Bold17, min + new Vector2(20, 14), Theme.Text, "Game log");
-            Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 20, 18), Theme.TextMuted, $"Round {_state.Turn.RoundCounter}");
+            Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 20, 18), Theme.TextMuted, $"Round {State.Turn.RoundCounter}");
             dl.AddLine(min + new Vector2(16, 46), min + new Vector2(size.X - 16, 46), Theme.U32(Theme.Border));
 
             ImGui.SetCursorScreenPos(min + new Vector2(16, 54));
@@ -391,7 +398,7 @@ namespace Client
             float tradeTop = endTop - 12 - 48;
             float buildTop = tradeTop - 12 - 132;
             int? human = HumanToAct;
-            int player = human ?? Viewer ?? 0;
+            int player = human ?? (Viewer is int viewing && viewing >= 0 ? viewing : 0);
 
             ImDrawListPtr dl = Theme.BeginHud("##actions", new Vector2(x - 8, buildTop - 26), new Vector2(ColumnWidth + 16, endTop + 72 - (buildTop - 26)));
             Theme.TextCentered(dl, Theme.Regular13, new Vector2(x + ColumnWidth / 2, buildTop - 12), Theme.TextFaint, "Build  ·  keys 1-4");
@@ -466,10 +473,10 @@ namespace Client
 
         private void DrawRollLabel()
         {
-            if (_state.Turn.RoundCounter == 0 && !_history.Any(h => h.Action is RollAction)) return;
-            if (_state.Turn.MustRoll && !_history.Any(h => h.Action is RollAction)) return;
+            if (State.Turn.RoundCounter == 0 && !History.Any(h => h.Action is RollAction)) return;
+            if (State.Turn.MustRoll && !History.Any(h => h.Action is RollAction)) return;
 
-            int roller = _history.Select(h => h.Action).OfType<RollAction>().FirstOrDefault()?.PlayerIndex ?? -1;
+            int roller = History.Select(h => h.Action).OfType<RollAction>().LastOrDefault()?.PlayerIndex ?? -1;
             if (roller < 0) return;
             string who = Viewer == roller ? "You" : Theme.PlayerName(roller);
             float x = Display.X - Margin - DiceWidget.Size - 10;
@@ -477,7 +484,7 @@ namespace Client
 
             ImDrawListPtr dl = Theme.BeginHud("##rolllabel", center - new Vector2(140, 14), new Vector2(280, 28));
             string text = $"{who} rolled ";
-            string number = _state.Turn.LastRoll.Total.ToString();
+            string number = State.Turn.LastRoll.Total.ToString();
             float tw = Theme.TextSize(Theme.Regular17, text).X, nw = Theme.TextSize(Theme.Bold17, number).X;
             Theme.DrawText(dl, Theme.Regular17, center - new Vector2((tw + nw) / 2, 11), new Color(223, 231, 255), text);
             Theme.DrawText(dl, Theme.Bold17, center - new Vector2((tw + nw) / 2 - tw, 11), Theme.Highlight, number);
@@ -505,9 +512,9 @@ namespace Client
                 DrawCurtain(min, size, next);
                 return;
             }
-            if (viewer is not int seat) return;
+            if (viewer is not int seat || seat < 0) return;
 
-            PlayerState player = _state.Players[seat];
+            PlayerState player = State.Players[seat];
             ImDrawListPtr dl = Theme.BeginHud("##hand", min - new Vector2(0, 30), size + new Vector2(0, 38));
             Theme.DrawPanel(dl, min, min + size, Theme.PlayerColor(seat), 16, null, 2);
             dl.AddCircleFilled(min + new Vector2(26, 28), 10, Theme.U32(Theme.PlayerColor(seat)), 24);
@@ -626,7 +633,7 @@ namespace Client
                 ? moves.All(m => ((RobberAction)m).TargetPlayerIndex == null) ? "nobody to rob" : "rob " + string.Join(" or ", moves.Select(m => ((RobberAction)m).TargetPlayerIndex).OfType<sbyte>().Select(v => Theme.PlayerName(v)))
                 : cost.Length > 0 ? "click  ·  costs" : "click";
 
-            Vector2f mapPos = _overlay.Position(_state.Board, hovered);
+            Vector2f mapPos = _overlay.Position(State.Board, hovered);
             Vector2i pixel = _window.MapCoordsToPixel(mapPos, _mapView);
             Vector2 anchor = new Vector2(pixel.X, pixel.Y) / GuiImpl.UiScale;
             float costWidth = cost.Length * 19;
@@ -692,7 +699,7 @@ namespace Client
         private void DrawDiscardDialog()
         {
             if (HumanToAct is not int player || !HasLegal<DiscardAction>(player)) { _dialog = Dialog.None; return; }
-            PlayerState state = _state.Players[player];
+            PlayerState state = State.Players[player];
             int required = (int)(state.ResourceCards.Count() / 2);
             int chosen = _discardSelection.Sum();
 
@@ -740,7 +747,7 @@ namespace Client
                 Theme.DrawPanel(dl, pos, pos + new Vector2(138, 100), hovered ? Theme.PlayerColor(victim) : Theme.BorderLight, 12, Theme.PanelRaised, hovered ? 2.5f : 1);
                 dl.AddCircleFilled(pos + new Vector2(69, 34), 18, Theme.U32(Theme.PlayerColor(victim)), 24);
                 Theme.TextCentered(dl, Theme.Bold17, pos + new Vector2(69, 70), Theme.Text, Theme.PlayerName(victim));
-                Theme.TextCentered(dl, Theme.Regular13, pos + new Vector2(69, 88), Theme.TextMuted, $"{_state.Players[victim].ResourceCards.Count()} cards");
+                Theme.TextCentered(dl, Theme.Regular13, pos + new Vector2(69, 88), Theme.TextMuted, $"{State.Players[victim].ResourceCards.Count()} cards");
                 if (clicked) PlayHumanMove(options[i]);
             }
             ImGui.End();
@@ -858,7 +865,7 @@ namespace Client
             {
                 Vector2 pos = min + new Vector2(28 + i * 110, 90);
                 int picked = (_plentyFirst == type ? 1 : 0) + (_plentySecond == type ? 1 : 0);
-                if (CardButton(dl, $"plenty{type}", type, pos, new Vector2(66, 99), _state.ResourceBank.Contains(type), picked > 0))
+                if (CardButton(dl, $"plenty{type}", type, pos, new Vector2(66, 99), State.ResourceBank.Contains(type), picked > 0))
                 {
                     if (_plentyFirst == null) _plentyFirst = type;
                     else if (_plentySecond == null) _plentySecond = type;
@@ -898,7 +905,7 @@ namespace Client
         private void DrawNewGameDialog()
         {
             ImDrawListPtr dl = BeginDialog("##newgame", new Vector2(520, 400), "New game", "Who plays each seat (seat 1 starts).", null, out Vector2 min);
-            string[] kinds = Enum.GetValues<SeatKind>().Select(SeatName).ToArray();
+            string[] kinds = Enum.GetValues<SeatKind>().Select(Simulation.Seats.Name).ToArray();
             for (int seat = 0; seat < PLAYER_COUNT; seat++)
             {
                 Vector2 pos = min + new Vector2(24, 92 + seat * 52);
@@ -911,7 +918,7 @@ namespace Client
                 if (ImGui.Combo($"##seatkind{seat}", ref kind, kinds, kinds.Length))
                 {
                     SeatKind chosen = (SeatKind)kind;
-                    if (chosen == SeatKind.Human || !NeedsValueNet(chosen) || _stateValueNet != null) _newGameSeats[seat] = chosen;
+                    if (chosen == SeatKind.Human || !Simulation.Seats.NeedsValueNet(chosen) || _stateValueNet != null) _newGameSeats[seat] = chosen;
                 }
             }
             ImGui.SetCursorScreenPos(min + new Vector2(24, 304));
@@ -920,14 +927,9 @@ namespace Client
             if (DrawButton(dl, "newgameok", min + new Vector2(520 - 24 - 180, 400 - 20 - 44), new Vector2(180, 44), "Start", true, Theme.Accent, Theme.AccentBorder, Theme.Bold17))
             {
                 _dialog = Dialog.None;
-                for (int seat = 0; seat < PLAYER_COUNT; seat++)
-                {
-                    _seats[seat] = _newGameSeats[seat];
-                    _agents[seat] = CreateAgent(_seats[seat], (sbyte)seat);
-                }
-                NewGame();
-                _endScreenDismissed = false;
                 SetMode(InteractionMode.Play);
+                Send(new Simulation.NewGame((SeatKind[])_newGameSeats.Clone(), _centerDesert));
+                _endScreenDismissed = false;
             }
             if (DrawButton(dl, "newgamecancel", min + new Vector2(24, 400 - 20 - 44), new Vector2(120, 44), "Cancel", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))
                 _dialog = Dialog.None;
@@ -938,22 +940,22 @@ namespace Client
         #region End screen
         private void DrawEndScreen()
         {
-            if (!_state.HasEnded || _endScreenDismissed || _mode == InteractionMode.Edit || _dialog == Dialog.NewGame) return;
+            if (!State.HasEnded || _endScreenDismissed || _mode == InteractionMode.Edit || _dialog == Dialog.NewGame) return;
 
-            int winner = _state.Turn.PlayerIndex;
+            int winner = State.Turn.PlayerIndex;
             ImDrawListPtr dl = BeginDialog("##endscreen", new Vector2(620, 380), $"{Theme.PlayerName(winner)} wins!",
-                $"after {_state.Turn.RoundCounter} rounds · {(IsHuman(winner) ? "a human seat" : SeatName(_seats[winner]))}", winner, out Vector2 min);
+                $"after {State.Turn.RoundCounter} rounds · {(IsHuman(winner) ? "a human seat" : Simulation.Seats.Name(Seats[winner]))}", winner, out Vector2 min);
 
             string[] headers = ["", "VP", "Settl.", "Cities", "VP cards", "Road", "Army"];
             float[] columns = [24, 190, 250, 320, 390, 480, 545];
             for (int c = 0; c < headers.Length; c++)
                 Theme.DrawText(dl, Theme.SemiBold15, min + new Vector2(columns[c], 88), Theme.TextMuted, headers[c]);
 
-            foreach (int seat in Enumerable.Range(0, PLAYER_COUNT).OrderByDescending(s => _state.Players[s].VictoryPoints.Total))
+            foreach (int seat in Enumerable.Range(0, PLAYER_COUNT).OrderByDescending(s => State.Players[s].VictoryPoints.Total))
             {
-                int row = Enumerable.Range(0, PLAYER_COUNT).OrderByDescending(s => _state.Players[s].VictoryPoints.Total).ToList().IndexOf(seat);
+                int row = Enumerable.Range(0, PLAYER_COUNT).OrderByDescending(s => State.Players[s].VictoryPoints.Total).ToList().IndexOf(seat);
                 Vector2 pos = min + new Vector2(0, 118 + row * 44);
-                VictoryPointTracker vp = _state.Players[seat].VictoryPoints;
+                VictoryPointTracker vp = State.Players[seat].VictoryPoints;
                 if (seat == winner) dl.AddRectFilled(pos + new Vector2(14, -6), pos + new Vector2(606, 32), Theme.U32(Theme.WithAlpha(Theme.PlayerColor(seat), 0.18f)), 8);
                 dl.AddCircleFilled(pos + new Vector2(columns[0] + 12, 13), 10, Theme.U32(Theme.PlayerColor(seat)), 20);
                 Theme.DrawText(dl, Theme.Bold17, pos + new Vector2(columns[0] + 32, 2), Theme.Text, Theme.PlayerName(seat));
@@ -963,7 +965,7 @@ namespace Client
                     Theme.DrawText(dl, c == 0 ? Theme.Bold17 : Theme.Regular17, pos + new Vector2(columns[c + 1], 2), c == 0 ? Theme.Text : Theme.TextSoft, values[c]);
             }
 
-            if (DrawButton(dl, "rematch", min + new Vector2(620 - 24 - 200, 380 - 20 - 44), new Vector2(200, 44), "Rematch (new map)", true, Theme.Accent, Theme.AccentBorder, Theme.Bold15))
+            if (DrawButton(dl, "rematch", min + new Vector2(620 - 24 - 200, 380 - 20 - 44), new Vector2(200, 44), "Rematch (new map)", IsAdmin, Theme.Accent, Theme.AccentBorder, Theme.Bold15))
             {
                 NewGame();
                 _endScreenDismissed = false;
@@ -1033,7 +1035,7 @@ namespace Client
             ImGui.Begin("Developer tools", ref _showDeveloperWindow, ImGuiWindowFlags.AlwaysAutoResize);
 
             ImGui.Text($"FPS: {Math.Floor(1 / _latestAvgFrameTime)} ({_latestAvgFrameTime * 1000.0f:0.000} ms)");
-            ImGui.Text($"State hash: {_state.GetHashCode():X}");
+            ImGui.Text($"State hash: {State.GetHashCode():X}");
             ImGui.Separator();
 
             ImGui.Checkbox("Center desert", ref _centerDesert);
@@ -1054,39 +1056,37 @@ namespace Client
 
             if (ImGui.CollapsingHeader("Agents"))
             {
-                string[] kinds = Enum.GetValues<SeatKind>().Select(SeatName).ToArray();
+                string[] kinds = Enum.GetValues<SeatKind>().Select(Simulation.Seats.Name).ToArray();
                 for (int seat = 0; seat < PLAYER_COUNT; seat++)
                 {
                     using (new ImGuiTextColor(Theme.PlayerTextColor(seat)))
                         ImGui.Text($"{Theme.PlayerName(seat)}:");
                     ImGui.SameLine(90);
                     ImGui.SetNextItemWidth(200);
-                    int kind = (int)_seats[seat];
+                    int kind = (int)Seats[seat];
                     if (ImGui.Combo($"##devseat{seat}", ref kind, kinds, kinds.Length)) SetSeat(seat, (SeatKind)kind);
                 }
 
                 ImGui.Separator();
                 ImGui.SetNextItemWidth(140);
-                if (ImGui.Combo("MCTS budget", ref _selectedMctsBudget, _mctsBudgetTypes, _mctsBudgetTypes.Length)) ApplyMctsBudget();
+                if (ImGui.Combo("MCTS budget", ref _selectedMctsBudget, _mctsBudgetTypes, _mctsBudgetTypes.Length)) Send(new ConfigureAgents(AgentSettingsFromTools));
                 ImGui.SetNextItemWidth(140);
                 if (_selectedMctsBudget == 1 && ImGui.InputFloat("Thinking time (s)", ref _mctsThinkingSeconds, 0.5f, 5f, "%.2f"))
                 {
                     _mctsThinkingSeconds = Math.Clamp(_mctsThinkingSeconds, 0.05f, 600f);
-                    ApplyMctsBudget();
+                    Send(new ConfigureAgents(AgentSettingsFromTools));
                 }
                 else if (_selectedMctsBudget == 2 && ImGui.InputInt("Iterations", ref _mctsIterations, 10_000, 100_000))
                 {
                     _mctsIterations = Math.Clamp(_mctsIterations, 256, 100_000_000);
-                    ApplyMctsBudget();
+                    Send(new ConfigureAgents(AgentSettingsFromTools));
                 }
                 ImGui.SetNextItemWidth(140);
                 if (ImGui.Combo("Opponent model", ref _selectedOpponentModel, _opponentModels, _opponentModels.Length))
-                {
-                    foreach (Agent agent in _agents)
-                        if (agent is MCTSAgent mctsAgent) mctsAgent.OpponentModel = (OpponentModel)_selectedOpponentModel;
-                }
+                    Send(new ConfigureAgents(AgentSettingsFromTools));
                 ImGui.SetNextItemWidth(140);
-                ImGui.SliderFloat("Pause between moves (s)", ref _botPaceSeconds, 0, 3, "%.1f");
+                float pace = Playback.PaceSeconds;
+                if (ImGui.SliderFloat("Pause between moves (s)", ref pace, 0, 3, "%.1f")) Send(new SetPlayback(Playback with { PaceSeconds = pace }));
                 ImGui.Checkbox("Silent agent moves", ref _muteQuickPlayouts);
             }
 
@@ -1098,8 +1098,8 @@ namespace Client
                 ImGui.InputInt("Threads", ref _randomPlayoutThreadCount);
                 if (ImGui.Button("Simulate random playouts"))
                 {
-                    // The playouts copy a snapshot: _state keeps changing on the UI thread while they run
-                    GameState startState = new GameState(_state);
+                    // The playouts copy a snapshot: State keeps changing on the UI thread while they run
+                    GameState startState = new GameState(State);
                     Task.Run(() => SimulateRandomRollouts(startState, _randomPlayoutCount, _randomPlayoutThreadCount));
                 }
                 if (ImGui.Button("Benchmark 10,000 random games")) BenchmarkPlayouts(10_000);

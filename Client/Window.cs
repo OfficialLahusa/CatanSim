@@ -16,7 +16,9 @@ namespace Client
 
         /// <summary>
         /// Options: --scene NAME [--seed N] starts in a preset situation (see GameScreen.Scenes), --size WIDTHxHEIGHT sets
-        /// the window size instead of maximizing it, --screenshot FILE [--after SECONDS] saves a screenshot after a while and quits
+        /// the window size instead of maximizing it, --screenshot FILE [--after SECONDS] saves a screenshot after a while and quits,
+        /// --host PORT (or localhost:PORT) hosts the game for others, --join ADDRESS [--name N] [--role player|spectator|admin|agent] [--seat 1-4]
+        /// [--token T] joins a game on a server, --network opens the network window
         /// </summary>
         public static void Main(String[] args)
         {
@@ -54,6 +56,10 @@ namespace Client
             GameScreen gameScreen = new GameScreen(window);
             screen = gameScreen;
             if (scene != null) gameScreen.RunScene(scene, seed);
+            if (Option("--host") is string host) gameScreen.HostFromCommandLine(host);
+            if (Option("--join") is string join)
+                gameScreen.JoinFromCommandLine(join, Option("--name"), Option("--role"), Option("--seat") is string seatText ? int.Parse(seatText) : null, Option("--token"));
+            if (args.Contains("--network")) gameScreen.ShowNetworkWindow();
             string? selfTest = Option("--selftest");
             if (selfTest != null) gameScreen.StartSelfTest(int.Parse(selfTest), seed);
 

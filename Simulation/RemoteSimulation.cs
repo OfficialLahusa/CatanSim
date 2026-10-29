@@ -82,7 +82,7 @@ namespace Simulation
                 _events.Enqueue(new ErrorEvent("Not connected."));
         }
 
-        public List<MatchEvent> ProcessEvents()
+        public List<MatchEvent> ProcessEvents(Action<MatchEvent>? afterEach = null)
         {
             List<MatchEvent> events = [];
             while (_events.TryDequeue(out MatchEvent? e))
@@ -95,6 +95,7 @@ namespace Simulation
                 }
                 Game.Apply(e);
                 events.Add(e);
+                afterEach?.Invoke(e);
             }
             return events;
         }

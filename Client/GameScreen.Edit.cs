@@ -1,9 +1,11 @@
-using BoardEdit = Simulation.BoardEdit;
+
 using Client.Logging;
 using Client.UI;
 using Common;
 using SFML.Graphics;
 using Edge = Common.Edge;
+
+using Simulation;
 
 namespace Client
 {
@@ -20,7 +22,7 @@ namespace Client
 
         private IEnumerable<BoardTarget> EditCandidates()
         {
-            Board board = _state.Board;
+            Board board = State.Board;
             switch (_editTool)
             {
                 case EditTool.Settlement:
@@ -67,7 +69,7 @@ namespace Client
         /// </summary>
         private void EditAt(BoardTarget target)
         {
-            GameState after = new GameState(_state);
+            GameState after = new GameState(State);
             Board board = after.Board;
             PlayerState player = after.Players[_editPlayer];
             string name = Theme.PlayerName(_editPlayer);
@@ -142,7 +144,7 @@ namespace Client
 
             if (description == null) return;
             BoardEdit.RecomputeFromBoard(after);
-            ApplyEdit(new BoardEdit(description, _editPlayer, _state, after));
+            SendEdit(new BoardEdit(description, _editPlayer, State, after));
             _placeSound.Play();
         }
 
@@ -151,7 +153,7 @@ namespace Client
         /// </summary>
         private void EditResource(int playerIdx, ResourceCardType type, int delta)
         {
-            GameState after = new GameState(_state);
+            GameState after = new GameState(State);
             PlayerState player = after.Players[playerIdx];
             string name = Theme.PlayerName(playerIdx);
             if (delta > 0)
@@ -159,32 +161,21 @@ namespace Client
                 if (!after.ResourceBank.Contains(type)) return;
                 after.ResourceBank.Remove(type, 1);
                 player.ResourceCards.Add(type, 1);
-                ApplyEdit(new BoardEdit($"gave {name} a {type.GetName().ToLower()} card", playerIdx, _state, after));
+                SendEdit(new BoardEdit($"gave {name} a {type.GetName().ToLower()} card", playerIdx, State, after));
             }
             else
             {
                 if (!player.ResourceCards.Contains(type)) return;
                 player.ResourceCards.Remove(type, 1);
                 after.ResourceBank.Add(type, 1);
-                ApplyEdit(new BoardEdit($"took a {type.GetName().ToLower()} card from {name}", playerIdx, _state, after));
+                SendEdit(new BoardEdit($"took a {type.GetName().ToLower()} card from {name}", playerIdx, State, after));
             }
         }
 
         /// <summary>
-        /// Makes an edit the current position and puts it into the history and the log
+        /// Sends an edit made on this client's copy of the position; the match makes it the position for everyone, puts it into
+        /// the history and the log
         /// </summary>
-        private void ApplyEdit(BoardEdit edit, bool keepRedo = false)
-        {
-            ReplaceState(edit.After);
-            _history.Push(new HistoryEntry(null, edit));
-            if (!keepRedo) _redo.Clear();
-
-            _eventLog.WriteLine(new SentenceEntry([("Edit: ", Theme.TextMuted), (char.ToUpper(edit.Description[0]) + edit.Description[1..], Theme.TextSoft)]));
-            _eventLog.PushSection();
-
-            _overlay.ClearRoll();
-            AfterPositionChanged();
-            _valuationHistory.Add((float[])_valuation.Clone());
-        }
+        private void SendEdit(BoardEdit edit) => Send(new ApplyEdit(edit));
     }
 }

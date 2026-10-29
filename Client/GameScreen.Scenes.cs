@@ -1,8 +1,11 @@
 using Agents;
+using Client.UI;
 using Common;
 using Common.Actions;
 using SFML.Graphics;
 using Action = Common.Actions.Action;
+
+using Simulation;
 
 namespace Client
 {
@@ -57,21 +60,20 @@ namespace Client
         /// </summary>
         public void RunScene(string scene, int seed)
         {
+            // The scene plays its own moves; the match's agents wait meanwhile and take over at the end
             Utils.Random.SeedCurrentThread(seed);
-            for (int seat = 0; seat < PLAYER_COUNT; seat++)
-                _seats[seat] = seat == 3 ? SeatKind.Human : _stateValueNet != null ? SeatKind.MctsMedium : SeatKind.Builder;
-            for (sbyte seat = 0; seat < PLAYER_COUNT; seat++)
-                _agents[seat] = CreateAgent(_seats[seat], seat);
-            NewGame();
+            SeatKind bot = _stateValueNet != null ? SeatKind.MctsMedium : SeatKind.Builder;
+            Send(new SetPlayback(Playback with { Paused = true, HumanStandIns = false }));
+            Send(new Simulation.NewGame([bot, bot, bot, SeatKind.Human], false));
 
             Agent[] fast = Enumerable.Range(0, PLAYER_COUNT).Select(i => (Agent)new BuilderAgent((sbyte)i)).ToArray();
             void PlayUntil(Func<bool> done, int maxMoves = 5000)
             {
-                for (int i = 0; i < maxMoves && !done() && !_state.HasEnded; i++)
-                    ApplyMove(fast[ActingPlayer].Act(_state), false);
+                for (int i = 0; i < maxMoves && !done() && !State.HasEnded; i++)
+                    Send(new PlayMove(fast[ActingPlayer].Act(State)));
             }
-            bool HumanMainPhase(int minRound) => ActingPlayer == 3 && _state.Turn.RoundCounter >= minRound && !_state.Turn.MustRoll
-                && !_state.Turn.MustDiscard && !_state.Turn.MustMoveRobber && _state.Turn.TypeOfRound == TurnState.RoundType.Normal;
+            bool HumanMainPhase(int minRound) => ActingPlayer == 3 && State.Turn.RoundCounter >= minRound && !State.Turn.MustRoll
+                && !State.Turn.MustDiscard && !State.Turn.MustMoveRobber && State.Turn.TypeOfRound == TurnState.RoundType.Normal;
 
             switch (scene)
             {
@@ -100,13 +102,14 @@ namespace Client
                     }
                     else if (scene == "devcards")
                     {
-                        _state.Players[3].DevelopmentCards.Add(DevelopmentCardType.Knight, 2);
-                        _state.Players[3].DevelopmentCards.Add(DevelopmentCardType.Monopoly, 1);
-                        _state.Players[3].NewDevelopmentCards.Add(DevelopmentCardType.YearOfPlenty, 1);
-                        _state.DevelopmentBank.Remove(DevelopmentCardType.Knight, 2);
-                        _state.DevelopmentBank.Remove(DevelopmentCardType.Monopoly, 1);
-                        _state.DevelopmentBank.Remove(DevelopmentCardType.YearOfPlenty, 1);
-                        AfterPositionChanged();
+                        GameState after = new GameState(State);
+                        after.Players[3].DevelopmentCards.Add(DevelopmentCardType.Knight, 2);
+                        after.Players[3].DevelopmentCards.Add(DevelopmentCardType.Monopoly, 1);
+                        after.Players[3].NewDevelopmentCards.Add(DevelopmentCardType.YearOfPlenty, 1);
+                        after.DevelopmentBank.Remove(DevelopmentCardType.Knight, 2);
+                        after.DevelopmentBank.Remove(DevelopmentCardType.Monopoly, 1);
+                        after.DevelopmentBank.Remove(DevelopmentCardType.YearOfPlenty, 1);
+                        SendEdit(new BoardEdit("gave Orange development cards", 3, State, after));
                         _dialog = Dialog.DevelopmentCard;
                     }
                     else if (scene == "edit")
@@ -117,7 +120,7 @@ namespace Client
                     break;
 
                 case "roll":
-                    PlayUntil(() => ActingPlayer == 3 && _state.Turn.MustRoll && _state.Turn.RoundCounter >= 4
+                    PlayUntil(() => ActingPlayer == 3 && State.Turn.MustRoll && State.Turn.RoundCounter >= 4
                         && Legal(3).Any(a => a is RollAction));
                     RollOrEndTurn();
                     break;
@@ -139,20 +142,22 @@ namespace Client
                     break;
 
                 case "spectate":
-                    PlayUntil(() => _state.Turn.RoundCounter >= 5 && !_state.Turn.MustRoll && _state.Turn.TypeOfRound == TurnState.RoundType.Normal);
+                    PlayUntil(() => State.Turn.RoundCounter >= 5 && !State.Turn.MustRoll && State.Turn.TypeOfRound == TurnState.RoundType.Normal);
                     // Hard agents think for 2 s, so the live search shows up in the heat map
-                    for (sbyte seat = 0; seat < PLAYER_COUNT; seat++)
-                        if (_stateValueNet != null) _agents[seat] = CreateAgent(seat == 3 ? SeatKind.Human : _seats[seat] = SeatKind.MctsHard, seat);
+                    if (_stateValueNet != null)
+                        for (int seat = 0; seat < 3; seat++) Send(new Simulation.SetSeat(seat, SeatKind.MctsHard));
                     SetMode(InteractionMode.Spectate);
-                    _spectatePlaying = true;
-                    _botPaceSeconds = 0.3f;
+                    Send(new SetPlayback(new PlaybackState(false, true, 0.3f)));
+                    return;
                     break;
 
                 case "end":
-                    PlayUntil(() => _state.HasEnded, 20000);
+                    PlayUntil(() => State.HasEnded, 20000);
                     break;
             }
-            _sinceLastMove.Restart();
+
+            // The agents play their seats again (none in Edit mode)
+            ApplyPlaybackForMode(playing: false);
         }
 
         /// <summary>
@@ -160,10 +165,11 @@ namespace Client
         /// </summary>
         private void GiveCards(int player, ResourceCardType type, uint amount)
         {
-            amount = Math.Min(amount, _state.ResourceBank.Get(type));
-            _state.ResourceBank.Remove(type, amount);
-            _state.Players[player].ResourceCards.Add(type, amount);
-            AfterPositionChanged();
+            amount = Math.Min(amount, State.ResourceBank.Get(type));
+            GameState after = new GameState(State);
+            after.ResourceBank.Remove(type, amount);
+            after.Players[player].ResourceCards.Add(type, amount);
+            SendEdit(new BoardEdit($"gave {Theme.PlayerName(player)} {amount} {type.GetName().ToLower()}", player, State, after));
         }
     }
 }
