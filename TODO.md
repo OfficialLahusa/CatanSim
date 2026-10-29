@@ -1,6 +1,6 @@
 ## Simulator
-- Projekt in Hexfarer umbenannt (CATAN ist Marke der CATAN GmbH; Hexfarer frei: keine Marke in TMview, kein Spiel, Domains, GitHub, HF frei): Repo-Inhalt, Solution, Texte, Repo-Ordner, GitHub-Repo, HF-Modell, Domains hexfarer.dev (.com leitet weiter), HEXFARER_*-Variablen (CATANSIM_* noch akzeptiert), %AppData%\Hexfarer übernimmt das Host-Zertifikat
-	- Offen: Model Card auf HF nennt noch CatanSim, Datenordner CatanSim-data umbenennen (loop_state.json hat absolute Pfade, nur für alte Läufe relevant)
+- Projekt in Hexfarer umbenannt (CATAN ist Marke der CATAN GmbH; Hexfarer frei: keine Marke in TMview, kein Spiel, Domains, GitHub, HF frei): Repo-Inhalt, Solution, Texte, Repo-Ordner, GitHub-Repo, HF-Modell und Model Card, Datenordner Hexfarer-data, Domains hexfarer.dev (.com leitet weiter), HEXFARER_*-Variablen (CATANSIM_* noch akzeptiert), %AppData%\Hexfarer übernimmt das Host-Zertifikat
+	- Offen: loop_state.json der alten Schleife hat noch absolute CatanSim-data-Pfade (nur zum Fortsetzen relevant)
 	- Domains (Cloudflare): DNSSEC an und Transfer-Lock prüfen; hexfarer.com per Redirect Rule (301, Pfad und Query bleiben) auf hexfarer.dev, dafür Platzhalter-Records proxied (A @, CNAME www); hexfarer.dev bis zur Website auf das GitHub-Repo oder eine Pages-Seite; Email Routing (contact@hexfarer.dev, Catch-all für .com)
 	- Später: Cloudflare Tunnel vom Server für Web-Client und Match-Server (wss mit Cloudflare-Zertifikat, kein Fingerprint, keine offenen Ports)
 - Save Files geprüft: auch mit Handel vollständig (Test lädt offene Angebote und Redo-Liste, ganz zurück und wieder vor), alte Dateien laden richtig => keine neue Version nötig
