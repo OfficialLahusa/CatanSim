@@ -1,4 +1,5 @@
 ## Simulator
+- Projekt in Hexfarer umbenennen (CATAN ist Marke der CATAN GmbH; Hexfarer frei: keine Marke in TMview, kein Spiel, Domains, GitHub, HF frei): erst Domains und GitHub-Org sichern, dann Repo, Solution, Fenstertitel, Server-Texte, CATANSIM_*-Variablen (alte Namen übergangsweise), %AppData%-Ordner samt Host-Zertifikat, HF-Modell und Download-URL; Repo- und Datenordner erst ohne laufende Self-Play-Schleife
 - Save Files geprüft: auch mit Handel vollständig (Test lädt offene Angebote und Redo-Liste, ganz zurück und wieder vor), alte Dateien laden richtig => keine neue Version nötig
 	- Offen: Edits und Sitze im Save für Share Links
 - Freier Handel umgesetzt (Regelbuch: nur mit dem Spieler am Zug, nach dem Wurf, keine Geschenke/gleichen Rohstoffe; Angebot, Annehmen/Ablehnen/Gegenangebot, Partnerwahl; Regel FreeTrade aus für Self-Play/Datasets, an im Client; Bots antworten per Value Net bzw. Handheuristik, max. 10 Angebote pro Zug)
