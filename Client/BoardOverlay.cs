@@ -15,8 +15,8 @@ namespace Client
     public readonly record struct BoardTarget(TargetKind Kind, int Index);
 
     /// <summary>
-    /// What the board shows on top of the pieces: ghost pieces on the legal spots of the active build mode (pulsing in opacity
-    /// and size), the hovered spot as a solid preview, a policy heat map, and rings on the tiles of the last roll. Drawn in
+    /// What the board shows on top of the pieces: ghosts on the legal spots of the active build mode (bright roads and circles,
+    /// pulsing in opacity and size), the hovered spot as a solid preview, a policy heat map, and rings on the tiles of the last roll. Drawn in
     /// map coordinates, so it moves and zooms with the board.
     /// </summary>
     public class BoardOverlay
@@ -27,6 +27,10 @@ namespace Client
         // Pulse of the ghosts: opacity and size follow one sine, all ghosts in phase
         public const float PulsePeriod = 1.6f;
         private const float MinOpacity = 0.45f, MaxOpacity = 0.9f, MinScale = 0.94f, MaxScale = 1.06f;
+
+        // Road, settlement and city ghosts share one bright color that no player, tile or heat map step uses, so the legal
+        // spots stand out from the pieces; only the hovered one shows the piece in the player's color
+        public static readonly Color GhostColor = new Color(64, 232, 255);
 
         private readonly BoardRenderer _renderer;
         private float _time;
@@ -142,7 +146,7 @@ namespace Client
             // Road ghosts pulse in opacity only; the hovered one is solid
             float opacity = MinOpacity + (MaxOpacity - MinOpacity) * Pulse;
             foreach (Ghost ghost in Ghosts.Where(g => g.Target.Kind == TargetKind.Edge))
-                _renderer.AppendRoad(_roadVertices, board.Edges[ghost.Target.Index], Theme.WithAlpha(ghost.Color, Hovered == ghost.Target ? 1f : opacity * 0.75f));
+                _renderer.AppendRoad(_roadVertices, board.Edges[ghost.Target.Index], Hovered == ghost.Target ? ghost.Color : Theme.WithAlpha(GhostColor, opacity * 0.8f));
             target.Draw(_roadVertices);
         }
 
@@ -161,23 +165,28 @@ namespace Client
                     }
                 case TargetKind.Intersection:
                     {
-                        // Smaller and fainter than a built piece, so many ghosts don't hide the board
                         Vector2f center = _renderer.GetIntersectionCenter(board.Intersections[ghost.Target.Index], board);
-                        if (ghost.Sprite == TextureAtlas.Sprite.City)
+                        float radius = _renderer.SideLength * 0.17f;
+                        if (hovered)
                         {
-                            // A city replaces a settlement: a translucent city over it would blend the two, so the settlement is
-                            // covered by a dark disc and the city drawn nearly solid on it, pulsing only in size and a little
-                            // in opacity
-                            float citySize = hovered ? 1.1f : 0.95f * scale;
-                            DrawDisc(target, center, _renderer.SideLength * 0.3f * citySize, new Color(8, 25, 76, (byte)(hovered ? 230 : 200)));
-                            DrawRing(target, center, _renderer.SideLength * 0.3f * citySize, hovered ? 4 : 3, Theme.WithAlpha(Color.White, hovered ? 1f : 0.4f + 0.5f * opacity));
-                            DrawSprite(target, ghost.Sprite, center, citySize, Theme.WithAlpha(ghost.Color, hovered ? 1f : 0.6f + 0.4f * opacity));
-                            break;
+                            // The piece itself in the player's color, on a dark disc that covers a settlement becoming a city
+                            DrawDisc(target, center, radius * 1.5f, new Color(8, 25, 76, 200));
+                            DrawRing(target, center, radius * 1.5f, 3, GhostColor);
+                            DrawSprite(target, ghost.Sprite, center, 1.1f, ghost.Color);
                         }
-                        float size = hovered ? 1.1f : 0.78f;
-                        float alpha = hovered ? 1f : opacity * 0.8f;
-                        DrawDisc(target, center, _renderer.SideLength * 0.2f * size * scale, Theme.WithAlpha(Color.White, alpha * (hovered ? 0.5f : 0.35f)));
-                        DrawSprite(target, ghost.Sprite, center, scale * size, Theme.WithAlpha(ghost.Color, alpha));
+                        else if (ghost.Sprite == TextureAtlas.Sprite.City)
+                        {
+                            // A ring around the settlement that would become a city, with a light fill, so the settlement
+                            // stays visible under it
+                            DrawDisc(target, center, radius * 1.45f * scale, Theme.WithAlpha(GhostColor, opacity * 0.3f));
+                            DrawRing(target, center, radius * 1.45f * scale, 5, Theme.WithAlpha(GhostColor, 0.5f + 0.5f * opacity));
+                        }
+                        else
+                        {
+                            // A disc on the free spot, with a dark edge so it reads on light tiles as well
+                            DrawDisc(target, center, radius * scale + 2, new Color(8, 25, 76, (byte)(160 * opacity)));
+                            DrawDisc(target, center, radius * scale, Theme.WithAlpha(GhostColor, opacity));
+                        }
                         break;
                     }
                 case TargetKind.Tile:

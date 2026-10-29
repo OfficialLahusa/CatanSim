@@ -304,7 +304,16 @@ namespace Client.UI
         {
             IntRect rect = sprite.GetTextureRect();
             Vector2 size = new Vector2(TextureAtlas.Texture.Size.X, TextureAtlas.Texture.Size.Y);
-            dl.AddImage(AtlasId, min, max, new Vector2(rect.Left, rect.Top) / size, new Vector2(rect.Left + rect.Width, rect.Top + rect.Height) / size, U32(tint));
+
+            // The atlas is mipmapped and some icons fill their cell to the edge, so at small sizes the coarse levels blend the
+            // neighbouring cell into the border (a thin line along the quad's edge). The UVs are pulled in by about one texel of
+            // the level in use and the quad shrinks by the same amount, so the icon keeps its size and place.
+            float pixels = MathF.Max(1, (max.X - min.X) * GuiImpl.UiScale);
+            float inset = Math.Clamp(rect.Width / pixels, 0, rect.Width / 16f);
+            Vector2 shrink = (max - min) * (inset / rect.Width);
+            Vector2 uv0 = new Vector2(rect.Left + inset, rect.Top + inset) / size;
+            Vector2 uv1 = new Vector2(rect.Left + rect.Width - inset, rect.Top + rect.Height - inset) / size;
+            dl.AddImage(AtlasId, min + shrink, max - shrink, uv0, uv1, U32(tint));
         }
 
         public static void IconCentered(ImDrawListPtr dl, TextureAtlas.Sprite sprite, Vector2 center, float size, Color tint)
