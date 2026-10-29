@@ -29,7 +29,8 @@ namespace Client
         private const float MinOpacity = 0.45f, MaxOpacity = 0.9f, MinScale = 0.94f, MaxScale = 1.06f;
 
         // Road, settlement and city ghosts share one light gray that no player color uses, so the legal spots stand out from
-        // the pieces; only the hovered one shows the piece in the player's color
+        // the pieces; only the hovered one shows the piece in the player's color. The circles stay translucent (at most
+        // about 75% opaque) even at the top of the pulse.
         public static readonly Color GhostColor = new Color(222, 224, 230);
 
         private readonly BoardRenderer _renderer;
@@ -179,14 +180,14 @@ namespace Client
                             // A ring around the settlement that would become a city, filled enough to stand out from it while
                             // its outline still shows through
                             DrawDisc(target, center, radius * 1.45f * scale + 2, new Color(8, 25, 76, (byte)(160 * opacity)));
-                            DrawDisc(target, center, radius * 1.45f * scale, Theme.WithAlpha(GhostColor, 0.35f + 0.4f * opacity));
-                            DrawRing(target, center, radius * 1.45f * scale, 5, Theme.WithAlpha(GhostColor, 0.5f + 0.5f * opacity));
+                            DrawDisc(target, center, radius * 1.45f * scale, Theme.WithAlpha(GhostColor, 0.3f + 0.4f * opacity));
+                            DrawRing(target, center, radius * 1.45f * scale, 5, Theme.WithAlpha(GhostColor, 0.35f + 0.45f * opacity));
                         }
                         else
                         {
                             // A disc on the free spot, with a dark edge so it reads on light tiles as well
                             DrawDisc(target, center, radius * scale + 2, new Color(8, 25, 76, (byte)(160 * opacity)));
-                            DrawDisc(target, center, radius * scale, Theme.WithAlpha(GhostColor, opacity));
+                            DrawDisc(target, center, radius * scale, Theme.WithAlpha(GhostColor, opacity * 0.8f));
                         }
                         break;
                     }
