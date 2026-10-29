@@ -35,9 +35,10 @@ namespace Client
         private float _tokenRadius;
         private float _tokenTextSize;
         private Text _tokenText;
-        private readonly List<(Vector2i pixel, int number, Color ink)> _tokenNumbers = [];
+        private readonly List<(Vector2f center, int number, int pips, Color ink)> _tokenNumbers = [];
         private CircleShape _tokenBase;
         private CircleShape _yieldPoint;
+        private RectangleShape _yieldPointSquare;
 
         // Port text
         private Text _portText;
@@ -102,8 +103,8 @@ namespace Client
             _tokenBase = new CircleShape(_tokenRadius, 64);
             _tokenBase.Origin = new Vector2f(_tokenBase.Radius, _tokenBase.Radius);
 
-            _yieldPoint = new CircleShape(SideLength / 42, 12);
-            _yieldPoint.Origin = new Vector2f(_yieldPoint.Radius, _yieldPoint.Radius);
+            _yieldPoint = new CircleShape(1, 16);
+            _yieldPointSquare = new RectangleShape();
 
             _portText = new Text("", GameScreen.Font);
             _portText.CharacterSize = (uint)Math.Round(sideLength * (8.0f / 30.0f));
@@ -383,8 +384,9 @@ namespace Client
         }
 
         /// <summary>
-        /// The token numbers in screen pixels: rasterized at the size they appear at and snapped to whole pixels, so every
-        /// number is equally sharp and centered at any zoom (in map coordinates each would land on another pixel fraction)
+        /// The token numbers and pips in screen pixels: rasterized at the size they appear at and snapped to whole pixels, so
+        /// every token is equally sharp and centered at any zoom (in map coordinates each would land on another pixel fraction,
+        /// which put numbers a pixel off and pips at uneven gaps)
         /// </summary>
         private void DrawTokenNumbers(RenderTarget target, RenderStates states)
         {
@@ -394,8 +396,16 @@ namespace Client
             target.SetView(new View(new FloatRect(0, 0, target.Size.X, target.Size.Y)));
             _tokenText.CharacterSize = (uint)Math.Max(1, Math.Round(_tokenTextSize / zoom));
 
-            foreach ((Vector2i pixel, int value, Color ink) in _tokenNumbers)
+            // Pips with an even width at an even spacing, so a row of any length is symmetric around a pixel border
+            int pipSize = Math.Max(2, 2 * (int)MathF.Round(SideLength / 42 / zoom));
+            int pipSpacing = Math.Max(pipSize + 2, 2 * (int)MathF.Round(_tokenRadius / 12f / zoom));
+
+            foreach ((Vector2f mapCenter, int value, int pips, Color ink) in _tokenNumbers)
             {
+                Vector2f center = ToScreen(target, mapView, mapCenter);
+                float centerX = MathF.Round(center.X);
+                float numberY = MathF.Round(center.Y - (pips > 0 ? _tokenRadius * 0.08f / zoom : 0));
+
                 string number = value.ToString();
                 _tokenText.DisplayedString = number;
                 _tokenText.FillColor = ink;
@@ -405,12 +415,38 @@ namespace Client
                 FloatRect bounds = _tokenText.GetLocalBounds();
                 float originX = bounds.Left + bounds.Width / 2.0f + OpticalShift(value) * _tokenText.CharacterSize;
                 _tokenText.Origin = new Vector2f(MathF.Round(originX), MathF.Round(bounds.Top + bounds.Height / 2.0f));
-                _tokenText.Position = new Vector2f(pixel.X, pixel.Y);
+                _tokenText.Position = new Vector2f(centerX, numberY);
                 target.Draw(_tokenText, states);
+
+                if (pips == 0) continue;
+                Shape pip = pipSize <= 2 ? _yieldPointSquare : _yieldPoint;
+                _yieldPoint.Radius = pipSize / 2f;
+                _yieldPointSquare.Size = new Vector2f(pipSize, pipSize);
+                pip.FillColor = ink;
+                float left = centerX - ((pips - 1) * pipSpacing + pipSize) / 2f;
+                float top = MathF.Round(center.Y + _tokenRadius * 0.64f / zoom - pipSize / 2f);
+                for (int i = 0; i < pips; i++)
+                {
+                    pip.Position = new Vector2f(left + i * pipSpacing, top);
+                    target.Draw(pip, states);
+                }
             }
 
             _tokenNumbers.Clear();
             target.SetView(mapView);
+        }
+
+        /// <summary>
+        /// Where a map point lands on the target, in fractional pixels (MapCoordsToPixel truncates, which put tokens a pixel
+        /// left of center whenever their center fell just short of a pixel border)
+        /// </summary>
+        private static Vector2f ToScreen(RenderTarget target, View view, Vector2f point)
+        {
+            FloatRect viewport = view.Viewport;
+            Vector2f topLeft = view.Center - view.Size / 2;
+            return new Vector2f(
+                (viewport.Left + (point.X - topLeft.X) / view.Size.X * viewport.Width) * target.Size.X,
+                (viewport.Top + (point.Y - topLeft.Y) / view.Size.Y * viewport.Height) * target.Size.Y);
         }
 
         // Per number: how far its ink centroid lies right of its ink box's middle, in units of the character size
@@ -584,22 +620,8 @@ namespace Client
                         _tokenBase.FillColor = TokenFace;
                         target.Draw(_tokenBase, states);
 
-                        // The number a bit above the middle (drawn after the loop in screen pixels), the probability pips below it
-                        Vector2f numberCenter = center + new Vector2f(0, DrawYieldPoints ? -_tokenRadius * 0.08f : 0);
-                        _tokenNumbers.Add((target.MapCoordsToPixel(numberCenter), value.Number ?? 0, ink));
-
-                        if (DrawYieldPoints)
-                        {
-                            int yieldPoints = value.YieldPoints;
-                            float spacing = _tokenRadius / 6f;
-                            _yieldPoint.FillColor = ink;
-                            _yieldPoint.Position = center + new Vector2f(-spacing * (yieldPoints - 1) / 2f, _tokenRadius * 0.64f);
-                            for (int i = 0; i < yieldPoints; i++)
-                            {
-                                target.Draw(_yieldPoint, states);
-                                _yieldPoint.Position += new Vector2f(spacing, 0);
-                            }
-                        }
+                        // The number a bit above the middle and the probability pips below it, drawn after the loop in screen pixels
+                        _tokenNumbers.Add((center, value.Number ?? 0, DrawYieldPoints ? value.YieldPoints : 0, ink));
                     }
                 }
             }
