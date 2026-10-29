@@ -11,6 +11,13 @@ namespace Tests
     /// </summary>
     public class ActionTests
     {
+        // Trades between players don't happen in random games (free trade is off there and offers aren't listed moves);
+        // FreeTradeTests covers them, including Apply and Revert of every step
+        private static readonly Type[] PlayerTradeTypes =
+            [typeof(OfferTradeAction), typeof(RespondToTradeAction), typeof(CounterTradeAction), typeof(ConfirmTradeAction), typeof(CancelTradeAction)];
+
+        private static IEnumerable<Type> RandomGameActionTypes => TestUtil.ActionTypes.Except(PlayerTradeTypes);
+
         [Fact]
         public void EveryActionTypeOccursInRandomGames()
         {
@@ -18,14 +25,14 @@ namespace Tests
             HashSet<Type> seen = [];
 
             // Guards the reflection-based type list the other tests rely on
-            Assert.Equal(19, TestUtil.ActionTypes.Count);
+            Assert.Equal(24, TestUtil.ActionTypes.Count);
 
-            for (int game = 0; game < 200 && seen.Count < TestUtil.ActionTypes.Count; game++)
+            for (int game = 0; game < 200 && seen.Count < RandomGameActionTypes.Count(); game++)
             {
                 TestUtil.PlayRandomGame(TestUtil.NewGame(), beforeApply: (_, action) => seen.Add(action.GetType()));
             }
 
-            Assert.Empty(TestUtil.ActionTypes.Except(seen).Select(type => type.Name));
+            Assert.Empty(RandomGameActionTypes.Except(seen).Select(type => type.Name));
         }
 
         [Fact]
@@ -34,7 +41,7 @@ namespace Tests
             TestUtil.Seed(3);
             Dictionary<Type, int> checkedPerType = [];
 
-            for (int game = 0; game < 120 && checkedPerType.Count < TestUtil.ActionTypes.Count; game++)
+            for (int game = 0; game < 120 && checkedPerType.Count < RandomGameActionTypes.Count(); game++)
             {
                 TestUtil.PlayRandomGame(TestUtil.NewGame(), beforeApply: (state, action) =>
                 {
@@ -51,7 +58,7 @@ namespace Tests
                 });
             }
 
-            Assert.Empty(TestUtil.ActionTypes.Except(checkedPerType.Keys).Select(type => type.Name));
+            Assert.Empty(RandomGameActionTypes.Except(checkedPerType.Keys).Select(type => type.Name));
         }
 
         [Fact]

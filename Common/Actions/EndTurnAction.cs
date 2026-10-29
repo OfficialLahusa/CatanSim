@@ -11,6 +11,12 @@ namespace Common.Actions
         public record EndTurnActionHistory(uint PrevFreeRoads, CardSet<DevelopmentCardType> PrevNewDevelopmentCards, bool PrevHasPlayedDevelopmentCard)
         {
             /// <summary>
+            /// The offers made in the ended turn (free trade only)
+            /// </summary>
+            [YamlDotNet.Serialization.YamlMember(DefaultValuesHandling = YamlDotNet.Serialization.DefaultValuesHandling.OmitDefaults)]
+            public int PrevTradeOffers { get; init; }
+
+            /// <summary>
             /// Parameterless constructor for deserialization
             /// </summary>
             private EndTurnActionHistory() : this(0, null!, false) { }
@@ -41,7 +47,7 @@ namespace Common.Actions
                 // Copy, so that the history never shares a live card set with a player state
                 new CardSet<DevelopmentCardType>(state.Players[PlayerIndex].NewDevelopmentCards),
                 state.Turn.HasPlayedDevelopmentCard
-            );
+            ) { PrevTradeOffers = state.Turn.TradeOffersThisTurn };
 
             // Return remaining free stock from road building dev card to main stock
             BuildingStock stock = state.Players[PlayerIndex].BuildingStock;
@@ -62,6 +68,7 @@ namespace Common.Actions
             state.Turn.MustMoveRobber = false;
             Array.Fill(state.Turn.AwaitedPlayerDiscards, false);
             state.Turn.HasPlayedDevelopmentCard = false;
+            state.Turn.TradeOffersThisTurn = 0;
 
             // Players might have had enough VPs to win before their own turn
             state.CheckForCompletion();
@@ -89,6 +96,7 @@ namespace Common.Actions
             if (state.Turn.PlayerIndex < 0) state.Turn.PlayerIndex = state.Players.Length - 1;
             state.Turn.MustRoll = false;
             state.Turn.HasPlayedDevelopmentCard = History.PrevHasPlayedDevelopmentCard;
+            state.Turn.TradeOffersThisTurn = History.PrevTradeOffers;
 
             // Un-complete match
             state.Turn.TypeOfRound = TurnState.RoundType.Normal;
@@ -105,6 +113,7 @@ namespace Common.Actions
         {
             return turn.PlayerIndex == playerIdx
                 && turn.TypeOfRound == TurnState.RoundType.Normal
+                && turn.PendingTrade == null
                 && !turn.MustRoll
                 && !turn.MustDiscard
                 && !turn.MustMoveRobber;

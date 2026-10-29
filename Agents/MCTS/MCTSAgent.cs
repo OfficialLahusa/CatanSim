@@ -145,6 +145,9 @@ namespace Agents.MCTS
         /// </summary>
         public override Action Act(GameState state, CancellationToken cancellation)
         {
+            // Trades between players are decided outside the tree: the value of the position with and without the trade
+            if (TradeDecisions.Decide(state, PlayerIndex, TradeUtility) is Action trade) return trade;
+
             // Reuse the tree kept up to date by HandleAction as long as it describes exactly this state.
             // Otherwise (first move, missed or manual actions, undo, another opponent model) start over on a private copy of the state.
             if (_tree == null || _tree.Model != _opponentModel || !_tree.RootState.Equals(state))
@@ -379,6 +382,16 @@ namespace Agents.MCTS
 
             (float[] winProbabilities, float[] placements) = _stateValueNet.RunWithPlacements(input);
             LeafUtilities(winProbabilities, placements, destination);
+        }
+
+        /// <summary>
+        /// A player's utility of a position by the value net, as the search scores its leaves
+        /// </summary>
+        private float TradeUtility(GameState state, int player)
+        {
+            Span<double> utilities = stackalloc double[MCTSNode.PlayerCount];
+            SimulateUtilities(state, utilities);
+            return (float)utilities[player];
         }
 
         protected float ValuationToScore(ReadOnlySpan<float> valuation)

@@ -1,6 +1,7 @@
 ## Simulator
 - Prüfen, ob die Save Files noch alle nötigen Infos serialisieren oder eine neue Version brauchen
-- PRIORITÄT: Freier Handel Mensch ↔ Bots: Mensch bietet beliebige Tausche an, ein Bot nimmt an, wenn das Value Net seine Gewinnchance danach höher bewertet; braucht Handelsaktionen zwischen Spielern in der Engine
+- Freier Handel umgesetzt (Regelbuch: nur mit dem Spieler am Zug, nach dem Wurf, keine Geschenke/gleichen Rohstoffe; Angebot, Annehmen/Ablehnen/Gegenangebot, Partnerwahl; Regel FreeTrade aus für Self-Play/Datasets, an im Client; Bots antworten per Value Net bzw. Handheuristik, max. 10 Angebote pro Zug)
+	- Offen: Bots machen selbst Angebote und Gegenangebote, Zeitlimit für Antworten im Netzwerkspiel, Handel im Policy Head/Training
 - Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
 	- Umgesetzt: Modi Play, Spectate, Edit (Ghosts aus den legalen Moves, Dialoge, Ertragspartikel, Hidden Info im Play, Policy-Heatmap und Eval-Bar im Spectate, Edit mit Undo/Redo und Log), HUD skaliert mit der Fensterhöhe; --selftest spielt Partien über die UI-Pfade
 	- Offen: Coach-Modus (Zugvorschläge, Blunder-Check), Hot-Seat mit verdeckter Übergabe (zeigt sonst sofort die Hand des nächsten Menschen)
@@ -19,17 +20,12 @@
 	- 3. SO-ISMCTS: Knoten = Information Sets des Root-Spielers, Availability Counts statt Parent Visits, Zufall nur branchen, wo der Root-Spieler das Ergebnis sieht
 	- 4. Belief-aware StateValueNet: Training auf StateView-Inputs (Views per Replay der Histories rekonstruierbar), Sichtbarkeits-Augmentation nach der echten Beobachtungsverteilung statt zufällig, erwartete versteckte VP als Feature
 	- 5. Particle MCTS / POMCP erst mit Spielerhandel (Angebote schwer als Constraints)
-- Action für variable Player Trades
 - Client
 	- Edit Mode schreibt direkt ins Board: Building Stock, VPs, Longest Road und Action Stack werden nicht nachgezogen, geleerte Felder behalten einen Owner, Klicks auf ImGui-Fenster editieren mit
 	- Font, Texture Atlas und Sounds relativ zum Arbeitsverzeichnis geladen => AppContext.BaseDirectory, res/ ins Build-Output kopieren
 	- SimulateRandomRollouts: kein Rundenlimit, countdown.Signal nicht im finally, Threadanzahl 0 hängt
 	- Fehlendes Exception Handling beim Auflisten von Verzeichnissen und Schreiben von Saves, Redo entfernt die Action vor der Validierung
 	- Linux-Port: RenderDataImpl.dll (nur Windows, ohne Quellcode) ersetzen, ShowWindow nur unter Windows, Pfade mit Path.Combine
-
-## Test Suite
-- Übersprungene Rulebook-Tests aktivieren, sobald die Regeln umgesetzt sind
-	- PlayersMayTradeResourcesWithEachOtherOnTheirTurn (Player Trades)
 
 ## Agents
 - Roadmap v2

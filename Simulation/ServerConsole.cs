@@ -37,7 +37,8 @@ namespace Simulation
               revoke ID                    removes a token and closes its connections
               spectators on|off            whether anyone may watch without a token
               seat SEAT KIND               who plays a seat (human, easy, medium, hard, greedy, builder, simple, random)
-              newgame KIND KIND KIND KIND  a new game on a new map with these seats (add "desert" for a central desert)
+              newgame KIND KIND KIND KIND  a new game on a new map with these seats (add "desert" for a central desert,
+                                           "notrade" for no trading between players)
               pause / resume               stops or restarts the agents
               quit                         stops the server
             Tokens are shown once and stored as hashes.
@@ -91,7 +92,8 @@ namespace Simulation
                                 if (ParseKind(words[i + 1]) is not SeatKind kind) return $"Unknown seat kind \"{words[i + 1]}\".";
                                 kinds[i] = kind;
                             }
-                            _match.Handle(ConsoleSession, new NewGame(kinds, words.Skip(5).Any(w => w.Equals("desert", StringComparison.OrdinalIgnoreCase))));
+                            _match.Handle(ConsoleSession, new NewGame(kinds, words.Skip(5).Any(w => w.Equals("desert", StringComparison.OrdinalIgnoreCase)),
+                                FreeTrade: !words.Skip(5).Any(w => w.Equals("notrade", StringComparison.OrdinalIgnoreCase))));
                             return "New game started.";
                         }
                     case "pause":

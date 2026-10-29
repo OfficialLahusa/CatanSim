@@ -22,7 +22,10 @@ namespace Common.Serialization
         {
             List<Type> actionTypes = [
                 typeof(BuyDevelopmentCardAction),
+                typeof(CancelTradeAction),
                 typeof(CityAction),
+                typeof(ConfirmTradeAction),
+                typeof(CounterTradeAction),
                 typeof(DiscardAction),
                 typeof(EndTurnAction),
                 typeof(FirstInitialRoadAction),
@@ -30,6 +33,8 @@ namespace Common.Serialization
                 typeof(FourToOneTradeAction),
                 typeof(KnightAction),
                 typeof(MonopolyAction),
+                typeof(OfferTradeAction),
+                typeof(RespondToTradeAction),
                 typeof(RoadAction),
                 typeof(RoadBuildingAction),
                 typeof(RobberAction),

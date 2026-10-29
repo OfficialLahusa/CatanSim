@@ -200,6 +200,7 @@ namespace Simulation
                                 state.Board.Clear();
                                 state.Reset();
                             }
+                            state.Settings.FreeTrade = newGame.FreeTrade;
                             _seats = (SeatKind[])newGame.Seats.Clone();
                             Record.Reset(state);
                             _agents = CreateAgents();

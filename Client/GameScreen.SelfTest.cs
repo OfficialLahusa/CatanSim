@@ -106,6 +106,18 @@ namespace Client
             List<Action> legal = Legal(human);
             Check(legal.Count > 0, "the human seat has no legal move");
 
+            // Now and then an offer to the agents through the offer dialog, or a counteroffer through the open offer's panel
+            if (CanOffer(human) && random.NextDouble() < 0.1)
+            {
+                foreach (bool frame in OfferSelfTest(random, human)) yield return frame;
+                yield break;
+            }
+            if (legal.Any(a => a is RespondToTradeAction) && random.NextDouble() < 0.3)
+            {
+                foreach (bool frame in CounterSelfTest(random, human)) yield return frame;
+                yield break;
+            }
+
             // Ending the turn less often keeps the games going through all kinds of moves
             Action action = legal[random.Next(legal.Count)];
             if (action is EndTurnAction && legal.Count > 1 && random.NextDouble() < 0.6) action = legal[random.Next(legal.Count)];
@@ -181,6 +193,59 @@ namespace Client
                     PlayHumanMove(action);
                     break;
             }
+            yield return true;
+        }
+
+        /// <summary>
+        /// One card of the hand for one or two of another type, picked in the offer dialog and sent to random recipients
+        /// </summary>
+        private IEnumerable<bool> OfferSelfTest(Random random, int human)
+        {
+            OpenOfferDialog(human);
+            CardSet<ResourceCardType> hand = State.Players[human].ResourceCards;
+            List<int> held = Enumerable.Range(0, 5).Where(i => hand.Get(CardTypeExtensions.ResourceTypes[i]) > 0).ToList();
+            int give = held[random.Next(held.Count)];
+            int get = (give + random.Next(1, 5)) % 5;
+            _offerGive[give] = 1;
+            _offerGet[get] = random.Next(1, 3);
+            _offerTo = (byte)(random.Next(1, 16) & OfferTradeAction.Everyone(State, human));
+            if (_offerTo == 0) _offerTo = OfferTradeAction.Everyone(State, human);
+            yield return true;
+
+            OfferTradeAction offer = new OfferTradeAction((sbyte)human, ToCards(_offerGive), ToCards(_offerGet), _offerTo);
+            Check(offer.IsValidFor(State), "the offer dialog makes an invalid offer");
+            int before = History.Count;
+            PlayHumanMove(offer);
+            yield return true;
+            // The agents may already have answered and closed it
+            Check(History.Skip(before).Any(e => e.Action is OfferTradeAction), "the offer was not played");
+        }
+
+        /// <summary>
+        /// A counteroffer from the open offer's panel: the offer swapped to one card each way where the hand allows it
+        /// </summary>
+        private IEnumerable<bool> CounterSelfTest(Random random, int human)
+        {
+            TradeOffer offer = State.Turn.PendingTrade!;
+            CardSet<ResourceCardType> hand = State.Players[human].ResourceCards;
+            Array.Clear(_counterGive);
+            Array.Clear(_counterGet);
+            List<int> held = Enumerable.Range(0, 5).Where(i => hand.Get(CardTypeExtensions.ResourceTypes[i]) > 0).ToList();
+            if (held.Count == 0)
+            {
+                PlayHumanMove(new RespondToTradeAction((sbyte)human, false));
+                yield break;
+            }
+            int give = held[random.Next(held.Count)];
+            _counterGive[give] = 1;
+            _counterGet[(give + random.Next(1, 5)) % 5] = 1;
+            _countering = true;
+            yield return true;
+
+            CounterTradeAction counter = new CounterTradeAction((sbyte)human, ToCards(_counterGet), ToCards(_counterGive));
+            Check(counter.IsValidFor(State), "the counteroffer panel makes an invalid counteroffer");
+            _countering = false;
+            PlayHumanMove(counter);
             yield return true;
         }
 

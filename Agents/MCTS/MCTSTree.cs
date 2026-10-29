@@ -593,6 +593,10 @@ namespace Agents.MCTS
         {
             sbyte activePlayerIdx = (sbyte)state.Turn.PlayerIndex;
 
+            // An open trade between players (only with free trade; agents decide those outside the tree): its answers or picks
+            if (state.Turn.PendingTrade is TradeOffer offer)
+                return LegalActionProvider.GetActionsForState(state, offer.NextResponder ?? offer.Offerer);
+
             List<Action> firstInitialSettlementActions = FirstInitialSettlementAction.GetActionsForState(state, activePlayerIdx);
             if (firstInitialSettlementActions.Count > 0)
                 return firstInitialSettlementActions;

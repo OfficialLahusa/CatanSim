@@ -111,6 +111,7 @@ namespace Common.Actions
         {
             return turn.PlayerIndex == playerIdx
                 && turn.TypeOfRound == TurnState.RoundType.Normal
+                && turn.PendingTrade == null
                 // Robber actions can happen before rolling when a knight is used before the roll
                 && !turn.MustDiscard
                 && turn.MustMoveRobber;

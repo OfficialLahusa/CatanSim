@@ -43,6 +43,22 @@ namespace Client.Logging
 
         private static string Cards(uint amount, ResourceCardType type) => amount == 1 ? $"1 {Card(type)}" : $"{amount} {Card(type)}";
 
+        /// <summary>
+        /// A set of cards as words: "2 lumber, 1 ore"
+        /// </summary>
+        public static string CardList(CardSet<ResourceCardType> cards) =>
+            string.Join(", ", CardTypeExtensions.ResourceTypes.Where(t => cards.Get(t) > 0).Select(t => Cards(cards.Get(t), t)));
+
+        private static IEnumerable<(string, Color)> Names(IEnumerable<int> players)
+        {
+            List<int> list = players.ToList();
+            for (int i = 0; i < list.Count; i++)
+            {
+                if (i > 0) yield return Plain(i == list.Count - 1 ? " and " : ", ");
+                yield return Name(list[i]);
+            }
+        }
+
         public void Log(Action action, GameState state)
         {
             int player = action.PlayerIndex;
@@ -182,6 +198,34 @@ namespace Client.Logging
 
                 case TwoToOneTradeAction t:
                     Line(Name(player), Plain($" traded 2 {Card(t.InputType)} for 1 {Card(t.OutputType)}"));
+                    break;
+
+                case OfferTradeAction offer:
+                    {
+                        IEnumerable<int> to = Enumerable.Range(0, state.Players.Length).Where(p => (offer.Recipients & 1 << p) != 0);
+                        Line([Name(player), Plain($" offered {CardList(offer.Give)} for {CardList(offer.Get)} to "), .. Names(to)]);
+                        break;
+                    }
+
+                case RespondToTradeAction response:
+                    Line(Plain("   "), Name(player), response.Accept ? Plain(" accepted") : Muted(" rejected"));
+                    if (response.History != null) Line(Muted("   Nobody took the offer"));
+                    break;
+
+                case CounterTradeAction counter:
+                    Line(Plain("   "), Name(player), Plain($" asked for {CardList(counter.Give)} and offered {CardList(counter.Get)} instead"));
+                    break;
+
+                case ConfirmTradeAction confirm when confirm.History?.TermsWith(confirm.Partner) is { } terms:
+                    Line(Name(player), Plain($" traded {CardList(terms.give)} for {CardList(terms.get)} with "), Name(confirm.Partner));
+                    break;
+
+                case ConfirmTradeAction confirm:
+                    Line(Name(player), Plain(" traded with "), Name(confirm.Partner));
+                    break;
+
+                case CancelTradeAction:
+                    Line(Name(player), Muted(" withdrew the offer"));
                     break;
 
                 // TODO: Changes in Longest Road/Largest Army Leader

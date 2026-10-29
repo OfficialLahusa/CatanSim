@@ -416,6 +416,9 @@ namespace Client
                 ThreeToOneTradeAction a => $"Trade 3 {Card(a.InputType)} for {Card(a.OutputType)}",
                 TwoToOneTradeAction a => $"Trade 2 {Card(a.InputType)} for {Card(a.OutputType)}",
                 DiscardAction a => "Discard " + string.Join(", ", CardTypeExtensions.ResourceTypes.Where(t => a.SelectedCards.Get(t) > 0).Select(t => $"{a.SelectedCards.Get(t)} {Card(t)}")),
+                RespondToTradeAction a => a.Accept ? "Accept the offer" : "Reject the offer",
+                ConfirmTradeAction a => $"Trade with {Theme.PlayerName(a.Partner)}",
+                CancelTradeAction => "Withdraw the offer",
                 _ => action.GetType().Name
             };
         }

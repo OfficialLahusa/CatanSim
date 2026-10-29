@@ -70,6 +70,7 @@ namespace Client
 
         // Map generator options
         private bool _centerDesert = false;
+        private bool _freeTrade = true;
 
         private InteractionMode _mode = InteractionMode.Play;
         public const int PLAYER_COUNT = 4;
@@ -129,7 +130,9 @@ namespace Client
 
             // A local match: three agents and the human on seat 4
             SeatKind bot = _stateValueNet != null ? SeatKind.MctsMedium : SeatKind.Builder;
-            _sim = StartLocal(new GameState(MapGenerator.GenerateRandomClassic(), PLAYER_COUNT), [bot, bot, bot, SeatKind.Human]);
+            GameState first = new GameState(MapGenerator.GenerateRandomClassic(), PLAYER_COUNT);
+            first.Settings.FreeTrade = true;
+            _sim = StartLocal(first, [bot, bot, bot, SeatKind.Human]);
 
             _renderer = new BoardRenderer(State.Board, 120, 20);
             _overlay = new BoardOverlay(_renderer);
@@ -457,7 +460,7 @@ namespace Client
         /// <summary>
         /// Starts over on a new map (or a cleared board) with the current seats
         /// </summary>
-        private void NewGame(bool clearBoard = false) => Send(new Simulation.NewGame(Seats, _centerDesert, clearBoard));
+        private void NewGame(bool clearBoard = false) => Send(new Simulation.NewGame(Seats, _centerDesert, clearBoard, State.Settings.FreeTrade));
 
         private void SetSeat(int seat, SeatKind kind)
         {

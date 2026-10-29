@@ -1,4 +1,5 @@
-﻿
+﻿using YamlDotNet.Serialization;
+
 namespace Common
 {
     public class GameSettings
@@ -7,6 +8,24 @@ namespace Common
         public int RobberCardLimit { get; set; }
         // Required number of victory points to win the match
         public int VictoryPoints { get; set; }
+
+        /// <summary>
+        /// Whether players trade with each other (offers, counteroffers) besides with the bank. Off for agent games, self-play
+        /// and datasets, whose agents and nets don't trade; on for games with humans.
+        /// </summary>
+        [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
+        public bool FreeTrade { get; set; }
+
+        /// <summary>
+        /// Offers a player may make per turn, 0 for the default: the rulebook sets no limit, but endless offers would stall the game
+        /// </summary>
+        [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
+        public int MaxTradeOffersPerTurn { get; set; }
+
+        public const int DefaultMaxTradeOffersPerTurn = 10;
+
+        [YamlIgnore]
+        public int TradeOfferLimit => MaxTradeOffersPerTurn > 0 ? MaxTradeOffersPerTurn : DefaultMaxTradeOffersPerTurn;
 
         public GameSettings()
         {
@@ -22,18 +41,22 @@ namespace Common
         {
             RobberCardLimit = copy.RobberCardLimit;
             VictoryPoints = copy.VictoryPoints;
+            FreeTrade = copy.FreeTrade;
+            MaxTradeOffersPerTurn = copy.MaxTradeOffersPerTurn;
         }
 
         public override bool Equals(object? obj)
         {
             return obj is GameSettings settings &&
                    RobberCardLimit == settings.RobberCardLimit &&
-                   VictoryPoints == settings.VictoryPoints;
+                   VictoryPoints == settings.VictoryPoints &&
+                   FreeTrade == settings.FreeTrade &&
+                   MaxTradeOffersPerTurn == settings.MaxTradeOffersPerTurn;
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(RobberCardLimit, VictoryPoints);
+            return HashCode.Combine(RobberCardLimit, VictoryPoints, FreeTrade, MaxTradeOffersPerTurn);
         }
     }
 }

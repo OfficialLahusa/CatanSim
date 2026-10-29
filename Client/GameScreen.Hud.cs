@@ -438,13 +438,13 @@ namespace Client
             }
 
             // Trade, development cards, end turn
-            bool canTrade = human is int t && HasTrades(t);
+            bool canTrade = human is int t && (HasTrades(t) || CanOffer(t));
             bool canPlayDev = human is int dv && HasDevelopmentMoves(dv);
             bool canEnd = human is int e && HasLegal<EndTurnAction>(e);
             bool mustRoll = human is int r && HasLegal<RollAction>(r);
             float half = (ColumnWidth - 10) / 2;
             if (DrawButton(dl, "trade", new Vector2(x, tradeTop), new Vector2(half, 48), "Trade", canTrade, Theme.PanelRaised, Theme.BorderLight, Theme.Bold17))
-                _dialog = Dialog.Trade;
+                OpenTradeDialog(human!.Value);
             if (DrawButton(dl, "devcard", new Vector2(x + half + 10, tradeTop), new Vector2(half, 48), "Play dev card", canPlayDev, Theme.PanelRaised, Theme.BorderLight, Theme.Bold17))
                 _dialog = Dialog.DevelopmentCard;
 
@@ -659,11 +659,19 @@ namespace Client
         #region Dialogs
         private void DrawDialogs()
         {
+            // An open offer comes before anything else: nobody moves until it is answered and closed
+            if (State.Turn.PendingTrade is TradeOffer offer && _mode != InteractionMode.Edit)
+            {
+                DrawPendingTrade(offer);
+                return;
+            }
+
             switch (_dialog)
             {
                 case Dialog.Discard: DrawDiscardDialog(); break;
                 case Dialog.Victim: DrawVictimDialog(); break;
                 case Dialog.Trade: DrawTradeDialog(); break;
+                case Dialog.Offer: DrawOfferDialog(); break;
                 case Dialog.DevelopmentCard: DrawDevelopmentDialog(); break;
                 case Dialog.YearOfPlenty: DrawPlentyDialog(); break;
                 case Dialog.Monopoly: DrawMonopolyDialog(); break;
@@ -794,6 +802,8 @@ namespace Client
                 PlayHumanMove(trade!);
             if (DrawButton(dl, "tradecancel", min + new Vector2(24, 430 - 20 - 44), new Vector2(120, 44), "Cancel", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))
                 ClearHumanInput();
+            if (CanOffer(player) && DrawButton(dl, "tradeplayers", min + new Vector2(600 / 2 - 90, 430 - 20 - 44), new Vector2(180, 44), "Offer to players", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))
+                OpenOfferDialog(player);
             ImGui.End();
         }
 
@@ -937,12 +947,14 @@ namespace Client
             }
             ImGui.SetCursorScreenPos(min + new Vector2(24, 304));
             ImGui.Checkbox("Desert in the center", ref _centerDesert);
+            ImGui.SetCursorScreenPos(min + new Vector2(260, 304));
+            ImGui.Checkbox("Trading between players", ref _freeTrade);
 
             if (DrawButton(dl, "newgameok", min + new Vector2(520 - 24 - 180, 400 - 20 - 44), new Vector2(180, 44), "Start", true, Theme.Accent, Theme.AccentBorder, Theme.Bold17))
             {
                 _dialog = Dialog.None;
                 SetMode(InteractionMode.Play);
-                Send(new Simulation.NewGame((SeatKind[])_newGameSeats.Clone(), _centerDesert));
+                Send(new Simulation.NewGame((SeatKind[])_newGameSeats.Clone(), _centerDesert, FreeTrade: _freeTrade));
                 _endScreenDismissed = false;
             }
             if (DrawButton(dl, "newgamecancel", min + new Vector2(24, 400 - 20 - 44), new Vector2(120, 44), "Cancel", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))

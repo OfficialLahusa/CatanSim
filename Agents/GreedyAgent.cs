@@ -29,6 +29,9 @@ namespace Agents
 
         public override Action Act(GameState state)
         {
+            // Trades between players: answers to offers and, on turn, the pick of a partner
+            if (TradeDecisions.Decide(state, PlayerIndex) is Action trade) return trade;
+
             List<Action> firstInitialSettlementActions = FirstInitialSettlementAction.GetActionsForState(state, PlayerIndex);
             if (firstInitialSettlementActions.Count > 0)
             {

@@ -47,6 +47,13 @@ namespace Agents
 
         public override Action Act(GameState state)
         {
+            // In an open trade only its answers or picks are possible, chosen at random like any other move
+            if (state.Turn.PendingTrade != null)
+            {
+                List<Action> tradeMoves = LegalActionProvider.GetActionsForState(state, PlayerIndex);
+                return tradeMoves[Utils.Random.Next(tradeMoves.Count)];
+            }
+
             // While a discard is pending, no other action is valid for this player
             if (DiscardAction.IsTurnValid(state.Turn, PlayerIndex))
             {

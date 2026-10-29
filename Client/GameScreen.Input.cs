@@ -20,7 +20,7 @@ namespace Client
     {
         private enum BuildMode { None, Road, Settlement, City }
 
-        private enum Dialog { None, Discard, Victim, Trade, DevelopmentCard, YearOfPlenty, Monopoly, NewGame }
+        private enum Dialog { None, Discard, Victim, Trade, Offer, DevelopmentCard, YearOfPlenty, Monopoly, NewGame }
 
         private BuildMode _buildMode;
         private Dialog _dialog;
@@ -238,6 +238,8 @@ namespace Client
             if (legal.Any(a => a is DiscardAction)) return $"Discard {State.Players[player].ResourceCards.Count() / 2} cards";
             if (legal.Any(a => a is RobberAction)) return _dialog == Dialog.Victim ? "Choose whom to rob" : "Move the robber: pick a tile";
             if (PlacingFreeRoads(player)) return $"Place {State.Players[player].BuildingStock.FreeRoads} free road" + (State.Players[player].BuildingStock.FreeRoads > 1 ? "s" : "");
+            if (legal.Any(a => a is RespondToTradeAction)) return "Answer the trade offer";
+            if (legal.Any(a => a is ConfirmTradeAction or CancelTradeAction)) return "Pick a trade partner or withdraw the offer";
             if (legal.Any(a => a is RollAction)) return "Roll the dice";
             return _buildMode switch
             {
@@ -287,7 +289,7 @@ namespace Client
                         case Keyboard.Key.Num2: ToggleBuildMode(BuildMode.Settlement); break;
                         case Keyboard.Key.Num3: ToggleBuildMode(BuildMode.City); break;
                         case Keyboard.Key.Num4: if (HumanToAct is int p) PlayFirst<BuyDevelopmentCardAction>(p); break;
-                        case Keyboard.Key.T: if (HumanToAct is int t && HasTrades(t)) _dialog = Dialog.Trade; break;
+                        case Keyboard.Key.T: if (HumanToAct is int t) OpenTradeDialog(t); break;
                         case Keyboard.Key.Escape: if (_dialog is not (Dialog.Discard or Dialog.Victim)) ClearHumanInput(); break;
                     }
                     break;

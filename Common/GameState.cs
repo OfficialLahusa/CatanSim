@@ -273,7 +273,8 @@ namespace Common
 
         public bool CanPlayerAct(int playerIdx)
         {
-            // TODO: Eventually account for trade offers from other players to target player
+            // An open offer: the next addressed player answers, then the offerer picks
+            if (Turn.PendingTrade is TradeOffer offer) return playerIdx == (offer.NextResponder ?? offer.Offerer);
             return !Turn.MustDiscard && Turn.PlayerIndex == playerIdx || Turn.MustDiscard && Turn.AwaitedPlayerDiscards[playerIdx];
         }
 

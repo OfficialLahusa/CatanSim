@@ -265,6 +265,7 @@ namespace Common.Actions
         {
             return turn.PlayerIndex == playerIdx
                 && turn.TypeOfRound == TurnState.RoundType.Normal
+                && turn.PendingTrade == null
                 && turn.MustRoll
                 && !turn.MustMoveRobber;
         }

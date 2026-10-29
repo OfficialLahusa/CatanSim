@@ -264,9 +264,30 @@ namespace Tests
 
         // ================================================================ Trade
 
-        [Fact(Skip = "Not implemented: domestic trade between players (TODO.md: \"Action für variable Player Trades\")")]
+        [Fact]
         public void PlayersMayTradeResourcesWithEachOtherOnTheirTurn()
         {
+            // Domestic trade: on their turn after rolling, players trade with the others, who don't trade among themselves
+            // (FreeTradeTests covers the details)
+            TestUtil.Seed(108);
+            GameState state = TestUtil.EmptyNormalTurn(0, mustRoll: false);
+            state.Settings.FreeTrade = true;
+            TestUtil.GiveCards(state, 0, ResourceCardType.Wool, 2);
+            TestUtil.GiveCards(state, 1, ResourceCardType.Ore, 1);
+            TestUtil.GiveCards(state, 2, ResourceCardType.Brick, 1);
+            CardSet<ResourceCardType> wool = new(), ore = new(), brick = new();
+            wool.Add(ResourceCardType.Wool, 2);
+            ore.Add(ResourceCardType.Ore, 1);
+            brick.Add(ResourceCardType.Brick, 1);
+
+            Assert.False(new OfferTradeAction(1, ore, brick, 1 << 2).IsValidFor(state));
+            OfferTradeAction offer = new OfferTradeAction(0, wool, ore, 1 << 1);
+            Assert.True(offer.IsValidFor(state));
+            offer.Apply(state);
+            new RespondToTradeAction(1, true).Apply(state);
+            new ConfirmTradeAction(0, 1).Apply(state);
+            Assert.Equal(1u, state.Players[0].ResourceCards.Get(ResourceCardType.Ore));
+            Assert.Equal(2u, state.Players[1].ResourceCards.Get(ResourceCardType.Wool));
         }
 
         [Fact]

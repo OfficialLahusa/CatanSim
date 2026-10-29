@@ -54,7 +54,7 @@ namespace Client
         private static extern void glReadPixels(int x, int y, int width, int height, uint format, uint type, byte[] pixels);
 
         public static readonly string[] Scenes = ["setup", "main", "road", "city", "roll", "discard", "robber", "victim", "trade", "devcards", "plenty",
-            "monopoly", "newgame", "save", "developer", "curtain", "spectate", "edit", "end"];
+            "monopoly", "newgame", "save", "developer", "curtain", "offer", "tradeanswer", "tradepick", "spectate", "edit", "end"];
 
         /// <summary>
         /// Plays fast agent moves up to a situation and sets the mode for it. Seat 4 (Orange) is the human.
@@ -93,6 +93,8 @@ namespace Client
                 case "save":
                 case "developer":
                 case "curtain":
+                case "offer":
+                case "tradepick":
                 case "edit":
                     PlayUntil(() => HumanMainPhase(4));
                     if (scene == "road")
@@ -149,6 +151,25 @@ namespace Client
                         // Hot seat: Blue is a second human at this screen, and the screen waits to be passed to Orange
                         Send(new Simulation.SetSeat(0, SeatKind.Human));
                         _curtainFor = 3;
+                    }
+                    else if (scene == "offer")
+                    {
+                        GiveCards(3, ResourceCardType.Ore, 3);
+                        OpenOfferDialog(3);
+                        _offerGive[4] = 2;
+                        _offerGet[0] = 1;
+                        _offerGet[1] = 1;
+                    }
+                    else if (scene == "tradepick")
+                    {
+                        // A generous offer to everyone; the agents answer once the scene hands the match back to them
+                        GiveCards(3, ResourceCardType.Ore, 3);
+                        GiveCards(3, ResourceCardType.Grain, 2);
+                        CardSet<ResourceCardType> give = new(), get = new();
+                        give.Add(ResourceCardType.Ore, 2);
+                        give.Add(ResourceCardType.Grain, 1);
+                        get.Add(ResourceCardType.Lumber, 1);
+                        Send(new PlayMove(new OfferTradeAction(3, give, get, OfferTradeAction.Everyone(State, 3))));
                     }
                     else if (scene == "edit")
                     {
@@ -213,6 +234,20 @@ namespace Client
                 case "end":
                     PlayUntil(() => State.HasEnded, 20000);
                     break;
+
+                case "tradeanswer":
+                    {
+                        // Blue offers Orange a trade in Blue's main phase; Orange answers
+                        PlayUntil(() => ActingPlayer == 0 && State.Turn.RoundCounter >= 4 && !State.Turn.MustRoll && !State.Turn.MustDiscard
+                            && !State.Turn.MustMoveRobber && State.Turn.TypeOfRound == TurnState.RoundType.Normal);
+                        GiveCards(0, ResourceCardType.Wool, 2);
+                        GiveCards(3, ResourceCardType.Brick, 2);
+                        CardSet<ResourceCardType> give = new(), get = new();
+                        give.Add(ResourceCardType.Wool, 2);
+                        get.Add(ResourceCardType.Brick, 1);
+                        Send(new PlayMove(new OfferTradeAction(0, give, get, (byte)(1 << 3 | 1 << 2))));
+                        break;
+                    }
             }
 
             ClearSceneEffects();

@@ -34,7 +34,13 @@ namespace Common.Actions
 
                 .. FourToOneTradeAction.GetActionsForState(state, playerIdx),
                 .. ThreeToOneTradeAction.GetActionsForState(state, playerIdx),
-                .. TwoToOneTradeAction.GetActionsForState(state, playerIdx)
+                .. TwoToOneTradeAction.GetActionsForState(state, playerIdx),
+
+                // Answers to an open offer and the offerer's pick; offers and counteroffers themselves are any card
+                // combination and come from the client or an agent
+                .. RespondToTradeAction.GetActionsForState(state, playerIdx),
+                .. ConfirmTradeAction.GetActionsForState(state, playerIdx),
+                .. CancelTradeAction.GetActionsForState(state, playerIdx)
             ];
 
             return actions;
