@@ -400,13 +400,10 @@ namespace Client
                 _tokenText.DisplayedString = number;
                 _tokenText.FillColor = ink;
 
-                // Centered on the ink, except the 11: the flags of its ones stretch the ink box to the left, so its
-                // stems would sit right of the middle. Open Sans figures are tabular with the 1 in the middle of its
-                // advance, so the 11 is centered on its advance width instead.
+                // Optically centered: halfway between the middle of the ink box and the ink's centroid, so open
+                // shapes like 3, 4 and 7 (or the flags of an 11) don't look shifted against the pips below
                 FloatRect bounds = _tokenText.GetLocalBounds();
-                float originX = bounds.Left + bounds.Width / 2.0f;
-                if (number == "11")
-                    originX = (_tokenText.FindCharacterPos((uint)number.Length).X - _tokenText.FindCharacterPos(0).X) / 2.0f;
+                float originX = bounds.Left + bounds.Width / 2.0f + OpticalShift(value) * _tokenText.CharacterSize;
                 _tokenText.Origin = new Vector2f(MathF.Round(originX), MathF.Round(bounds.Top + bounds.Height / 2.0f));
                 _tokenText.Position = new Vector2f(pixel.X, pixel.Y);
                 target.Draw(_tokenText, states);
@@ -414,6 +411,41 @@ namespace Client
 
             _tokenNumbers.Clear();
             target.SetView(mapView);
+        }
+
+        // Per number: how far its ink centroid lies right of its ink box's middle, in units of the character size
+        private readonly Dictionary<int, float> _opticalShift = [];
+
+        /// <summary>
+        /// Half the offset of a number's ink centroid from the middle of its ink box, measured once from a large rendering
+        /// </summary>
+        private float OpticalShift(int number)
+        {
+            if (_opticalShift.TryGetValue(number, out float shift)) return shift;
+
+            const uint size = 200;
+            Text text = new Text(number.ToString(), _tokenText.Font, size) { FillColor = Color.White };
+            FloatRect bounds = text.GetLocalBounds();
+            using RenderTexture canvas = new RenderTexture((uint)(bounds.Left + bounds.Width) + 20, (uint)(bounds.Top + bounds.Height) + 20);
+            canvas.Clear(Color.Transparent);
+            canvas.Draw(text);
+            canvas.Display();
+            using Image image = canvas.Texture.CopyToImage();
+
+            double weight = 0, sum = 0;
+            for (uint y = 0; y < image.Size.Y; y++)
+            {
+                for (uint x = 0; x < image.Size.X; x++)
+                {
+                    byte alpha = image.GetPixel(x, y).A;
+                    weight += alpha;
+                    sum += alpha * (x + 0.5);
+                }
+            }
+            float centroid = weight > 0 ? (float)(sum / weight) : bounds.Left + bounds.Width / 2;
+            shift = 0.5f * (centroid - (bounds.Left + bounds.Width / 2)) / size;
+            _opticalShift[number] = shift;
+            return shift;
         }
 
         public Vector2f GetTileCenter(Tile tile)
