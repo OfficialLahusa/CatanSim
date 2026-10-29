@@ -30,11 +30,6 @@ namespace Simulation
         /// applied (for effects that need the position of that moment)
         /// </summary>
         List<MatchEvent> ProcessEvents(Action<MatchEvent>? afterEach = null);
-
-        /// <summary>
-        /// The agent searching right now, when the match runs in this process (null over the network)
-        /// </summary>
-        MCTSAgent? ThinkingAgent { get; }
     }
 
     /// <summary>
@@ -50,7 +45,6 @@ namespace Simulation
         public ClientGame Game { get; } = new ClientGame();
         public bool IsConnected => true;
         public string Description { get; set; } = "Local game";
-        public MCTSAgent? ThinkingAgent => Match.ThinkingAgent;
 
         public LocalSimulation(Match match)
         {

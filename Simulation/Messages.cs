@@ -89,6 +89,18 @@ namespace Simulation
     public sealed record ThinkingEvent(int Seat, bool Thinking) : MatchEvent;
 
     /// <summary>
+    /// What the match's agents make of the current position (spectators and admins only): the win chances and the policy's
+    /// priors from their value net, the priors in the order of MCTSTree.GetValidActions (empty without a policy head)
+    /// </summary>
+    public sealed record EvaluationEvent(float[] WinChances, float[] Priors) : MatchEvent;
+
+    /// <summary>
+    /// The search of the agent thinking about the current position (spectators and admins only), a few times a second: per
+    /// move in the order of MCTSTree.GetValidActions its visits, prior and mean value for each player
+    /// </summary>
+    public sealed record SearchEvent(int Seat, long Iterations, uint[] Visits, float[] Priors, float[][] MeanValues) : MatchEvent;
+
+    /// <summary>
     /// The connections to the match (sent to admins only)
     /// </summary>
     public sealed record SessionsEvent(List<SessionInfo> Sessions) : MatchEvent;

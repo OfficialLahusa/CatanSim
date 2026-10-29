@@ -63,7 +63,7 @@ namespace Client
         {
             // The scene plays its own moves; the match's agents wait meanwhile and take over at the end
             Utils.Random.SeedCurrentThread(seed);
-            SeatKind bot = _stateValueNet != null ? SeatKind.MctsMedium : SeatKind.Builder;
+            SeatKind bot = _valueNetAvailable ? SeatKind.MctsMedium : SeatKind.Builder;
             Send(new SetPlayback(Playback with { Paused = true, HumanStandIns = false }));
             Send(new Simulation.NewGame([bot, bot, bot, SeatKind.Human], false));
 
@@ -251,7 +251,7 @@ namespace Client
                 case "spectate":
                     PlayUntil(() => State.Turn.RoundCounter >= 5 && !State.Turn.MustRoll && State.Turn.TypeOfRound == TurnState.RoundType.Normal);
                     // Hard agents think for 2 s, so the live search shows up in the heat map
-                    if (_stateValueNet != null)
+                    if (_valueNetAvailable)
                         for (int seat = 0; seat < 3; seat++) Send(new Simulation.SetSeat(seat, SeatKind.MctsHard));
                     SetMode(InteractionMode.Spectate);
                     ClearSceneEffects();

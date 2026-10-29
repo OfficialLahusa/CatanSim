@@ -21,7 +21,6 @@ namespace Simulation
         public SessionInfo? Session { get; private set; }
         public ClientGame Game { get; } = new ClientGame();
         public bool IsConnected { get; private set; } = true;
-        public MCTSAgent? ThinkingAgent => null;
 
         /// <summary>
         /// Refusals and failures the server reported, oldest first

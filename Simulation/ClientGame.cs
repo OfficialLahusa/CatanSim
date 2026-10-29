@@ -19,6 +19,13 @@ namespace Simulation
         public int? ThinkingSeat { get; private set; }
 
         /// <summary>
+        /// What the match's agents make of the current position and the search of the agent thinking about it, for spectators
+        /// and admins; null until the match sends them for this position
+        /// </summary>
+        public EvaluationEvent? Evaluation { get; private set; }
+        public SearchEvent? Search { get; private set; }
+
+        /// <summary>
         /// The connections to the match, if this client is an admin of a hosted match
         /// </summary>
         public List<SessionInfo> Sessions { get; private set; } = [];
@@ -45,12 +52,21 @@ namespace Simulation
                     Playback = snapshot.Playback;
                     AgentSettings = snapshot.Agents;
                     ThinkingSeat = null;
+                    (Evaluation, Search) = (null, null);
                     break;
                 case AppliedEvent applied:
                     Record.Apply(Copy(applied.Entry), applied.IsRedo);
+                    (Evaluation, Search) = (null, null);
                     break;
                 case UndoneEvent:
                     Record.Undo();
+                    (Evaluation, Search) = (null, null);
+                    break;
+                case EvaluationEvent evaluation:
+                    Evaluation = evaluation;
+                    break;
+                case SearchEvent search:
+                    Search = search;
                     break;
                 case SeatsEvent seats:
                     Seats = (SeatKind[])seats.Seats.Clone();

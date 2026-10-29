@@ -18,6 +18,11 @@ namespace Simulation
         private SeatKind[] _seats;
         private Agent[] _agents;
         private AgentRunner? _runner;
+        private AnalysisRunner? _analysis;
+
+        // The analysis of the current position, for listeners that join later
+        private readonly List<MatchEvent> _analysisEvents = [];
+        private int _analysisVersion = -1;
 
         // The agent searching on the runner thread: the match leaves it alone and resets it once the search is over
         private Agent? _busyAgent;
@@ -45,9 +50,15 @@ namespace Simulation
         public const string Admins = "@admins";
 
         /// <summary>
+        /// The recipient for the agents' analysis: spectators and admins (for a player it would show what the bots plan)
+        /// </summary>
+        public const string Watchers = "@watchers";
+
+        /// <summary>
         /// Whether a listener of the given session gets an event for this recipient
         /// </summary>
-        public static bool IsFor(string? to, SessionInfo session) => to == null || to == session.Id || (to == Admins && session.Role == Role.Admin);
+        public static bool IsFor(string? to, SessionInfo session) => to == null || to == session.Id || (to == Admins && session.Role == Role.Admin)
+            || (to == Watchers && session.Role is Role.Admin or Role.Spectator);
 
         public Match(GameState state, SeatKind[] seats, bool? valueNetAvailable = null)
         {
@@ -84,25 +95,23 @@ namespace Simulation
         public bool IsAgentThinking => _runner?.IsThinking ?? false;
 
         /// <summary>
-        /// The agent searching right now, if it is an MCTS agent (for showing its search; local use only)
-        /// </summary>
-        public MCTSAgent? ThinkingAgent => _runner?.ThinkingAgent as MCTSAgent;
-
-        /// <summary>
-        /// Lets the agents play their seats from now on
+        /// Lets the agents play their seats from now on, and analyzes the positions for spectators and admins
         /// </summary>
         public void Start()
         {
             lock (_lock)
             {
                 _runner ??= new AgentRunner(this);
+                _analysis ??= new AnalysisRunner(this, _valueNetAvailable);
             }
             _runner.Wake();
+            _analysis.Wake();
         }
 
         public void Dispose()
         {
             _runner?.Dispose();
+            _analysis?.Dispose();
         }
 
         /// <summary>
@@ -113,6 +122,10 @@ namespace Simulation
             lock (_lock)
             {
                 onSnapshot(SnapshotLocked());
+                if (_analysisVersion == Record.Version)
+                {
+                    foreach (MatchEvent e in _analysisEvents) listener(e, Watchers);
+                }
                 Published += listener;
             }
         }
@@ -264,8 +277,12 @@ namespace Simulation
                 }
             }
 
-            // Searches of the old position are dropped; the runner looks for the next agent move
-            if (positionChanged) _runner?.PositionChanged();
+            // Searches of the old position are dropped; the runner looks for the next agent move, the analysis at the position
+            if (positionChanged)
+            {
+                _runner?.PositionChanged();
+                _analysis?.Wake();
+            }
         }
 
         private bool PlayLocked(Action action, SessionInfo sender)
@@ -357,6 +374,7 @@ namespace Simulation
                 _busyAgent = _agents[acting];
                 _busyAgentStale = false;
                 Publish(new ThinkingEvent(acting, true));
+                _analysis?.Wake();
                 return (_busyAgent, new GameState(Record.State), Record.Version);
             }
         }
@@ -387,12 +405,46 @@ namespace Simulation
                 if (!PlayLocked(action, new SessionInfo("agents", "Agents", Role.Admin, null))) return false;
             }
             _runner?.PositionChanged();
+            _analysis?.Wake();
             return true;
         }
 
         internal void PublishError(string message)
         {
             lock (_lock) Publish(new ErrorEvent(message));
+        }
+        #endregion
+
+        #region For the analysis runner
+        /// <summary>
+        /// The position's version, a copy of the position if its version isn't the known one, and the MCTS agent searching it
+        /// </summary>
+        internal (int version, GameState? state, MCTSAgent? thinking) AnalysisSnapshot(int knownVersion)
+        {
+            lock (_lock)
+            {
+                return (Record.Version, Record.Version != knownVersion ? new GameState(Record.State) : null, _busyAgent as MCTSAgent);
+            }
+        }
+
+        /// <summary>
+        /// Sends an analysis to spectators and admins if the position is still the one it is for, and keeps it for later
+        /// listeners (one evaluation and the latest search)
+        /// </summary>
+        internal void PublishAnalysis(int version, MatchEvent analysis)
+        {
+            lock (_lock)
+            {
+                if (Record.Version != version) return;
+                if (_analysisVersion != version)
+                {
+                    _analysisEvents.Clear();
+                    _analysisVersion = version;
+                }
+                _analysisEvents.RemoveAll(e => e.GetType() == analysis.GetType());
+                _analysisEvents.Add(analysis);
+                Publish(analysis, Watchers);
+            }
         }
         #endregion
     }

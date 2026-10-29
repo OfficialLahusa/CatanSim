@@ -22,6 +22,8 @@ namespace Client.UI
         public void Draw(ImDrawListPtr dl, Vector2 min, Vector2 size, float alpha)
         {
             if (Development is DevelopmentCardType d) Theme.DevelopmentCard(dl, d, min, size, true, alpha);
+            else if (Resource == ResourceCardType.Unknown)
+                Theme.Card(dl, ColorPalette.DevelopmentCardPurple, ColorPalette.DevelopmentCardDarkPurple, TextureAtlas.Sprite.Development, min, size, true, alpha);
             else if (Resource is ResourceCardType r) Theme.ResourceCard(dl, r, min, size, true, alpha);
             else Theme.CardBack(dl, min, size, alpha);
         }

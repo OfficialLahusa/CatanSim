@@ -122,6 +122,20 @@ namespace Simulation
             ["remoteAdmins"] = s.AllowRemoteAdmins,
         };
 
+        // Rounded, and finite: JSON has no NaN
+        private static JsonArray Floats(IEnumerable<float> values) =>
+            new(values.Select(v => (JsonNode?)JsonValue.Create(float.IsFinite(v) ? MathF.Round(v, 5) : 0f)).ToArray());
+        private static float[] Floats(JsonNode? node) => node!.AsArray().Select(v => (float)v!).ToArray();
+
+        private static SearchEvent Search(JsonNode json)
+        {
+            uint[] visits = json["visits"]!.AsArray().Select(v => (uint)v!).ToArray();
+            float[] priors = Floats(json["priors"]);
+            float[][] means = json["means"]!.AsArray().Select(Floats).ToArray();
+            if (priors.Length != visits.Length || means.Length != visits.Length) throw new JsonException("A search needs one entry per move in each list");
+            return new SearchEvent((int)json["seat"]!, (long)json["iterations"]!, visits, priors, means);
+        }
+
         private static ServerInfo? Server(JsonNode? node) => node == null ? null : new((int)node["port"]!, (string)node["bind"]!, (bool)node["secure"]!,
             (string?)node["fingerprint"], (bool)node["anonymousSpectators"]!, (bool)node["remoteAdmins"]!);
         #endregion
@@ -202,6 +216,15 @@ namespace Simulation
                 PlaybackEvent p => new JsonObject { ["playback"] = Playback(p.Playback) },
                 AgentsEvent a => new JsonObject { ["settings"] = Agents(a.Settings) },
                 ThinkingEvent t => new JsonObject { ["seat"] = t.Seat, ["thinking"] = t.Thinking },
+                EvaluationEvent v => new JsonObject { ["winChances"] = Floats(v.WinChances), ["priors"] = Floats(v.Priors) },
+                SearchEvent s => new JsonObject
+                {
+                    ["seat"] = s.Seat,
+                    ["iterations"] = s.Iterations,
+                    ["visits"] = new JsonArray(s.Visits.Select(v => (JsonNode?)JsonValue.Create(v)).ToArray()),
+                    ["priors"] = Floats(s.Priors),
+                    ["means"] = new JsonArray(s.MeanValues.Select(m => (JsonNode?)Floats(m)).ToArray()),
+                },
                 SessionsEvent s => new JsonObject { ["sessions"] = new JsonArray(s.Sessions.Select(x => (JsonNode)Session(x)).ToArray()) },
                 ErrorEvent err => new JsonObject { ["message"] = err.Message },
                 ClosedEvent c => new JsonObject { ["reason"] = c.Reason },
@@ -228,6 +251,8 @@ namespace Simulation
                 nameof(PlaybackEvent) => new PlaybackEvent(Playback(json["playback"])),
                 nameof(AgentsEvent) => new AgentsEvent(Agents(json["settings"])),
                 nameof(ThinkingEvent) => new ThinkingEvent((int)json["seat"]!, (bool)json["thinking"]!),
+                nameof(EvaluationEvent) => new EvaluationEvent(Floats(json["winChances"]), Floats(json["priors"])),
+                nameof(SearchEvent) => Search(json),
                 nameof(SessionsEvent) => new SessionsEvent(json["sessions"]!.AsArray().Select(Session).ToList()),
                 nameof(ErrorEvent) => new ErrorEvent((string)json["message"]!),
                 nameof(ClosedEvent) => new ClosedEvent((string)json["reason"]!),

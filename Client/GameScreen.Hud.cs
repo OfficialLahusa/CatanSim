@@ -29,7 +29,8 @@ namespace Client
         private readonly Dictionary<ResourceCardType, Vector2> _handStackCenter = [];
         private readonly Dictionary<DevelopmentCardType, Vector2> _handDevelopmentStackCenter = [];
         private bool _rollChartPinned;
-        private Vector2 _tradeButtonCenter;
+        private readonly Dictionary<ResourceCardType, Vector2> _bankSlots = [];
+        private Vector2 _bankDevelopmentSlot;
         private Vector2 _handAnchor;
 
         // Hover animation of the hand's card stacks
@@ -52,19 +53,22 @@ namespace Client
             switch (_mode)
             {
                 case InteractionMode.Play:
-                    DrawLogPanel(Margin, Display.Y - 480);
+                    DrawLogPanel(Margin, Display.Y - 532);
+                    DrawBank(Display.Y - 520);
                     DrawActionPanel();
                     DrawHandPanel();
                     break;
                 case InteractionMode.Spectate:
                     DrawEvalPanel();
-                    DrawLogPanel(128, Display.Y - 504);
+                    DrawLogPanel(116, Display.Y - 556);
+                    DrawBank(Display.Y - 544);
                     DrawPlaybackPanel();
                     DrawPolicyPanel();
                     break;
                 case InteractionMode.Edit:
                     DrawEvalPanel();
-                    DrawLogPanel(128, Display.Y - 504);
+                    DrawLogPanel(116, Display.Y - 556);
+                    DrawBank(Display.Y - 544);
                     DrawEditPanel();
                     DrawEditCardsPanel();
                     break;
@@ -216,9 +220,9 @@ namespace Client
 
                 DrawSeatStats(dl, seat, min + new Vector2(28, 78), viewer);
 
-                if (_mode != InteractionMode.Play)
+                if (_mode != InteractionMode.Play && WinChances() is float[] chances)
                 {
-                    float share = _valuation[seat];
+                    float share = chances[seat];
                     Theme.TextRight(dl, Theme.Bold15, max + new Vector2(-16, -26), Theme.PlayerTextColor(seat), $"{share * 100:0} %");
                 }
 
@@ -293,6 +297,50 @@ namespace Client
         }
         #endregion
 
+        #region Bank
+        /// <summary>
+        /// The bank in the right column under the log (above the build menu in Play mode): each resource and the development card deck with how many cards are left, low counts in
+        /// red; payments to the bank and trades with it fly into these slots
+        /// </summary>
+        private void DrawBank(float top)
+        {
+            // Cards as large as the build menu's costs
+            const float card = 15;
+            int slots = CardTypeExtensions.ResourceTypes.Count() + 1;
+            float labelWidth = Theme.TextSize(Theme.SemiBold15, "Bank").X + 14;
+            Vector2 size = new Vector2(ColumnWidth, 40);
+            float slot = (size.X - 22 - labelWidth) / slots;
+            Vector2 min = new Vector2(Display.X - Margin - ColumnWidth, top);
+
+            ImDrawListPtr dl = Theme.BeginHud("##bank", min, size);
+            Theme.DrawPanel(dl, min, min + size, Theme.Border, 10, new Color(15, 33, 86, 235));
+            float midY = min.Y + size.Y / 2;
+            Theme.DrawText(dl, Theme.SemiBold15, new Vector2(min.X + 14, midY - Theme.TextSize(Theme.SemiBold15, "Bank").Y / 2), Theme.TextMuted, "Bank");
+
+            float x = min.X + 14 + labelWidth;
+            Vector2 cardSize = new Vector2(card, card * 4 / 3);
+            void Slot(FlyingCard what, uint count, string name, out Vector2 center)
+            {
+                Vector2 cardMin = new Vector2(x, midY - cardSize.Y / 2);
+                center = cardMin + cardSize / 2;
+                Theme.HitArea($"bank{name}", new Vector2(x - 4, min.Y), new Vector2(slot - 4, size.Y), out bool hovered);
+                what.Draw(dl, cardMin, cardSize, count == 0 ? 0.35f : 1f);
+                Color color = count == 0 ? Theme.TextFaint : count <= 3 ? new Color(255, 110, 110) : Theme.Text;
+                Theme.DrawText(dl, Theme.Bold15, new Vector2(x + card + 7, midY - Theme.TextSize(Theme.Bold15, count.ToString()).Y / 2), color, count.ToString());
+                if (hovered) DrawTooltip(ImGui.GetForegroundDrawList(), new Vector2(x + card / 2, min.Y - 6), $"{count} {name} left in the bank");
+                x += slot;
+            }
+
+            foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
+            {
+                Slot(type, State.ResourceBank.Get(type), type.GetName().ToLower(), out Vector2 center);
+                _bankSlots[type] = center;
+            }
+            Slot(FlyingCard.HiddenDevelopment, State.DevelopmentBank.Count(), "development cards", out _bankDevelopmentSlot);
+            ImGui.End();
+        }
+        #endregion
+
         #region Banner
         private void DrawBanner()
         {
@@ -329,7 +377,8 @@ namespace Client
             {
                 headline = $"{Theme.PlayerName(thinkingSeat)} is thinking";
                 string agent = Simulation.Seats.Name(Seats[thinkingSeat] == SeatKind.Human ? SeatKind.MctsMedium : Seats[thinkingSeat]);
-                detail = _mode == InteractionMode.Spectate && _liveIterations > 0 ? $" ({agent}, {_liveIterations / 1000.0:0.#}k iterations)" : $" ({agent})";
+                long iterations = CurrentSearch is SearchEvent search && search.Seat == thinkingSeat ? search.Iterations : 0;
+                detail = _mode == InteractionMode.Spectate && iterations > 0 ? $" ({agent}, {iterations / 1000.0:0.#}k iterations)" : $" ({agent})";
                 chip = $"{_thinkingClock.Elapsed.TotalSeconds:0.0} s";
             }
             else if (_mode == InteractionMode.Spectate && !SpectatePlaying)
@@ -450,7 +499,6 @@ namespace Client
             bool canEnd = human is int e && HasLegal<EndTurnAction>(e);
             bool mustRoll = human is int r && HasLegal<RollAction>(r);
             float half = (ColumnWidth - 10) / 2;
-            _tradeButtonCenter = new Vector2(x + half / 2, tradeTop + 24);
             if (DrawButton(dl, "trade", new Vector2(x, tradeTop), new Vector2(half, 48), "Trade", canTrade, Theme.PanelRaised, Theme.BorderLight, Theme.Bold17))
                 OpenTradeDialog(human!.Value);
             if (DrawButton(dl, "devcard", new Vector2(x + half + 10, tradeTop), new Vector2(half, 48), "Play dev card", canPlayDev, Theme.PanelRaised, Theme.BorderLight, Theme.Bold17))
@@ -491,7 +539,8 @@ namespace Client
             int roller = History.Select(h => h.Action).OfType<RollAction>().LastOrDefault()?.PlayerIndex ?? -1;
             if (roller < 0) return;
             string who = Viewer == roller ? "You" : Theme.PlayerName(roller);
-            float x = Display.X - Margin - DiceWidget.Size - 10;
+            // Centered over the dice, which are centered in the column
+            float x = Display.X - Margin - ColumnWidth / 2;
             Vector2 center = new Vector2(x, Display.Y - Margin - DiceWidget.Size - 18);
 
             ImDrawListPtr dl = Theme.BeginHud("##rolllabel", center - new Vector2(140, 14), new Vector2(280, 28));
@@ -510,9 +559,10 @@ namespace Client
         private void DrawRollChart()
         {
             float diceTop = Display.Y - Margin - DiceWidget.Size;
-            Vector2 area = new Vector2(Display.X - 2 * Margin - 2 * DiceWidget.Size, diceTop - 32);
+            Vector2 area = new Vector2(Display.X - Margin - ColumnWidth / 2 - DiceWidget.Size - DiceWidget.Gap / 2, diceTop - 32);
             Vector2 mouse = ImGui.GetIO().MousePos;
-            bool hovered = mouse.X >= area.X && mouse.Y >= area.Y && mouse.X <= Display.X - Margin && mouse.Y <= Display.Y - Margin;
+            bool hovered = mouse.X >= area.X && mouse.Y >= area.Y && mouse.X <= Display.X - Margin - ColumnWidth / 2 + DiceWidget.Size + DiceWidget.Gap / 2
+                && mouse.Y <= Display.Y - Margin;
             if (!hovered && !_rollChartPinned) return;
 
             int rolls = (int)_rollDistribution.Sum();
@@ -1038,7 +1088,7 @@ namespace Client
                 if (ImGui.Combo($"##seatkind{seat}", ref kind, kinds, kinds.Length))
                 {
                     SeatKind chosen = (SeatKind)kind;
-                    if (chosen == SeatKind.Human || !Simulation.Seats.NeedsValueNet(chosen) || _stateValueNet != null) _newGameSeats[seat] = chosen;
+                    if (chosen == SeatKind.Human || !Simulation.Seats.NeedsValueNet(chosen) || _valueNetAvailable) _newGameSeats[seat] = chosen;
                 }
             }
             ImGui.SetCursorScreenPos(min + new Vector2(24, 304));

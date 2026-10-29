@@ -32,106 +32,57 @@ namespace Client
         /// <summary>
         /// A legal move of the acting player with the net's prior and the search's visit share (if there is a search)
         /// </summary>
-        private sealed record MoveAnalysis(Action Move, float Prior, float? Visits, double[]? MeanValues);
+        private sealed record MoveAnalysis(Action Move, float Prior, float? Visits, float[]? MeanValues);
 
-        // The net's priors for the current position
-        private List<(Action move, float prior)> _priors = [];
-        private int _priorsVersion = -1;
+        // The legal moves of the current position, in the order the match's analysis lists them
+        private List<Action> _analysisMoves = [];
+        private int _analysisMovesVersion = -1;
 
-        // The search for the current position: live while an agent thinks, or kept from the last decision
-        private GameState? _searchState;
-        private IReadOnlyList<MCTSAgent.RootMove> _searchMoves = [];
-        private readonly System.Diagnostics.Stopwatch _sinceSearchRead = System.Diagnostics.Stopwatch.StartNew();
-        private long _liveIterations;
-
-        private void ClearAnalysis()
+        private List<Action> AnalysisMoves()
         {
-            _priorsVersion = -1;
-            _priors = [];
-            _searchState = null;
-            _searchMoves = [];
-            _liveIterations = 0;
+            if (_analysisMovesVersion != _stateVersion)
+            {
+                _analysisMovesVersion = _stateVersion;
+                _analysisMoves = State.HasEnded ? [] : MCTSTree.GetValidActions(State);
+            }
+            return _analysisMoves;
         }
 
         /// <summary>
-        /// Keeps the search an agent made its move with, for the position it was made in (seen again after an undo)
+        /// The match's search of the current position, if it has one that fits the moves
         /// </summary>
-        private void KeepSearch(MCTSAgent agent, GameState state)
+        private SearchEvent? CurrentSearch =>
+            _sim.Game.Search is SearchEvent search && search.Visits.Length == AnalysisMoves().Count && search.Iterations > 0 ? search : null;
+
+        /// <summary>
+        /// The win chances the match's agents see (a finished game's result), or null while the match sent none to this client
+        /// </summary>
+        private float[]? WinChances()
         {
-            (GameState? root, IReadOnlyList<MCTSAgent.RootMove> moves) = agent.GetRootMoves();
-            if (root == null || !root.Equals(state)) return;
-            _searchState = new GameState(state);
-            _searchMoves = moves;
-        }
-
-        private void UpdateAnalysis()
-        {
-            bool wanted = _mode == InteractionMode.Spectate || (_mode == InteractionMode.Edit && _showEditEval);
-            if (!wanted) return;
-
-            // The net's priors once per position, for the acting player
-            if (_priorsVersion != _stateVersion)
-            {
-                _priorsVersion = _stateVersion;
-                _priors = ComputePriors();
-            }
-
-            // The running search a few times per second
-            if (_sim.ThinkingAgent is MCTSAgent mcts && _sinceSearchRead.Elapsed.TotalSeconds > 0.2)
-            {
-                _sinceSearchRead.Restart();
-                (GameState? root, IReadOnlyList<MCTSAgent.RootMove> moves) = mcts.GetRootMoves();
-                if (root != null && root.Equals(State) && moves.Count > 0)
-                {
-                    _searchState = root;
-                    _searchMoves = moves;
-                    _liveIterations = moves.Sum(m => (long)m.Visits);
-                }
-            }
-            else if (_sim.Game.ThinkingSeat == null)
-            {
-                _liveIterations = 0;
-            }
-        }
-
-        private List<(Action move, float prior)> ComputePriors()
-        {
-            int acting = ActingPlayer;
-            if (acting < 0 || _stateValueNet?.Policy is not PolicyHead policy) return [];
-
-            List<Action> moves = MCTSTree.GetValidActions(State);
-            if (moves.Count == 0) return [];
-            if (moves.Count == 1) return [(moves[0], 1f)];
-
-            LeafValues values = _stateValueNet.Evaluate(StateVectorizer.For(_stateValueNet).Vectorize(State), false, withPolicy: true);
-            float[] priors = new float[moves.Count];
-            ActionEncoding.Logits(values.PolicyQueries!.AsSpan(0, policy.QueryLength), policy.Embeddings, policy.Dim, moves, priors);
-            ActionEncoding.Softmax(priors);
-            return moves.Select((move, i) => (move, priors[i])).ToList();
+            if (State.HasEnded) return [.. Enumerable.Range(0, PLAYER_COUNT).Select(seat => seat == State.Turn.PlayerIndex ? 1f : 0f)];
+            return _sim.Game.Evaluation?.WinChances;
         }
 
         /// <summary>
-        /// The acting player's moves with priors and visit shares, the most chosen first
+        /// Why there is no analysis to show: players don't get the agents' analysis, everyone else waits for it
+        /// </summary>
+        private string MissingAnalysis => _sim.Session?.Role is Role.Player or Role.Agent
+            ? "The match sends its analysis to spectators and admins only."
+            : "Waiting for the match's analysis.";
+
+        /// <summary>
+        /// The acting player's moves with the priors and visit shares the match sent, the most chosen first
         /// </summary>
         private List<MoveAnalysis> Analysis()
         {
-            bool hasSearch = _searchState != null && _searchState.Equals(State) && _searchMoves.Count > 0;
-            if (!hasSearch)
-                return _priors.Select(p => new MoveAnalysis(p.move, p.prior, null, null)).OrderByDescending(m => m.Prior).ToList();
+            List<Action> moves = AnalysisMoves();
+            float[]? priors = _sim.Game.Evaluation?.Priors is { } p && p.Length == moves.Count && p.Length > 0 ? p : null;
+            if (CurrentSearch is not SearchEvent search)
+                return priors == null ? [] : moves.Select((move, i) => new MoveAnalysis(move, priors[i], null, null)).OrderByDescending(m => m.Prior).ToList();
 
-            double total = Math.Max(1, _searchMoves.Sum(m => (double)m.Visits));
-            List<MoveAnalysis> result = [];
-            foreach (MCTSAgent.RootMove root in _searchMoves)
-            {
-                float prior = root.Prior;
-                if (prior == 0)
-                {
-                    int i = _priors.FindIndex(p => p.move.Equals(root.Move));
-                    if (i >= 0) prior = _priors[i].prior;
-                }
-                result.Add(new MoveAnalysis(root.Move, prior, (float)(root.Visits / total), root.MeanValues));
-            }
-            return result.OrderByDescending(m => m.Visits).ThenByDescending(m => m.Prior).ToList();
+            double total = Math.Max(1, search.Visits.Sum(v => (double)v));
+            return moves.Select((move, i) => new MoveAnalysis(move, search.Priors[i] != 0 || priors == null ? search.Priors[i] : priors[i], (float)(search.Visits[i] / total), search.MeanValues[i]))
+                .OrderByDescending(m => m.Visits).ThenByDescending(m => m.Prior).ToList();
         }
 
         /// <summary>
@@ -168,14 +119,21 @@ namespace Client
 
             float x = Display.X - Margin - ColumnWidth;
             Vector2 min = new Vector2(x, Margin);
-            Vector2 size = new Vector2(ColumnWidth, 96);
-            float[] values = EvalValues();
+            Vector2 size = new Vector2(ColumnWidth, 84);
+            float[]? values = EvalValues();
 
             ImDrawListPtr dl = Theme.BeginHud("##eval", min, size + new Vector2(0, 8));
             Theme.DrawPanel(dl, min, min + size);
             Theme.DrawText(dl, Theme.Bold17, min + new Vector2(20, 12), Theme.Text, "Win chances");
-            string source = _evalSource == EvalSource.Search && _searchMoves.Count > 0 && _mode == InteractionMode.Spectate ? "search" : "value net";
+            string source = _evalSource == EvalSource.Search && CurrentSearch != null && _mode == InteractionMode.Spectate ? "search" : "value net";
             Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 20, 16), Theme.TextMuted, $"{source}, after move {History.Count}");
+
+            if (values == null)
+            {
+                Theme.DrawText(dl, Theme.Regular15, min + new Vector2(20, 46), Theme.TextMuted, MissingAnalysis);
+                ImGui.End();
+                return;
+            }
 
             // The bar: one segment per player in seat order
             Vector2 bar = min + new Vector2(16, 44);
@@ -189,43 +147,25 @@ namespace Client
                 if (w > 34) Theme.TextCentered(dl, Theme.Bold15, bar + new Vector2(offset + w / 2, 13), Theme.TextOnPlayer(seat), $"{values[seat] / total * 100:0}%");
                 offset += w;
             }
-
-            // History of the win chances, one line per player
-            if (_valuationHistory.Count > 1)
-            {
-                Vector2 chart = min + new Vector2(16, 76);
-                int count = _valuationHistory.Count;
-                for (int seat = 0; seat < PLAYER_COUNT; seat++)
-                {
-                    Vector2[] points = new Vector2[count];
-                    for (int i = 0; i < count; i++)
-                        points[i] = chart + new Vector2(width * i / (count - 1), 14 - 14 * _valuationHistory[i][seat]);
-                    for (int i = 1; i < count; i++)
-                        dl.AddLine(points[i - 1], points[i], Theme.U32(Theme.WithAlpha(Theme.PlayerTextColor(seat), 0.8f)), 1.5f);
-                }
-            }
             ImGui.End();
         }
 
         /// <summary>
-        /// Win chances per player from the selected source: the value net, or the mean values of the search's root moves
-        /// weighted by their visits
+        /// Win chances per player from the selected source, both from the match: its value net, or the mean values of the
+        /// thinking agent's root moves weighted by their visits; null while the match sent none
         /// </summary>
-        private float[] EvalValues()
+        private float[]? EvalValues()
         {
-            if (_evalSource == EvalSource.Search && _mode == InteractionMode.Spectate && _searchState != null && _searchState.Equals(State) && _searchMoves.Count > 0)
+            if (_evalSource == EvalSource.Search && _mode == InteractionMode.Spectate && !State.HasEnded && CurrentSearch is SearchEvent search)
             {
-                double totalVisits = _searchMoves.Sum(m => (double)m.Visits);
-                if (totalVisits > 0)
-                {
-                    float[] values = new float[PLAYER_COUNT];
-                    foreach (MCTSAgent.RootMove move in _searchMoves)
-                        for (int seat = 0; seat < PLAYER_COUNT; seat++)
-                            values[seat] += (float)(move.MeanValues[seat] * move.Visits / totalVisits);
-                    return values;
-                }
+                double totalVisits = search.Visits.Sum(v => (double)v);
+                float[] values = new float[PLAYER_COUNT];
+                for (int move = 0; move < search.Visits.Length; move++)
+                    for (int seat = 0; seat < PLAYER_COUNT && seat < search.MeanValues[move].Length; seat++)
+                        values[seat] += (float)(search.MeanValues[move][seat] * search.Visits[move] / totalVisits);
+                return values;
             }
-            return _valuation;
+            return WinChances();
         }
 
         private void DrawPlaybackPanel()
@@ -337,20 +277,16 @@ namespace Client
             dl.AddCircleFilled(min + new Vector2(26, 28), 10, Theme.U32(Theme.PlayerColor(acting)), 24);
             Theme.DrawText(dl, Theme.Bold20, min + new Vector2(44, 15), Theme.Text, Theme.PlayerName(acting));
             Theme.DrawText(dl, Theme.Regular17, min + new Vector2(44 + Theme.TextSize(Theme.Bold20, Theme.PlayerName(acting)).X, 17), Theme.TextMuted, " (policy)");
-            string info = hasVisits ? $"{analysis.Count} moves, {(long)_searchMoves.Sum(m => (double)m.Visits) / 1000.0:0.#}k visits" : $"{analysis.Count} moves, net only";
+            string info = hasVisits ? $"{analysis.Count} moves, {CurrentSearch!.Iterations / 1000.0:0.#}k visits" : $"{analysis.Count} moves, net only";
             Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 16, 21), Theme.TextMuted, info);
 
-            if (_stateValueNet?.Policy == null && !hasVisits)
-            {
-                Theme.DrawText(dl, Theme.Regular15, min + new Vector2(24, 70), Theme.TextMuted, "The value net has no policy head.");
-                ImGui.End();
-                return;
-            }
-
-            // No moves: the game is over, or the priors come with the next frame (right after switching to Spectate mode)
+            // No moves to show: the game is over, the match's net has no policy head, or the analysis hasn't come
             if (analysis.Count == 0)
             {
-                Theme.DrawText(dl, Theme.Regular15, min + new Vector2(24, 70), Theme.TextMuted, State.HasEnded ? "The game is over." : "No moves to show yet.");
+                string why = State.HasEnded ? "The game is over."
+                    : _sim.Game.Evaluation is EvaluationEvent evaluation && evaluation.Priors.Length == 0 ? "The agents' value net has no policy head."
+                    : MissingAnalysis;
+                Theme.DrawText(dl, Theme.Regular15, min + new Vector2(24, 70), Theme.TextMuted, why);
                 ImGui.End();
                 return;
             }
@@ -469,10 +405,11 @@ namespace Client
             float w = (size.X - 32 - 4 * 8) / 5;
             for (int i = 0; i < tools.Length; i++)
             {
-                Vector2 pos = min + new Vector2(16 + i * (w + 8), 48);
+                // The tools above Undo and Redo, each with its key in the corner
+                Vector2 pos = min + new Vector2(16 + i * (w + 8), 46);
                 bool active = _editTool == tools[i].tool;
-                bool clicked = Theme.HitArea($"tool{i}", pos, new Vector2(w, 92), out bool hovered);
-                Theme.DrawPanel(dl, pos, pos + new Vector2(w, 92), active ? Theme.PlayerColor(_editPlayer) : Theme.BorderLight, 10,
+                bool clicked = Theme.HitArea($"tool{i}", pos, new Vector2(w, 84), out bool hovered);
+                Theme.DrawPanel(dl, pos, pos + new Vector2(w, 84), active ? Theme.PlayerColor(_editPlayer) : Theme.BorderLight, 10,
                     active ? Theme.PanelActive : hovered ? new Color(32, 52, 112) : Theme.PanelRaised, active ? 3 : 1);
                 Color iconColor = tools[i].tool switch
                 {
@@ -480,20 +417,20 @@ namespace Client
                     EditTool.Erase => new Color(255, 96, 96),
                     _ => Theme.PlayerColor(_editPlayer)
                 };
-                if (tools[i].tool == EditTool.Robber) dl.AddCircleFilled(pos + new Vector2(w / 2, 34), 22, Theme.U32(new Color(220, 220, 220)), 24);
-                Theme.IconCentered(dl, tools[i].sprite, pos + new Vector2(w / 2, 34), 38, iconColor);
-                Theme.TextCentered(dl, Theme.Bold13, pos + new Vector2(w / 2, 74), Theme.Text, tools[i].label);
-                Theme.TextCentered(dl, Theme.Regular13, pos + new Vector2(w / 2, 102), Theme.TextFaint, (i + 1).ToString());
+                if (tools[i].tool == EditTool.Robber) dl.AddCircleFilled(pos + new Vector2(w / 2, 32), 21, Theme.U32(new Color(220, 220, 220)), 24);
+                Theme.IconCentered(dl, tools[i].sprite, pos + new Vector2(w / 2, 32), 36, iconColor);
+                Theme.TextCentered(dl, Theme.Bold13, pos + new Vector2(w / 2, 68), Theme.Text, tools[i].label);
+                Theme.DrawText(dl, Theme.Regular13, pos + new Vector2(8, 4), Theme.TextFaint, (i + 1).ToString());
                 if (clicked) _editTool = tools[i].tool;
             }
 
             float half = (size.X - 32 - 10) / 2;
-            if (DrawButton(dl, "undo", min + new Vector2(16, 132), new Vector2(half, 46), "Undo", History.Count > 0, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15, "Ctrl+Z"))
+            if (DrawButton(dl, "undo", min + new Vector2(16, 142), new Vector2(half, 44), "Undo", History.Count > 0, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15, "Ctrl+Z"))
                 UndoAction();
-            if (DrawButton(dl, "redo", min + new Vector2(26 + half, 132), new Vector2(half, 46), "Redo", Redo.Count > 0, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15, "Ctrl+Y"))
+            if (DrawButton(dl, "redo", min + new Vector2(26 + half, 142), new Vector2(half, 44), "Redo", Redo.Count > 0, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15, "Ctrl+Y"))
                 RedoAction(false);
 
-            Theme.DrawText(dl, Theme.Regular13, min + new Vector2(20, 196), Theme.TextMuted, "Map (starts a new game, not undoable)");
+            Theme.DrawText(dl, Theme.Regular13, min + new Vector2(20, 198), Theme.TextMuted, "Map (starts a new game, not undoable)");
             ImGui.SetCursorScreenPos(min + new Vector2(20, 216));
             ImGui.Checkbox("Desert in the center", ref _centerDesert);
             if (DrawButton(dl, "newmap", min + new Vector2(16, 250), new Vector2(half, 44), "New map", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))

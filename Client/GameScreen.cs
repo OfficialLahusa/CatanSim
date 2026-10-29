@@ -107,10 +107,8 @@ namespace Client
 
         // State value network for win rate evaluation
         // Null when the model file is missing (it is not tracked in git), the net evaluation is unavailable then
-        private StateValueNet? _stateValueNet = StateValueNet.IsDefaultModelAvailable ? new StateValueNet(StateValueNet.DefaultModelFile) : null;
-        private float[] _valuation = new float[PLAYER_COUNT];
-        // Win chances after each history entry, for the eval bar's history
-        private List<float[]> _valuationHistory = [];
+        // The match's agents and its analysis load the value net; the client only needs to know whether they can
+        private static readonly bool _valueNetAvailable = StateValueNet.IsDefaultModelAvailable;
 
         // Developer window (the old menu)
         private bool _showDeveloperWindow;
@@ -125,11 +123,11 @@ namespace Client
         {
             _window = window;
 
-            if (_stateValueNet == null)
+            if (!_valueNetAvailable)
                 Console.WriteLine($"Value net not found at \"{StateValueNet.DefaultModelPath}\": net evaluation, GreedyAgent and MCTSAgent are unavailable.");
 
             // A local match: three agents and the human on a random seat, so they don't always start last
-            SeatKind bot = _stateValueNet != null ? SeatKind.MctsMedium : SeatKind.Builder;
+            SeatKind bot = _valueNetAvailable ? SeatKind.MctsMedium : SeatKind.Builder;
             GameState first = new GameState(MapGenerator.GenerateRandomClassic(), PLAYER_COUNT);
             first.Settings.FreeTrade = true;
             SeatKind[] seats = Enumerable.Repeat(bot, PLAYER_COUNT).ToArray();
@@ -139,7 +137,7 @@ namespace Client
             _renderer = new BoardRenderer(State.Board, 120, 20);
             _overlay = new BoardOverlay(_renderer);
             _renderer.BeforeBuildings = (target, states) => _overlay.DrawUnderBuildings(target, State.Board);
-            _diceWidget = new DiceWidget(window);
+            _diceWidget = new DiceWidget(window, ColumnWidth);
             _diceWidget.Active = true;
 
             _eventLog = new EventLog();
@@ -307,7 +305,6 @@ namespace Client
             ProcessSimulation();
             UpdateNetwork();
             StepSelfTest();
-            UpdateAnalysis();
         }
 
         #region Simulation
@@ -316,7 +313,7 @@ namespace Client
         /// </summary>
         private LocalSimulation StartLocal(GameState state, SeatKind[] seats, IEnumerable<HistoryEntry>? history = null, IEnumerable<HistoryEntry>? redo = null)
         {
-            Match match = new Match(state, seats, _stateValueNet != null);
+            Match match = new Match(state, seats, _valueNetAvailable);
             if (history != null || redo != null)
             {
                 // Continue a game from another match (e.g. after leaving a server) with its moves
@@ -366,12 +363,10 @@ namespace Client
                     RebuildLogAndRollDistribution();
                     _overlay.ClearRoll();
                     _particles.Clear();
-                    ClearAnalysis();
                     _endScreenDismissed = false;
                     _lastHumanViewer = null;
                     _curtainFor = null;
                     AfterPositionChanged();
-                    _valuationHistory = [(float[])_valuation.Clone()];
                     break;
 
                 case AppliedEvent applied:
@@ -399,7 +394,6 @@ namespace Client
                         _overlay.ClearRoll();
                     }
                     AfterPositionChanged();
-                    _valuationHistory.Add((float[])_valuation.Clone());
                     break;
 
                 case UndoneEvent:
@@ -409,7 +403,6 @@ namespace Client
                     _actionLogger.UpdateTracking(State);
                     _overlay.ClearRoll();
                     _particles.Clear();
-                    if (_valuationHistory.Count > 1) _valuationHistory.RemoveAt(_valuationHistory.Count - 1);
                     AfterPositionChanged();
                     break;
 
@@ -440,7 +433,6 @@ namespace Client
             _stateVersion++;
             _renderer.Board = State.Board;
             _renderer.Update();
-            UpdateValuation();
 
             _diceWidget.Active = State.Turn.MustRoll;
             _diceWidget.RollResult = State.Turn.LastRoll;
@@ -467,7 +459,7 @@ namespace Client
 
         private void SetSeat(int seat, SeatKind kind)
         {
-            if (Simulation.Seats.NeedsValueNet(kind) && kind != SeatKind.Human && _stateValueNet == null)
+            if (Simulation.Seats.NeedsValueNet(kind) && kind != SeatKind.Human && !_valueNetAvailable)
             {
                 _eventLog.WriteLine(new ColoredStrEntry($"{Simulation.Seats.Name(kind)} needs the value net {StateValueNet.DefaultModelFile}, which is missing", Color.Red));
                 return;
@@ -559,21 +551,22 @@ namespace Client
                 Vector2f point = _overlay.Position(State.Board, target);
                 return () => ScreenPosition(point);
             }
-            void Pay(Func<System.Numerics.Vector2> to, params ResourceCardType[] cards)
+            Func<System.Numerics.Vector2> Bank(FlyingCard card) => () => BankSlot(card);
+            void Pay(Func<FlyingCard, Func<System.Numerics.Vector2>> to, params ResourceCardType[] cards)
             {
-                foreach (ResourceCardType card in cards) Fly(card, Hand(player, card), to, 0.08f);
+                foreach (ResourceCardType card in cards) Fly(card, Hand(player, card), to(card), 0.08f);
             }
-            // Trades with the bank go through the Trade button, port trades through the port
-            void BankTrade(ResourceCardType input, int ratio, ResourceCardType output, Func<System.Numerics.Vector2> place)
+            // Trades with the bank go through the bank's slots, port trades through the port
+            void BankTrade(ResourceCardType input, int ratio, ResourceCardType output, Func<FlyingCard, Func<System.Numerics.Vector2>> place)
             {
                 Pay(place, [.. Enumerable.Repeat(input, ratio)]);
                 delay += 0.15f;
-                Fly(output, place, Hand(player, output));
+                Fly(output, place(output), Hand(player, output));
             }
-            Func<System.Numerics.Vector2> PortOf(Port.TradeType type)
+            Func<FlyingCard, Func<System.Numerics.Vector2>> PortOf(Port.TradeType type)
             {
-                if (PortPosition(player, type) is not Vector2f point) return BankPosition;
-                return () => ScreenPosition(point);
+                if (PortPosition(player, type) is not Vector2f point) return Bank;
+                return _ => () => ScreenPosition(point);
             }
             bool Sees(params int[] players) => EventLog.Viewer is not int viewer || players.Contains(viewer);
             static IEnumerable<ResourceCardType> Each(CardSet<ResourceCardType> cards) =>
@@ -596,23 +589,23 @@ namespace Client
                     }
 
                 case RoadAction road when !road.History!.WasFree:
-                    Pay(Spot(TargetOf(road)!.Value), ResourceCardType.Lumber, ResourceCardType.Brick);
+                    Pay(_ => Spot(TargetOf(road)!.Value), ResourceCardType.Lumber, ResourceCardType.Brick);
                     break;
 
                 case SettlementAction:
-                    Pay(Spot(TargetOf(action)!.Value), ResourceCardType.Lumber, ResourceCardType.Brick, ResourceCardType.Wool, ResourceCardType.Grain);
+                    Pay(_ => Spot(TargetOf(action)!.Value), ResourceCardType.Lumber, ResourceCardType.Brick, ResourceCardType.Wool, ResourceCardType.Grain);
                     break;
 
                 case CityAction:
-                    Pay(Spot(TargetOf(action)!.Value), ResourceCardType.Grain, ResourceCardType.Grain, ResourceCardType.Ore, ResourceCardType.Ore, ResourceCardType.Ore);
+                    Pay(_ => Spot(TargetOf(action)!.Value), ResourceCardType.Grain, ResourceCardType.Grain, ResourceCardType.Ore, ResourceCardType.Ore, ResourceCardType.Ore);
                     break;
 
                 case BuyDevelopmentCardAction buy:
                     {
-                        Pay(BankPosition, ResourceCardType.Wool, ResourceCardType.Grain, ResourceCardType.Ore);
+                        Pay(Bank, ResourceCardType.Wool, ResourceCardType.Grain, ResourceCardType.Ore);
                         delay += 0.15f;
                         FlyingCard drawn = Sees(player) ? buy.History!.DrawnType : FlyingCard.HiddenDevelopment;
-                        Fly(drawn, BankPosition, Hand(player, drawn));
+                        Fly(drawn, Bank(drawn), Hand(player, drawn));
                         break;
                     }
 
@@ -633,16 +626,16 @@ namespace Client
                     break;
 
                 case YearOfPlentyAction plenty:
-                    Fly(plenty.FirstChoice, BankPosition, Hand(player, plenty.FirstChoice));
-                    if (plenty.SecondChoice is ResourceCardType second) Fly(second, BankPosition, Hand(player, second));
+                    Fly(plenty.FirstChoice, Bank(plenty.FirstChoice), Hand(player, plenty.FirstChoice));
+                    if (plenty.SecondChoice is ResourceCardType second) Fly(second, Bank(second), Hand(player, second));
                     break;
 
                 case DiscardAction discard:
-                    Pay(BankPosition, [.. Each(discard.SelectedCards)]);
+                    Pay(Bank, [.. Each(discard.SelectedCards)]);
                     break;
 
                 case FourToOneTradeAction trade:
-                    BankTrade(trade.InputType, 4, trade.OutputType, TradeButtonPosition);
+                    BankTrade(trade.InputType, 4, trade.OutputType, Bank);
                     break;
 
                 case ThreeToOneTradeAction trade:
@@ -659,11 +652,6 @@ namespace Client
                     break;
             }
         }
-
-        /// <summary>
-        /// Where cards of a trade with the bank go: the Trade button where there is one (Play mode), else the bank
-        /// </summary>
-        private System.Numerics.Vector2 TradeButtonPosition() => _mode == InteractionMode.Play ? _tradeButtonCenter : BankPosition();
 
         /// <summary>
         /// The label of a port of a type in map coordinates, preferring one the player has a building at; null if the board has none
@@ -687,18 +675,12 @@ namespace Client
         }
 
         /// <summary>
-        /// Where cards go to and come from the bank: the middle of the board
+        /// Where a card goes to or comes from the bank: its slot in the bank strip (a hidden development card the deck's)
         /// </summary>
-        private System.Numerics.Vector2 BankPosition()
+        private System.Numerics.Vector2 BankSlot(FlyingCard card)
         {
-            Vector2f sum = new Vector2f();
-            int tiles = 0;
-            foreach (Tile tile in State.Board.Map.Where(t => t.IsLandTile()))
-            {
-                sum += _renderer.GetTileCenter(tile);
-                tiles++;
-            }
-            return ScreenPosition(tiles > 0 ? sum / tiles : sum);
+            if (card.Development != null || card.Resource == ResourceCardType.Unknown) return _bankDevelopmentSlot;
+            return card.Resource is ResourceCardType type && _bankSlots.TryGetValue(type, out System.Numerics.Vector2 slot) ? slot : _bankDevelopmentSlot;
         }
         #endregion
 
@@ -865,20 +847,6 @@ namespace Client
         }
 
         private int HumanCount() => Seats.Count(s => s == SeatKind.Human);
-
-        private void UpdateValuation()
-        {
-            _valuation = _stateValueNet != null
-                ? _stateValueNet.Run(StateVectorizer.For(_stateValueNet).Vectorize(State))
-                : SimpleAgent.StateValueFunc(State);
-
-            // The net rates a finished game by its position; the result itself is certain
-            if (State.HasEnded)
-            {
-                for (int i = 0; i < _valuation.Length; i++)
-                    _valuation[i] = i == State.Turn.PlayerIndex ? 1 : 0;
-            }
-        }
 
         private void Window_MouseWheelScrolled(object? sender, MouseWheelScrollEventArgs e)
         {
