@@ -11,7 +11,8 @@ namespace Agents.Inference
 {
     /// <summary>
     /// Where the value net runs. Auto takes the GPU if it is available, through DirectML on Windows and CUDA on Linux, and
-    /// the CPU otherwise; the environment variable CATANSIM_INFERENCE (cpu, dml or cuda) overrides it.
+    /// the CPU otherwise; the environment variable HEXFARER_INFERENCE (cpu, dml or cuda; the older CATANSIM_INFERENCE works
+    /// too) overrides it.
     /// </summary>
     public enum InferenceProvider { Auto, Cpu, DirectML, Cuda }
 
@@ -89,7 +90,7 @@ namespace Agents.Inference
                 catch (Exception e) when (e is OnnxRuntimeException or EntryPointNotFoundException or DllNotFoundException)
                 {
                     // No DirectX 12 GPU, or the CPU-only runtime (e.g. on Linux): fall back to the CPU
-                    if (Environment.GetEnvironmentVariable("CATANSIM_INFERENCE") == "dml") throw;
+                    if (InferenceSetting == "dml") throw;
                     provider = InferenceProvider.Cpu;
                 }
             }
@@ -102,7 +103,7 @@ namespace Agents.Inference
                 catch (Exception e) when (e is OnnxRuntimeException or EntryPointNotFoundException or DllNotFoundException)
                 {
                     // No NVIDIA GPU, or the CUDA or cuDNN libraries are missing: fall back to the CPU
-                    if (Environment.GetEnvironmentVariable("CATANSIM_INFERENCE") == "cuda") throw;
+                    if (InferenceSetting == "cuda") throw;
                     provider = InferenceProvider.Cpu;
                 }
             }
@@ -130,10 +131,16 @@ namespace Agents.Inference
             }
         }
 
+        /// <summary>
+        /// The provider forced by the environment, under the project's current or former name
+        /// </summary>
+        private static string? InferenceSetting =>
+            Environment.GetEnvironmentVariable("HEXFARER_INFERENCE") ?? Environment.GetEnvironmentVariable("CATANSIM_INFERENCE");
+
         private static InferenceProvider ResolveProvider(InferenceProvider provider)
         {
             if (provider != InferenceProvider.Auto) return provider;
-            return Environment.GetEnvironmentVariable("CATANSIM_INFERENCE") switch
+            return InferenceSetting switch
             {
                 "cpu" => InferenceProvider.Cpu,
                 "dml" => InferenceProvider.DirectML,

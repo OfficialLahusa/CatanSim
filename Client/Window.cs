@@ -18,7 +18,7 @@ namespace Client
         /// Options: --scene NAME [--seed N] starts in a preset situation (see GameScreen.Scenes), --size WIDTHxHEIGHT sets
         /// the window size instead of maximizing it, --screenshot FILE [--after SECONDS] saves a screenshot after a while and quits,
         /// --host PORT (or localhost:PORT) hosts the game for others, --join ADDRESS [--name N] [--role player|spectator|admin|agent] [--seat 1-4]
-        /// [--token T, or CATANSIM_TOKEN] [--fingerprint F] joins a game on a server (F: the certificate fingerprint for wss), --network opens the network window, --admin [TAB] the admin panel
+        /// [--token T, or HEXFARER_TOKEN] [--fingerprint F] joins a game on a server (F: the certificate fingerprint for wss), --network opens the network window, --admin [TAB] the admin panel
         /// </summary>
         public static void Main(String[] args)
         {
@@ -41,7 +41,7 @@ namespace Client
                 mode = new VideoMode(uint.Parse(parts[0]), uint.Parse(parts[1]));
             }
 
-            window = new RenderWindow(mode, "CatanSim", Styles.Default, new ContextSettings() { AntialiasingLevel = 8 });
+            window = new RenderWindow(mode, "Hexfarer", Styles.Default, new ContextSettings() { AntialiasingLevel = 8 });
 
             // Maximize window
             if (size == null) ShowWindow(window.SystemHandle, 3);
@@ -58,9 +58,11 @@ namespace Client
             if (scene != null) gameScreen.RunScene(scene, seed);
             if (Option("--host") is string host) gameScreen.HostFromCommandLine(host);
             if (Option("--join") is string join)
-                // The token may also come from CATANSIM_TOKEN, which keeps it out of process lists and shell history
+                // The token may also come from HEXFARER_TOKEN (or the older CATANSIM_TOKEN), which keeps it out of process lists and
+                // shell history
                 gameScreen.JoinFromCommandLine(join, Option("--name"), Option("--role"), Option("--seat") is string seatText ? int.Parse(seatText) : null,
-                    Option("--token") ?? Environment.GetEnvironmentVariable("CATANSIM_TOKEN"), Option("--fingerprint"));
+                    Option("--token") ?? Environment.GetEnvironmentVariable("HEXFARER_TOKEN") ?? Environment.GetEnvironmentVariable("CATANSIM_TOKEN"),
+                    Option("--fingerprint"));
             if (args.Contains("--network")) gameScreen.ShowNetworkWindow();
             if (args.Contains("--admin")) gameScreen.ShowAdminWindow(Option("--admin") is string tab && !tab.StartsWith("--") ? tab : null);
             string? selfTest = Option("--selftest");

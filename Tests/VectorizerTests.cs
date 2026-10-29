@@ -12,7 +12,7 @@ namespace Tests
     /// </summary>
     public class VectorizerTests
     {
-        private const string UpdateFixturesVariable = "CATANSIM_UPDATE_FIXTURES";
+        private const string UpdateFixturesVariable = "HEXFARER_UPDATE_FIXTURES";
         private static readonly StateVectorizer Vectorizer = new();
 
         [Fact]
@@ -153,7 +153,7 @@ namespace Tests
 
         /// <summary>
         /// Regenerates the parity fixtures shared with Tests/Python after an intended change of the encoding.
-        /// Runs only when CATANSIM_UPDATE_FIXTURES=1 is set.
+        /// Runs only when HEXFARER_UPDATE_FIXTURES=1 is set.
         /// </summary>
         [SkippableFact]
         public void RegenerateParityFixtures()

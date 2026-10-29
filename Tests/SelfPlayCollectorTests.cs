@@ -41,7 +41,7 @@ namespace Tests
         public void RunRecordsPositionsThatReplayFromTheSavedGames(string model)
         {
             string modelPath = TestUtil.FixturePath("ValueNet", model);
-            string root = Path.Combine(Path.GetTempPath(), "catansim-selfplay-" + Guid.NewGuid().ToString("N"));
+            string root = Path.Combine(Path.GetTempPath(), "hexfarer-selfplay-" + Guid.NewGuid().ToString("N"));
             try
             {
                 SelfPlaySettings settings = new()

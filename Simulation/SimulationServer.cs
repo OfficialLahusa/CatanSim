@@ -117,7 +117,7 @@ namespace Simulation
             if (!context.WebSockets.IsWebSocketRequest)
             {
                 context.Response.StatusCode = 400;
-                await context.Response.WriteAsync("CatanSim match: connect with a WebSocket.");
+                await context.Response.WriteAsync("Hexfarer match: connect with a WebSocket.");
                 return;
             }
 

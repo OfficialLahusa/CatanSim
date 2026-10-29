@@ -45,7 +45,7 @@ namespace Server
             await using SimulationServer server = await SimulationServer.StartAsync(match, config, path);
             console.Server = server;
 
-            Console.WriteLine($"CatanSim server listening on {(server.Secure ? "wss" : "ws")}://{config.BindAddress}:{server.Port}{Protocol.Path}. Type help for the commands.");
+            Console.WriteLine($"Hexfarer server listening on {(server.Secure ? "wss" : "ws")}://{config.BindAddress}:{server.Port}{Protocol.Path}. Type help for the commands.");
             if (server.CertificateFingerprint is string fingerprint)
                 Console.WriteLine($"Certificate fingerprint (clients enter it to trust this server): {fingerprint}");
             if (config.AllowRemoteAdmins && !server.Secure)

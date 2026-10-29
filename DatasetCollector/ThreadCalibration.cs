@@ -42,7 +42,7 @@ namespace DatasetCollector
 
         private static double Measure(CollectorSettings settings, TimeSpan duration)
         {
-            string directory = Path.Combine(Path.GetTempPath(), "catansim-calibration-" + Guid.NewGuid().ToString("N"));
+            string directory = Path.Combine(Path.GetTempPath(), "hexfarer-calibration-" + Guid.NewGuid().ToString("N"));
             try
             {
                 // Enough matches to last the whole run; the same run seed gives every candidate the same matches

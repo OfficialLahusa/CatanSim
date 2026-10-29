@@ -190,7 +190,7 @@ namespace Tests
         public void HistoryReferencesAreResolvedWhenLoading()
         {
             TestUtil.Seed(86);
-            string directory = Path.Combine(Path.GetTempPath(), "catansim-references-" + Guid.NewGuid().ToString("N"));
+            string directory = Path.Combine(Path.GetTempPath(), "hexfarer-references-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
 
             try

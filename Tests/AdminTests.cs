@@ -138,7 +138,7 @@ namespace Tests
         [Fact]
         public async Task TokenChangesAreSavedToTheConfig()
         {
-            string path = Path.Combine(Path.GetTempPath(), $"catansim-admin-{Guid.NewGuid():N}.json");
+            string path = Path.Combine(Path.GetTempPath(), $"hexfarer-admin-{Guid.NewGuid():N}.json");
             try
             {
                 using Match match = NewMatch();
@@ -164,7 +164,7 @@ namespace Tests
         [Fact]
         public void OldConfigsGetTokenIds()
         {
-            string path = Path.Combine(Path.GetTempPath(), $"catansim-old-{Guid.NewGuid():N}.json");
+            string path = Path.Combine(Path.GetTempPath(), $"hexfarer-old-{Guid.NewGuid():N}.json");
             try
             {
                 File.WriteAllText(path, """
@@ -475,7 +475,7 @@ namespace Tests
         [Fact]
         public void CertificatesAreCreatedOnceAndReloaded()
         {
-            string path = Path.Combine(Path.GetTempPath(), $"catansim-cert-{Guid.NewGuid():N}.pfx");
+            string path = Path.Combine(Path.GetTempPath(), $"hexfarer-cert-{Guid.NewGuid():N}.pfx");
             try
             {
                 using var created = ServerCertificates.LoadOrCreate(path);

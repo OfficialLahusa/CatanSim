@@ -31,7 +31,7 @@ namespace Simulation
         private static byte[] NewPfx(string? password)
         {
             using ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-            CertificateRequest request = new CertificateRequest("CN=CatanSim server", key, HashAlgorithmName.SHA256);
+            CertificateRequest request = new CertificateRequest("CN=Hexfarer server", key, HashAlgorithmName.SHA256);
             SubjectAlternativeNameBuilder names = new SubjectAlternativeNameBuilder();
             names.AddDnsName("localhost");
             names.AddDnsName(Environment.MachineName);

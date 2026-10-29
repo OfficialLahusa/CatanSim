@@ -11,7 +11,7 @@ namespace Tests
         [Fact]
         public void ConfigsKeepOnlyTokenHashesAndRoundTrip()
         {
-            string path = Path.Combine(Path.GetTempPath(), $"catansim-server-{Guid.NewGuid():N}.json");
+            string path = Path.Combine(Path.GetTempPath(), $"hexfarer-server-{Guid.NewGuid():N}.json");
             try
             {
                 ServerConfig config = new() { Port = 18018, BindAddress = "0.0.0.0", AllowAnonymousSpectators = false,

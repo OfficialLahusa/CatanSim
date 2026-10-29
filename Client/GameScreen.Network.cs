@@ -35,7 +35,11 @@ namespace Client
         private Hello? _lastHello;
         private string? _lastFingerprint;
 
-        private static string HostCertificatePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CatanSim", "host.pfx");
+        private static string AppData => Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        private static string HostCertificatePath => Path.Combine(AppData, "Hexfarer", "host.pfx");
+
+        // Where the certificate was kept under the project's former name
+        private static string OldHostCertificatePath => Path.Combine(AppData, "CatanSim", "host.pfx");
         private Uri? _lastUri;
         private string _joinAddress = "localhost:17017";
         private string _joinName = Environment.UserName;
@@ -399,6 +403,10 @@ namespace Client
         private static System.Security.Cryptography.X509Certificates.X509Certificate2 LoadHostCertificate()
         {
             Directory.CreateDirectory(Path.GetDirectoryName(HostCertificatePath)!);
+
+            // A certificate from before the rename moves over, so guests keep the fingerprint they know
+            if (!File.Exists(HostCertificatePath) && File.Exists(OldHostCertificatePath))
+                File.Copy(OldHostCertificatePath, HostCertificatePath);
             return ServerCertificates.LoadOrCreate(HostCertificatePath);
         }
 
