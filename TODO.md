@@ -1,6 +1,18 @@
 ## Simulator
 - PRIORITÄT: Eval-Bar zeigt bei beendetem Spiel nicht 100% für den Sieger (das Net bewertet den Endzustand) => bei HasEnded das echte Ergebnis anzeigen
 - Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
+	- Drei Modi Play, Spectate, Edit mit gemeinsamen Bausteinen (Brett, Sitz-Panels, Log, Würfel), Umschalter oben links; Debug-Werkzeuge (Playouts, Hashes) ins Menü
+	- Play: HumanAgent, Klicks filtern die legalen Moves des LegalActionProvider (keine eigene Validierung); Sitze Mensch/Agent mit Stärke-Presets, Agents ziehen selbst mit kurzer Pause
+	- Layout: Sitz-Panels links in Zugreihenfolge (Sitznummer, VP, Karten, Dev, Ritter, Straße, aktiver Sitz hervorgehoben), Banner oben mit der aktuellen Aufgabe, Log rechts in kurzen Sätzen, darunter Bauleiste mit Kosten, Handeln, Zug beenden
+	- Eigene Hand unten links als Stapel wie im CardWidget, ohne Zahlen; Karten, Kosten-Chips und Partikel im Kartenstil aus ColorPalette (Füllung Feldfarbe, Rand und Icon in Icon-Farbe), Icons aus dem Atlas
+	- Ghost Pieces für legale Spots: echte Figurenform in Spielerfarbe mit weißem Rand, pulsieren per Sinus (Deckkraft 45-90%, Größe 94-106%, 1,6 s, alle in Phase); Hover = solide Vorschau, 10% größer, Glow
+	- Würfelertrag: pro Ertrag fliegt eine Mini-Karte mit Spur vom Feld zur eigenen Hand bzw. zum Sitz-Panel, Aufblitzen bei Ankunft
+	- Auswahldialoge: Abwerfen, Räuber und Opfer, Erfindung, Monopol, Straßenbau, Bank-/Hafenhandel mit bestem Kurs; Endbildschirm mit VP-Aufschlüsselung
+	- Hidden Information im Play-Modus: nur die eigene Hand, Gegner als Anzahlen, Log ohne gestohlene Karten, Eval-Bar aus (nutzt volle Information)
+	- Spectate: Eval-Bar (Value Net oder Suche, mit Verlauf), Policy-Heatmap über alle legalen Moves (Visits/Prior, % am Brett, Liste mit Nicht-Brett-Moves wie Zug beenden), offene Hände, Wiedergabe (Pause, Schritt, Zughistorie, Denkzeit)
+	- Edit: jede Änderung als Action mit Undo/Redo und Log-Eintrag
+	- Umsetzung in ImGui mit eigenem Stil (Rundungen, Farben, Fonts, DrawList, InvisibleButton), Brett-Overlays (Ghosts, Heatmap, Partikel) im BoardRenderer
+	- Später: Spielerhandel (fehlt in der Engine), Coach-Modus (Zugvorschläge, Blunder-Check)
 	- Danach, erst wenn die UI im C#-Client fertig ist: Web-Client fürs Spielen (gleiche Farben, Icons und Proportionen; Brett als SVG, UI in HTML/CSS); Spiellogik und Agents bleiben in C# auf dem Simulation Server (SignalR/WebSocket), keine KI im Browser
 	- Der C#-Client bleibt die Obermenge (Analyse, Eval-Bar, Edit Mode, Playouts), der Web-Client deckt nur das Spielen ab
 	- Web-Client auch als Discord Activity (Embedded App SDK im iframe, z.B. im Voice-Channel): ein Spielraum pro Activity-Instanz, Spieler per Discord-OAuth, leere Sitze übernehmen Agents; Server per HTTPS erreichbar (URL-Mapping über Discords Proxy, für privates Spielen reicht ein Tunnel zum lokalen Server); dafür relative URLs, alles mitgeliefert (CSP), Layout fürs Handy
