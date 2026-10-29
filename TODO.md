@@ -7,9 +7,8 @@
 - Freier Handel umgesetzt (Regelbuch: nur mit dem Spieler am Zug, nach dem Wurf, keine Geschenke/gleichen Rohstoffe; Angebot, Annehmen/Ablehnen/Gegenangebot, Partnerwahl; Regel FreeTrade aus für Self-Play/Datasets, an im Client; Bots antworten per Value Net bzw. Handheuristik, max. 10 Angebote pro Zug)
 	- Offen: Bots machen selbst Angebote und Gegenangebote, Zeitlimit für Antworten im Netzwerkspiel, Handel im Policy Head/Training
 - Client-UI für echtes interaktives Spielen durch Menschen überarbeiten und fertigstellen
-	- Umgesetzt: Modi Play, Spectate, Edit (Ghosts aus den legalen Moves, Dialoge, Ertragspartikel, Hidden Info im Play, Policy-Heatmap und Eval-Bar im Spectate, Edit mit Undo/Redo und Log), HUD skaliert mit der Fensterhöhe; --selftest spielt Partien über die UI-Pfade
+	- Umgesetzt: Modi Play, Spectate, Edit (Ghosts aus den legalen Moves, Dialoge, Ertragspartikel, Hidden Info im Play, Policy-Heatmap und Eval-Bar im Spectate, Edit mit Undo/Redo und Log), HUD skaliert mit der Fensterhöhe; Hauptmenü (gegen Bots, Hot-Seat, Hosten, Beitreten, Laden; Einstellungen für Sounds, Lautstärke, Partikel und Bot-Tempo in %AppData%\Hexfarer\settings.json); --selftest spielt Partien über die UI-Pfade und das Menü
 	- Offen: Coach-Modus (Zugvorschläge, Blunder-Check); Hot-Seat mit verdeckter Übergabe ist umgesetzt (Vorhang zwischen zwei Menschen)
-	- Hauptmenü: lokales Spiel gegen Bots, Hot-Seat oder Verbindung zu einem Server usw. wählen; Einstellungen für Sounds, Partikel usw.
 	- Danach, erst wenn die UI im C#-Client fertig ist: Web-Client fürs Spielen (gleiche Farben, Icons und Proportionen; Brett als SVG, UI in HTML/CSS); Spiellogik und Agents bleiben in C# auf dem Simulation Server (SignalR/WebSocket), keine KI im Browser
 	- Der C#-Client bleibt die Obermenge (Analyse, Eval-Bar, Edit Mode, Playouts), der Web-Client deckt nur das Spielen ab
 	- Web-Client auch als Discord Activity (Embedded App SDK im iframe, z.B. im Voice-Channel): ein Spielraum pro Activity-Instanz, Spieler per Discord-OAuth, leere Sitze übernehmen Agents; Server per HTTPS erreichbar (URL-Mapping über Discords Proxy, für privates Spielen reicht ein Tunnel zum lokalen Server); dafür relative URLs, alles mitgeliefert (CSP), Layout fürs Handy
@@ -26,10 +25,7 @@
 	- 4. Belief-aware StateValueNet: Training auf StateView-Inputs (Views per Replay der Histories rekonstruierbar), Sichtbarkeits-Augmentation nach der echten Beobachtungsverteilung statt zufällig, erwartete versteckte VP als Feature
 	- 5. Particle MCTS / POMCP erst mit Spielerhandel (Angebote schwer als Constraints)
 - Client
-	- Font, Texture Atlas und Sounds relativ zum Arbeitsverzeichnis geladen => AppContext.BaseDirectory, res/ ins Build-Output kopieren
-	- SimulateRandomRollouts: kein Rundenlimit, countdown.Signal nicht im finally, Threadanzahl 0 hängt
-	- Fehlendes Exception Handling beim Auflisten von Verzeichnissen und Schreiben von Saves
-	- Linux-Port: RenderDataImpl.dll (nur Windows, ohne Quellcode) ersetzen, ShowWindow nur unter Windows, Pfade mit Path.Combine
+	- Linux-Port: RenderDataImpl.dll (nur Windows, ohne Quellcode) ersetzen, ShowWindow nur unter Windows (Ressourcen kommen schon aus res/ neben der Exe)
 
 ## Agents
 - Roadmap v2

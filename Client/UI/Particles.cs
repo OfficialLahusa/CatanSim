@@ -59,11 +59,15 @@ namespace Client.UI
 
         public bool IsEmpty => _particles.Count == 0 && _flashes.Count == 0;
 
+        // Off in the settings: no card starts flying
+        public bool Enabled { get; set; } = true;
+
         /// <summary>
         /// A card flying from a point to a destination, starting after a delay
         /// </summary>
         public void Add(FlyingCard card, Func<Vector2> from, Func<Vector2> to, float delay)
         {
+            if (!Enabled) return;
             _particles.Add(new Particle { Card = card, From = from, To = to, Delay = delay });
         }
 

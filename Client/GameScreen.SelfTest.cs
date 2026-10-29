@@ -43,11 +43,29 @@ namespace Client
             Random random = new Random(seed);
             Utils.Random.SeedCurrentThread(seed);
 
+            // The main menu: every page draws, the local game waits while it is open and goes on after it
+            OpenMenu();
+            Check(Playback.Paused, "the menu did not pause the local game");
+            foreach (MenuPage page in Enum.GetValues<MenuPage>())
+            {
+                _menuPage = page;
+                yield return true;
+            }
+            _menuPage = MenuPage.Main;
+            MenuBack();
+            Check(!_menuOpen && !Playback.Paused, "the game did not go on after the menu");
+
             for (int game = 0; game < games; game++)
             {
-                // The match's agents play the random seats without a pause; the human seat plays through the UI's paths
-                SetMode(InteractionMode.Play);
-                Send(new Simulation.NewGame([SeatKind.Random, SeatKind.Random, SeatKind.Random, SeatKind.Human], false));
+                // The match's agents play the random seats without a pause; the human seat plays through the UI's paths. The first
+                // game starts the way the menu starts one.
+                SeatKind[] seats = [SeatKind.Random, SeatKind.Random, SeatKind.Random, SeatKind.Human];
+                if (game == 0) StartGameFromMenu(seats, host: false);
+                else
+                {
+                    SetMode(InteractionMode.Play);
+                    Send(new Simulation.NewGame(seats, false));
+                }
                 Send(new SetPlayback(new PlaybackState(false, false, 0)));
 
                 int humanMoves = 0, frames = 0, stalled = 0, lastCount = -1;

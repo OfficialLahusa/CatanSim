@@ -46,10 +46,9 @@ namespace Client.UI
 
             // Rasterized at the pixel size they end up at, laid out at their size in UI units
             ImGuiIOPtr io = ImGui.GetIO();
-            const string dir = @"..\..\..\res\Open_Sans\static\";
             ImFontPtr Load(string file, float size)
             {
-                ImFontPtr font = io.Fonts.AddFontFromFileTTF(dir + file, size * uiScale);
+                ImFontPtr font = io.Fonts.AddFontFromFileTTF(ClientUtils.Resource("Open_Sans", "static", file), size * uiScale);
                 font.Scale = 1f / uiScale;
                 return font;
             }

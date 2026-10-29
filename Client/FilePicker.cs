@@ -32,6 +32,9 @@ namespace Client
         public List<string> AllowedExtensions;
         public bool OnlyAllowFolders;
 
+        // Why the current folder could not be listed (no access, removed meanwhile, drive not ready)
+        private string? _listError;
+
         public static FilePicker GetFolderPicker(object o, string startingPath, bool saveMode = false)
             => GetFilePicker(o, startingPath, saveMode, null, true);
 
@@ -80,6 +83,7 @@ namespace Client
         {
             ImGui.AlignTextToFramePadding();
             ImGui.Text("Current Folder: " + CurrentFolder.Split(Path.DirectorySeparatorChar).Last()); //Path.GetFileName(RootFolder) + CurrentFolder.Replace(RootFolder, ""));
+            if (_listError != null) ImGui.TextColored(ColorPalette.ColorToVec4(new Color(255, 120, 120)), _listError);
             bool result = false;
 
             if (ImGui.BeginChildFrame(1, new Num.Vector2(400, 400)))
@@ -203,7 +207,19 @@ namespace Client
             var files = new List<string>();
             var dirs = new List<string>();
 
-            foreach (var fse in Directory.GetFileSystemEntries(fullName, ""))
+            string[] entries;
+            try
+            {
+                entries = Directory.GetFileSystemEntries(fullName, "");
+                _listError = null;
+            }
+            catch (Exception e) when (e is UnauthorizedAccessException or IOException)
+            {
+                _listError = $"This folder can't be listed: {e.Message}";
+                return files;
+            }
+
+            foreach (var fse in entries)
             {
                 if (Directory.Exists(fse))
                 {

@@ -9,8 +9,8 @@ namespace Client
 
         static Sounds()
         {
-            DiceRolling = new SoundBuffer(@"..\..\..\res\dice_rolling.wav");
-            Place = new SoundBuffer(@"..\..\..\res\place.wav");
+            DiceRolling = new SoundBuffer(ClientUtils.Resource("dice_rolling.wav"));
+            Place = new SoundBuffer(ClientUtils.Resource("place.wav"));
         }
     }
 }

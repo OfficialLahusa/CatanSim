@@ -43,6 +43,14 @@ namespace Client
 
         private void DrawHud()
         {
+            // The menu covers the board; loading a game from it still needs the file dialog
+            if (_menuOpen)
+            {
+                DrawMenu();
+                DrawModals();
+                return;
+            }
+
             EventLog.Viewer = Viewer;
             OpenRequiredDialog();
 
@@ -130,7 +138,8 @@ namespace Client
 
         private float DrawToggle(ImDrawListPtr dl, string id, Vector2 min, string label, ref bool value)
         {
-            float width = 48 + Theme.TextSize(Theme.Regular15, label).X;
+            // The label starts at 46 and keeps some room before the border
+            float width = 54 + Theme.TextSize(Theme.Regular15, label).X;
             if (Theme.HitArea(id, min, new Vector2(width, 32), out _)) value = !value;
             dl.RoundRectFilled(min, min + new Vector2(width, 32), Theme.U32(Theme.Panel), 16);
             dl.RoundRect(min, min + new Vector2(width, 32), Theme.U32(Theme.Border), 16);
@@ -145,6 +154,8 @@ namespace Client
         {
             if (!ImGui.BeginPopup("main-menu")) return;
 
+            if (ImGui.MenuItem("Main menu", "Esc")) OpenMenu();
+            ImGui.Separator();
             if (ImGui.MenuItem("New game...", "", false, IsAdmin))
             {
                 Array.Copy(Seats, _newGameSeats, PLAYER_COUNT);
@@ -157,6 +168,7 @@ namespace Client
             if (ImGui.MenuItem("Admin panel...", "", _showAdminWindow, CanAdminister)) _showAdminWindow = !_showAdminWindow;
             ImGui.Separator();
             if (ImGui.MenuItem("Developer tools", "", _showDeveloperWindow)) _showDeveloperWindow = !_showDeveloperWindow;
+            if (ImGui.MenuItem("Settings...")) OpenMenu(MenuPage.Settings);
             ImGui.Separator();
             if (ImGui.MenuItem("Quit")) _window.Close();
             ImGui.EndPopup();
@@ -1177,6 +1189,8 @@ namespace Client
                 {
                     ReadSaveFile(picker.SelectedFile);
                     FilePicker.RemoveFilePicker(this);
+                    // Loaded from the main menu: the game is on (an older file asks about the upgrade first)
+                    if (_menuOpen && !_openUpgradeModal) CloseMenu();
                 }
                 ImGui.EndPopup();
             }
@@ -1192,6 +1206,7 @@ namespace Client
                 {
                     UpgradeAndLoadSaveFile(_pendingUpgradePath!);
                     ImGui.CloseCurrentPopup();
+                    if (_menuOpen) CloseMenu();
                 }
                 ImGui.SameLine();
                 if (ImGui.Button("Cancel")) ImGui.CloseCurrentPopup();

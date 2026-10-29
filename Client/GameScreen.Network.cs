@@ -77,6 +77,8 @@ namespace Client
                 {
                     StopHosting();
                     ReplaceSimulation(connecting.Result);
+                    // Joined from the main menu: the menu now returns to this game
+                    if (_menuOpen) CloseMenu();
                     _networkError = null;
                     _disconnectReason = null;
                     _eventLog.WriteLine(new ColoredStrEntry(connecting.Result.Description, Color.Green));

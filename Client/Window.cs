@@ -18,7 +18,7 @@ namespace Client
         /// Options: --scene NAME [--seed N] starts in a preset situation (see GameScreen.Scenes), --size WIDTHxHEIGHT sets
         /// the window size instead of maximizing it, --screenshot FILE [--after SECONDS] saves a screenshot after a while and quits,
         /// --host PORT (or localhost:PORT) hosts the game for others, --join ADDRESS [--name N] [--role player|spectator|admin|agent] [--seat 1-4]
-        /// [--token T, or HEXFARER_TOKEN] [--fingerprint F] joins a game on a server (F: the certificate fingerprint for wss), --network opens the network window, --admin [TAB] the admin panel
+        /// [--token T, or HEXFARER_TOKEN] [--fingerprint F] joins a game on a server (F: the certificate fingerprint for wss), --network opens the network window, --admin [TAB] the admin panel, --menu [PAGE] a page of the main menu (local, host, join, settings)
         /// </summary>
         public static void Main(String[] args)
         {
@@ -52,8 +52,9 @@ namespace Client
             float uiScale = Math.Clamp(MathF.Round(window.Size.Y / 1100f * 4) / 4, 0.75f, 2f);
             UI.Theme.Init(uiScale);
 
-            // Init Screen
-            GameScreen gameScreen = new GameScreen(window);
+            // Init Screen: the main menu first, unless the command line sets up the game
+            bool setUp = scene != null || new[] { "--selftest", "--host", "--join", "--network", "--admin" }.Any(args.Contains);
+            GameScreen gameScreen = new GameScreen(window, showMenu: !setUp);
             screen = gameScreen;
             if (scene != null) gameScreen.RunScene(scene, seed);
             if (Option("--host") is string host) gameScreen.HostFromCommandLine(host);
@@ -64,6 +65,7 @@ namespace Client
                     Option("--token") ?? Environment.GetEnvironmentVariable("HEXFARER_TOKEN") ?? Environment.GetEnvironmentVariable("CATANSIM_TOKEN"),
                     Option("--fingerprint"));
             if (args.Contains("--network")) gameScreen.ShowNetworkWindow();
+            if (args.Contains("--menu")) gameScreen.ShowMenuPage(Option("--menu"));
             if (args.Contains("--admin")) gameScreen.ShowAdminWindow(Option("--admin") is string tab && !tab.StartsWith("--") ? tab : null);
             string? selfTest = Option("--selftest");
             if (selfTest != null) gameScreen.StartSelfTest(int.Parse(selfTest), seed);

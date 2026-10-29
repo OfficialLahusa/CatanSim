@@ -145,7 +145,7 @@ namespace Client
             if (description == null) return;
             BoardEdit.RecomputeFromBoard(after);
             SendEdit(new BoardEdit(description, _editPlayer, State, after));
-            _placeSound.Play();
+            if (_settings.Sounds) _placeSound.Play();
         }
 
         /// <summary>

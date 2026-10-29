@@ -51,7 +51,7 @@ namespace Client
 
         static TextureAtlas()
         {
-            using Image image = new Image(@"..\..\..\res\atlas.png");
+            using Image image = new Image(ClientUtils.Resource("atlas.png"));
             using Image bled = BleedColors(image);
             Texture = new Texture(bled);
         }

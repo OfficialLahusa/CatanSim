@@ -139,6 +139,7 @@ namespace Client
             _overlay.Ghosts.Clear();
             _overlay.Heat.Clear();
             _overlay.Hovered = null;
+            if (_menuOpen) return;
 
             switch (_mode)
             {
@@ -266,6 +267,19 @@ namespace Client
         private void Window_KeyPressed(object? sender, KeyEventArgs e)
         {
             if (ImGui.GetIO().WantCaptureKeyboard) return;
+
+            if (_menuOpen)
+            {
+                if (e.Code == Keyboard.Key.Escape) MenuBack();
+                return;
+            }
+
+            // Escape opens the main menu, unless it first cancels a build or closes a dialog
+            if (e.Code == Keyboard.Key.Escape && _buildMode == BuildMode.None && _dialog == Dialog.None)
+            {
+                OpenMenu();
+                return;
+            }
 
             // Mode switch and screenshots work everywhere
             switch (e.Code)

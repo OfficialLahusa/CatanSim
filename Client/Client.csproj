@@ -17,6 +17,11 @@
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
+  <!-- The files the client loads at runtime, next to the executable (res/ also holds the icon sources and the atlas project) -->
+  <ItemGroup>
+    <None Include="res\atlas.png;res\*.wav;res\Open_Sans\OFL.txt;res\Open_Sans\static\OpenSans-*.ttf" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Agents\Agents.csproj" />
     <ProjectReference Include="..\Common\Common.csproj" />

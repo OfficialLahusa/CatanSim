@@ -115,11 +115,14 @@ namespace Client
 
         static GameScreen()
         {
-            Font = new Font(@"..\..\..\res\Open_Sans\static\OpenSans-Regular.ttf");
-            BoldFont = new Font(@"..\..\..\res\Open_Sans\static\OpenSans-Bold.ttf");
+            Font = new Font(ClientUtils.Resource("Open_Sans", "static", "OpenSans-Regular.ttf"));
+            BoldFont = new Font(ClientUtils.Resource("Open_Sans", "static", "OpenSans-Bold.ttf"));
         }
 
-        public GameScreen(RenderWindow window)
+        /// <summary>
+        /// The screen with a local game; the main menu opens over it unless the game was set up from the command line
+        /// </summary>
+        public GameScreen(RenderWindow window, bool showMenu = false)
         {
             _window = window;
 
@@ -132,7 +135,14 @@ namespace Client
             first.Settings.FreeTrade = true;
             SeatKind[] seats = Enumerable.Repeat(bot, PLAYER_COUNT).ToArray();
             seats[Random.Shared.Next(PLAYER_COUNT)] = SeatKind.Human;
-            _sim = StartLocal(first, seats);
+            // Behind the main menu the game waits, so no agent moves before the user chose what to play
+            PlaybackState playback = PlaybackState.Default with { PaceSeconds = _settings.BotPace };
+            _sim = StartLocal(first, seats, playback: showMenu ? playback with { Paused = true } : playback);
+            if (showMenu)
+            {
+                _menuOpen = _menuIsStartScreen = true;
+                _playbackBeforeMenu = playback;
+            }
 
             _renderer = new BoardRenderer(State.Board, 120, 20);
             _overlay = new BoardOverlay(_renderer);
@@ -149,10 +159,9 @@ namespace Client
             _rollDistribution = new float[15];
 
             _placeSound = new Sound(Sounds.Place);
-            _placeSound.Volume = 40f;
 
             _diceRollSound = new Sound(Sounds.DiceRolling);
-            _diceRollSound.Volume = 50f;
+            ApplySettings();
 
             _mapView = new View(ClientUtils.RoundVec2f(_renderer.GetTileCenter(3, 3)), new Vector2f(window.Size.X, window.Size.Y));
             _uiView = new View(new Vector2f(0, 0), _mapView.Size);
@@ -261,8 +270,8 @@ namespace Client
 
         public void HandleInput(Time deltaTime)
         {
-            // Block if ImGui is capturing input
-            if (ImGui.GetIO().WantCaptureKeyboard)
+            // Block if ImGui is capturing input or the menu covers the board
+            if (ImGui.GetIO().WantCaptureKeyboard || _menuOpen)
                 return;
 
             Vector2f moveDelta = new Vector2f();
@@ -311,7 +320,8 @@ namespace Client
         /// <summary>
         /// A match in this process, with its agents running
         /// </summary>
-        private LocalSimulation StartLocal(GameState state, SeatKind[] seats, IEnumerable<HistoryEntry>? history = null, IEnumerable<HistoryEntry>? redo = null)
+        private LocalSimulation StartLocal(GameState state, SeatKind[] seats, IEnumerable<HistoryEntry>? history = null, IEnumerable<HistoryEntry>? redo = null,
+            PlaybackState? playback = null)
         {
             Match match = new Match(state, seats, _valueNetAvailable);
             if (history != null || redo != null)
@@ -320,7 +330,7 @@ namespace Client
                 match.Handle(new SessionInfo("local", "Local", Role.Admin, null), new LoadGame(new GameState(state),
                     history?.Where(e => e.Action != null).Select(e => e.Action!).ToList() ?? [], redo?.Where(e => e.Action != null).Select(e => e.Action!).ToList() ?? []));
             }
-            match.Handle(new SessionInfo("local", "Local", Role.Admin, null), new SetPlayback(PlaybackState.Default));
+            match.Handle(new SessionInfo("local", "Local", Role.Admin, null), new SetPlayback(playback ?? PlaybackState.Default with { PaceSeconds = _settings.BotPace }));
             match.Start();
             return new LocalSimulation(match);
         }
@@ -754,8 +764,13 @@ namespace Client
             Console.WriteLine($"Avg. {ms / matches} ms/match, {ms / playedRounds} ms/round, {ms / playedActions} ms/action\n");
         }
 
+        // Random games can go on for a very long time; a playout that reaches this round counts as unfinished
+        private const int RolloutRoundLimit = 1000;
+
         private async Task SimulateRandomRollouts(GameState startState, int playoutCount, int threadCount)
         {
+            if (playoutCount <= 0 || startState.HasEnded) return;
+            threadCount = Math.Clamp(threadCount, 1, Environment.ProcessorCount);
             Console.WriteLine($"Simulating {playoutCount:n0} random playouts...");
 
             Clock playoutClock = new Clock();
@@ -767,19 +782,19 @@ namespace Client
                 randomAgents[i] = new RandomAgent(i);
 
             ConcurrentQueue<int> runs = new ConcurrentQueue<int>(Enumerable.Range(0, playoutCount));
-            CountdownEvent countdown = new CountdownEvent(playoutCount);
 
             object lockObj = new object();
             List<int> timesWon = new List<int>();
             for (int i = 0; i < PLAYER_COUNT; i++)
                 timesWon.Add(0);
+            int unfinished = 0;
 
             System.Action doPlayout = () =>
             {
                 while (runs.TryDequeue(out int runIdx))
                 {
                     GameState simState = new GameState(startState);
-                    while (!simState.HasEnded)
+                    while (!simState.HasEnded && simState.Turn.RoundCounter < RolloutRoundLimit)
                     {
                         // Find first player that is allowed to act on state
                         sbyte? actingPlayerIdx = null;
@@ -809,10 +824,9 @@ namespace Client
                     // Collect match result thread-safely
                     lock (lockObj)
                     {
-                        timesWon[winnerIdx]++;
+                        if (simState.HasEnded) timesWon[winnerIdx]++;
+                        else unfinished++;
                     }
-
-                    countdown.Signal();
                 }
             };
 
@@ -824,10 +838,16 @@ namespace Client
                 tasks.Add(Task.Run(doPlayout));
             }
 
-            countdown.Wait();
-
-            // Not strictly necessary, but ensures all tasks are complete
-            await Task.WhenAll(tasks);
+            // A failing playout ends its thread; the others finish the queue, then the error is reported
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"The random playouts failed: {e.Message}");
+                return;
+            }
 
             float totalSeconds = playoutClock.ElapsedTime.AsSeconds();
             Console.WriteLine($"All playouts completed in {totalSeconds} seconds ({playoutCount / totalSeconds:n1}/s, {playoutCount / totalSeconds / threadCount:n1}/s per thread).");
@@ -836,6 +856,7 @@ namespace Client
             {
                 Console.WriteLine($"Player {i} won {timesWon[i]:n0} times ({(float)timesWon[i] / playoutCount:P2})");
             }
+            if (unfinished > 0) Console.WriteLine($"{unfinished:n0} playouts were still running after {RolloutRoundLimit} rounds and count for nobody");
         }
         #endregion
 
@@ -897,6 +918,7 @@ namespace Client
 
         public void PlaySoundForAction(Action action)
         {
+            if (!_settings.Sounds) return;
             if (action is RollAction && _diceRollSound.Status != SoundStatus.Playing)
             {
                 _diceRollSound.Play();
@@ -1024,9 +1046,18 @@ namespace Client
             if (History.Any(entry => entry.Edit != null))
                 _eventLog.WriteLine(new ColoredStrEntry("The save keeps the edited position and the moves since the last edit", Color.Yellow));
 
-            SaveFile saveFile = new SaveFile(State, Record.ActionsSinceLastEdit(), Record.RedoActionsUntilEdit());
-            string saveData = SaveFileSerializer.Serialize(saveFile);
-            File.WriteAllText(filepath, saveData);
+            try
+            {
+                SaveFile saveFile = new SaveFile(State, Record.ActionsSinceLastEdit(), Record.RedoActionsUntilEdit());
+                File.WriteAllText(filepath, SaveFileSerializer.Serialize(saveFile));
+                _eventLog.WriteLine(new ColoredStrEntry($"Saved to \"{Path.GetFileName(filepath)}\"", Color.Green));
+            }
+            catch (Exception e)
+            {
+                // A full disk, a folder without write access or an invalid file name must not take the client down
+                Console.WriteLine($"Could not write save file \"{filepath}\": {e.Message}");
+                _eventLog.WriteLine(new ColoredStrEntry($"Could not save the game: {e.Message}", Color.Red));
+            }
         }
 
         /// <summary>
