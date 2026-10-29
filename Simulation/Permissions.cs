@@ -37,6 +37,8 @@ namespace Simulation
             SetPlayback or StepCommand => "control the playback",
             ConfigureAgents => "configure the agents",
             KickSession => "close connections",
+            CreateToken or RevokeToken => "manage tokens",
+            SetServerOptions => "change the server's options",
             _ => "do that"
         };
     }

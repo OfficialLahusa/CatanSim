@@ -237,6 +237,10 @@ ClientBin/
 *.dbproj.schemaview
 *.jfm
 *.pfx
+
+# Simulation server configuration (token hashes) and its certificate
+server.json
+server.pfx
 *.publishsettings
 orleans.codegen.cs
 

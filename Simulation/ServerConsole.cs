@@ -29,10 +29,13 @@ namespace Simulation
               status                       seats, turn, playback and connections
               sessions                     the connections with their IDs
               kick ID                      closes a connection
-              token admin                  a new admin token
-              token player SEAT            a new token for the player of a seat (1-4)
-              token agent SEAT             a new token for an agent bridge playing a seat
-              token spectator              a new spectator token
+              tokens                       the tokens with their IDs (the secrets are never stored)
+              token admin [LABEL]          a new admin token
+              token player SEAT [LABEL]    a new token for the player of a seat (1-4)
+              token agent SEAT [LABEL]     a new token for an agent bridge playing a seat
+              token spectator [LABEL]      a new spectator token
+              revoke ID                    removes a token and closes its connections
+              spectators on|off            whether anyone may watch without a token
               seat SEAT KIND               who plays a seat (human, easy, medium, hard, greedy, builder, simple, random)
               newgame KIND KIND KIND KIND  a new game on a new map with these seats (add "desert" for a central desert)
               pause / resume               stops or restarts the agents
@@ -56,6 +59,23 @@ namespace Simulation
                         _match.Handle(ConsoleSession, new KickSession(words[1]));
                         return $"Closing {words[1]}.";
                     case "token": return AddToken(words);
+                    case "tokens": return TokenList();
+                    case "revoke" when words.Length == 2:
+                        if (Server != null) return Server.RevokeToken(words[1]) ? $"Revoked {words[1]}." : $"There is no token {words[1]}.";
+                        if (Config.RemoveToken(words[1]) == null) return $"There is no token {words[1]}.";
+                        if (_path != null) Config.Save(_path);
+                        return $"Revoked {words[1]}.";
+                    case "spectators" when words.Length == 2 && words[1].ToLowerInvariant() is "on" or "off":
+                        {
+                            bool allow = words[1].Equals("on", StringComparison.OrdinalIgnoreCase);
+                            if (Server != null) Server.SetAllowAnonymousSpectators(allow);
+                            else
+                            {
+                                Config.AllowAnonymousSpectators = allow;
+                                if (_path != null) Config.Save(_path);
+                            }
+                            return allow ? "Anyone may watch without a token." : "Watching needs a token.";
+                        }
                     case "seat" when words.Length == 3:
                         {
                             int seat = ParseSeat(words[1]);
@@ -116,6 +136,7 @@ namespace Simulation
             if (words.Length < 2) return "Which role? admin, player SEAT, agent SEAT or spectator.";
             Role role;
             int? seat = null;
+            int labelStart = 2;
             switch (words[1].ToLowerInvariant())
             {
                 case "admin": role = Role.Admin; break;
@@ -125,15 +146,34 @@ namespace Simulation
                     role = words[1].Equals("player", StringComparison.OrdinalIgnoreCase) ? Role.Player : Role.Agent;
                     if (words.Length < 3) return $"A {words[1].ToLower()} token needs a seat (1-4).";
                     seat = ParseSeat(words[2]);
+                    labelStart = 3;
                     break;
                 default:
                     return $"Unknown role \"{words[1]}\": admin, player SEAT, agent SEAT or spectator.";
             }
 
-            string token = ServerConfig.NewToken();
-            Config.Tokens.Add(new TokenEntry(ServerConfig.HashToken(token), role, seat));
-            if (_path != null) Config.Save(_path);
-            return $"New {role.ToString().ToLower()} token{(seat is int s ? $" for seat {s + 1}" : "")} (shown once): {token}";
+            string label = string.Join(' ', words.Skip(labelStart));
+            string token;
+            TokenInfo info;
+            if (Server != null)
+            {
+                (info, token) = Server.CreateToken(role, seat, label);
+            }
+            else
+            {
+                (TokenEntry entry, token) = Config.AddToken(role, seat, label);
+                info = entry.Info;
+                if (_path != null) Config.Save(_path);
+            }
+            return $"New {role.ToString().ToLower()} token{(seat is int s ? $" for seat {s + 1}" : "")} {info.Id} (shown once): {token}";
+        }
+
+        private string TokenList()
+        {
+            List<TokenInfo> tokens = Config.TokenInfos();
+            if (tokens.Count == 0) return "No tokens.";
+            return string.Join(Environment.NewLine, tokens.Select(t =>
+                $"{t.Id}  {t.Role.ToString().ToLower()}{(t.Seat is int seat ? $" of seat {seat + 1}" : "")}  {(t.Label.Length > 0 ? t.Label + "  " : "")}created {t.Created:yyyy-MM-dd HH:mm} UTC"));
         }
 
         private static int ParseSeat(string word)

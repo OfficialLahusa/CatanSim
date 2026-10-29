@@ -58,8 +58,24 @@ namespace Simulation
         private static JsonArray Entries(IEnumerable<HistoryEntry> entries) => new(entries.Select(e => (JsonNode)Entry(e)).ToArray());
         private static List<HistoryEntry> Entries(JsonNode? node) => node!.AsArray().Select(Entry).ToList();
 
+        /// <summary>
+        /// An enum value by its name only: numbers ("7") and names of no member are refused
+        /// </summary>
+        private static T Named<T>(JsonNode? node) where T : struct, Enum
+        {
+            string text = (string)node!;
+            if (text.Length == 0 || !char.IsLetter(text[0]) || !Enum.TryParse(text, false, out T value) || !Enum.IsDefined(value))
+                throw new JsonException($"\"{text}\" is not a {typeof(T).Name}");
+            return value;
+        }
+
         private static JsonArray SeatKinds(SeatKind[] seats) => new(seats.Select(s => (JsonNode)s.ToString()).ToArray());
-        private static SeatKind[] SeatKinds(JsonNode? node) => node!.AsArray().Select(n => Enum.Parse<SeatKind>((string)n!)).ToArray();
+        private static SeatKind[] SeatKinds(JsonNode? node)
+        {
+            SeatKind[] seats = node!.AsArray().Select(Named<SeatKind>).ToArray();
+            if (seats.Length != 4) throw new JsonException($"A match has 4 seats, not {seats.Length}");
+            return seats;
+        }
 
         private static JsonObject Playback(PlaybackState p) => new() { ["paused"] = p.Paused, ["standIns"] = p.HumanStandIns, ["pace"] = p.PaceSeconds };
         private static PlaybackState Playback(JsonNode? node) => new((bool)node!["paused"]!, (bool)node["standIns"]!, (float)node["pace"]!);
@@ -71,7 +87,7 @@ namespace Simulation
             ["opponentModel"] = a.OpponentModel.ToString()
         };
 
-        private static AgentSettings Agents(JsonNode? node) => new((double?)node!["seconds"], (long)node["iterations"]!, Enum.Parse<OpponentModel>((string)node["opponentModel"]!));
+        private static AgentSettings Agents(JsonNode? node) => new((double?)node!["seconds"], (long)node["iterations"]!, Named<OpponentModel>(node["opponentModel"]));
 
         private static JsonObject Session(SessionInfo s) => new()
         {
@@ -82,7 +98,32 @@ namespace Simulation
             ["address"] = s.Address
         };
 
-        private static SessionInfo Session(JsonNode? node) => new((string)node!["id"]!, (string)node["name"]!, Enum.Parse<Role>((string)node["role"]!), (int?)node["seat"], (string?)node["address"] ?? "");
+        private static SessionInfo Session(JsonNode? node) => new((string)node!["id"]!, (string)node["name"]!, Named<Role>(node["role"]), (int?)node["seat"], (string?)node["address"] ?? "");
+
+        private static JsonObject Token(TokenInfo t) => new()
+        {
+            ["id"] = t.Id,
+            ["role"] = t.Role.ToString(),
+            ["seat"] = t.Seat,
+            ["label"] = t.Label,
+            ["created"] = t.Created.ToString("O"),
+        };
+
+        private static TokenInfo Token(JsonNode? node) => new((string)node!["id"]!, Named<Role>(node["role"]), (int?)node["seat"], (string?)node["label"] ?? "",
+            DateTimeOffset.Parse((string)node["created"]!, System.Globalization.CultureInfo.InvariantCulture));
+
+        private static JsonObject? Server(ServerInfo? s) => s == null ? null : new JsonObject
+        {
+            ["port"] = s.Port,
+            ["bind"] = s.BindAddress,
+            ["secure"] = s.Secure,
+            ["fingerprint"] = s.CertificateFingerprint,
+            ["anonymousSpectators"] = s.AllowAnonymousSpectators,
+            ["remoteAdmins"] = s.AllowRemoteAdmins,
+        };
+
+        private static ServerInfo? Server(JsonNode? node) => node == null ? null : new((int)node["port"]!, (string)node["bind"]!, (bool)node["secure"]!,
+            (string?)node["fingerprint"], (bool)node["anonymousSpectators"]!, (bool)node["remoteAdmins"]!);
         #endregion
 
         #region Commands
@@ -101,6 +142,9 @@ namespace Simulation
                 StepCommand => [],
                 ConfigureAgents c => new JsonObject { ["settings"] = Agents(c.Settings) },
                 KickSession k => new JsonObject { ["session"] = k.SessionId },
+                CreateToken t => new JsonObject { ["role"] = t.Role.ToString(), ["seat"] = t.Seat, ["label"] = t.Label },
+                RevokeToken r => new JsonObject { ["id"] = r.Id },
+                SetServerOptions o => new JsonObject { ["anonymousSpectators"] = o.AllowAnonymousSpectators },
                 _ => throw new ArgumentException($"Unknown command {command.GetType().Name}")
             };
             json["type"] = command.GetType().Name;
@@ -118,11 +162,14 @@ namespace Simulation
                 nameof(ApplyEdit) => new ApplyEdit(Edit(json["edit"])),
                 nameof(NewGame) => new NewGame(SeatKinds(json["seats"]), (bool)json["centerDesert"]!, (bool?)json["clearBoard"] ?? false),
                 nameof(LoadGame) => new LoadGame(State(json["state"]), Actions(json["played"]), Actions(json["redo"])),
-                nameof(SetSeat) => new SetSeat((int)json["seat"]!, Enum.Parse<SeatKind>((string)json["kind"]!)),
+                nameof(SetSeat) => new SetSeat((int)json["seat"]!, Named<SeatKind>(json["kind"])),
                 nameof(SetPlayback) => new SetPlayback(Playback(json["playback"])),
                 nameof(StepCommand) => new StepCommand(),
                 nameof(ConfigureAgents) => new ConfigureAgents(Agents(json["settings"])),
                 nameof(KickSession) => new KickSession((string)json["session"]!),
+                nameof(CreateToken) => new CreateToken(Named<Role>(json["role"]), (int?)json["seat"], (string?)json["label"] ?? ""),
+                nameof(RevokeToken) => new RevokeToken((string)json["id"]!),
+                nameof(SetServerOptions) => new SetServerOptions((bool)json["anonymousSpectators"]!),
                 string type => throw new JsonException($"Unknown command type \"{type}\""),
                 null => throw new JsonException("The message has no type")
             };
@@ -130,7 +177,12 @@ namespace Simulation
         #endregion
 
         #region Events
-        public static string Serialize(MatchEvent e)
+        // Every connection sends the same event: it is serialized once (while the match is locked, so cheaply matters)
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MatchEvent, string> Serialized = new();
+
+        public static string Serialize(MatchEvent e) => Serialized.GetValue(e, SerializeEvent);
+
+        private static string SerializeEvent(MatchEvent e)
         {
             JsonObject json = e switch
             {
@@ -153,6 +205,9 @@ namespace Simulation
                 SessionsEvent s => new JsonObject { ["sessions"] = new JsonArray(s.Sessions.Select(x => (JsonNode)Session(x)).ToArray()) },
                 ErrorEvent err => new JsonObject { ["message"] = err.Message },
                 ClosedEvent c => new JsonObject { ["reason"] = c.Reason },
+                TokenCreatedEvent t => new JsonObject { ["info"] = Token(t.Info), ["token"] = t.Token },
+                TokensEvent t => new JsonObject { ["tokens"] = new JsonArray(t.Tokens.Select(x => (JsonNode)Token(x)).ToArray()) },
+                ServerInfoEvent s => new JsonObject { ["server"] = Server(s.Info) },
                 _ => throw new ArgumentException($"Unknown event {e.GetType().Name}")
             };
             json["type"] = e.GetType().Name;
@@ -176,6 +231,9 @@ namespace Simulation
                 nameof(SessionsEvent) => new SessionsEvent(json["sessions"]!.AsArray().Select(Session).ToList()),
                 nameof(ErrorEvent) => new ErrorEvent((string)json["message"]!),
                 nameof(ClosedEvent) => new ClosedEvent((string)json["reason"]!),
+                nameof(TokenCreatedEvent) => new TokenCreatedEvent(Token(json["info"]), (string)json["token"]!),
+                nameof(TokensEvent) => new TokensEvent(json["tokens"]!.AsArray().Select(Token).ToList()),
+                nameof(ServerInfoEvent) => new ServerInfoEvent(Server(json["server"])),
                 string type => throw new JsonException($"Unknown event type \"{type}\""),
                 null => throw new JsonException("The message has no type")
             };
@@ -197,7 +255,7 @@ namespace Simulation
         {
             JsonNode json = JsonNode.Parse(text) ?? throw new JsonException("Empty message");
             if ((string?)json["type"] != nameof(Hello)) throw new JsonException("The first message must be a hello");
-            return new Hello((string?)json["name"] ?? "Guest", (string?)json["token"], Enum.Parse<Role>((string)json["role"]!), (int?)json["seat"], (string?)json["sessionId"]);
+            return new Hello((string?)json["name"] ?? "Guest", (string?)json["token"], Named<Role>(json["role"]), (int?)json["seat"], (string?)json["sessionId"]);
         }
         #endregion
     }

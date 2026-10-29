@@ -23,6 +23,17 @@ namespace Simulation
         /// </summary>
         public List<SessionInfo> Sessions { get; private set; } = [];
 
+        /// <summary>
+        /// The server's tokens (without secrets) and the server itself, for admins of a hosted match
+        /// </summary>
+        public List<TokenInfo> Tokens { get; private set; } = [];
+        public ServerInfo? Server { get; private set; }
+
+        /// <summary>
+        /// The token this admin created last, shown once; null once it was dismissed
+        /// </summary>
+        public TokenCreatedEvent? CreatedToken { get; set; }
+
         public void Apply(MatchEvent e)
         {
             switch (e)
@@ -55,6 +66,21 @@ namespace Simulation
                     break;
                 case SessionsEvent sessions:
                     Sessions = sessions.Sessions;
+                    break;
+                case TokensEvent tokens:
+                    Tokens = tokens.Tokens;
+                    break;
+                case TokenCreatedEvent created:
+                    CreatedToken = created;
+                    break;
+                case ServerInfoEvent server:
+                    Server = server.Info;
+                    if (server.Info == null)
+                    {
+                        Tokens = [];
+                        Sessions = [];
+                        CreatedToken = null;
+                    }
                     break;
             }
         }

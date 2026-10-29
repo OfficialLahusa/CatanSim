@@ -57,7 +57,7 @@ namespace Simulation
             Match = match;
             _listener = (e, to) =>
             {
-                if (to == null || to == Session!.Id) _events.Enqueue(e);
+                if (Match.IsFor(to, Session!)) _events.Enqueue(e);
             };
 
             // The snapshot and the listener under one lock, so no event is missed or doubled

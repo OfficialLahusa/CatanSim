@@ -74,6 +74,7 @@ namespace Client
             DrawModals();
             if (_showDeveloperWindow) DrawDeveloperWindow();
             DrawNetworkWindow();
+            DrawAdminWindow();
 
             _particles.Draw(ImGui.GetForegroundDrawList());
         }
@@ -145,6 +146,7 @@ namespace Client
             if (ImGui.MenuItem("Load game...", "", false, IsAdmin)) _openLoadModal = true;
             ImGui.Separator();
             if (ImGui.MenuItem("Host or join a game...")) _showNetworkWindow = true;
+            if (ImGui.MenuItem("Admin panel...", "", _showAdminWindow, CanAdminister)) _showAdminWindow = !_showAdminWindow;
             ImGui.Separator();
             if (ImGui.MenuItem("Developer tools", "", _showDeveloperWindow)) _showDeveloperWindow = !_showDeveloperWindow;
             ImGui.Separator();

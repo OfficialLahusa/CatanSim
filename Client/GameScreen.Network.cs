@@ -24,17 +24,23 @@ namespace Client
         private Task<SimulationServer>? _hostStarting;
         private readonly List<(string label, string token)> _hostTokens = [];
         private int _hostPort = 17017;
-        private bool _hostOnNetwork = true;
-        private bool _hostOpenToSpectators = true;
+        // Safe defaults: only this computer, watching needs a token; both are one click away
+        private bool _hostOnNetwork = false;
+        private bool _hostOpenToSpectators = false;
+        private bool _hostSecure = false;
         private string? _networkError;
 
         // Joining
         private Task<RemoteSimulation>? _connecting;
         private Hello? _lastHello;
+        private string? _lastFingerprint;
+
+        private static string HostCertificatePath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CatanSim", "host.pfx");
         private Uri? _lastUri;
         private string _joinAddress = "localhost:17017";
         private string _joinName = Environment.UserName;
         private string _joinToken = "";
+        private string _joinFingerprint = "";
         private int _joinRole = 0;
         private int _joinSeat = 0;
         private static readonly string[] JoinRoles = ["Player", "Spectator", "Admin", "Agent bridge"];
@@ -70,10 +76,12 @@ namespace Client
                     _networkError = null;
                     _disconnectReason = null;
                     _eventLog.WriteLine(new ColoredStrEntry(connecting.Result.Description, Color.Green));
+                    // Spectators can't play, so they start with the eval bar and the moves
+                    if (connecting.Result.Session?.Role == Role.Spectator) SetMode(InteractionMode.Spectate);
                 }
                 else
                 {
-                    _networkError = connecting.Exception?.GetBaseException().Message ?? "The connection failed.";
+                    _networkError = DescribeConnectionFailure(connecting.Exception);
                 }
             }
 
@@ -92,6 +100,27 @@ namespace Client
                     _networkError = starting.Exception?.GetBaseException().Message ?? "The server did not start.";
                 }
             }
+        }
+
+        /// <summary>
+        /// Why a connection failed, in words that say what to do about it
+        /// </summary>
+        private string DescribeConnectionFailure(Exception? failure)
+        {
+            if (failure == null) return "The connection failed.";
+            List<Exception> chain = [];
+            for (Exception? e = failure; e != null; e = e.InnerException)
+            {
+                if (e is AggregateException aggregate) chain.AddRange(aggregate.InnerExceptions);
+                chain.Add(e);
+            }
+            if (chain.Any(e => e is System.Security.Authentication.AuthenticationException))
+                return string.IsNullOrWhiteSpace(_joinFingerprint)
+                    ? "The server's certificate isn't trusted: enter the fingerprint the server shows."
+                    : "The server's certificate doesn't match the fingerprint: check it with the server's admin.";
+            if (failure.GetBaseException() is InvalidOperationException refused) return refused.Message;
+            string message = failure.GetBaseException().Message;
+            return string.IsNullOrWhiteSpace(_joinFingerprint) ? $"{message} (if the server uses TLS, enter its fingerprint)" : message;
         }
 
         /// <summary>
@@ -116,28 +145,33 @@ namespace Client
 
             // A player token per human seat and one for watching; the host itself is the admin
             _hostTokens.Clear();
-            List<TokenEntry> entries = [];
+            ServerConfig tokens = new ServerConfig();
             for (int seat = 0; seat < PLAYER_COUNT; seat++)
             {
                 if (!IsHuman(seat)) continue;
-                string token = ServerConfig.NewToken();
-                _hostTokens.Add(($"{Theme.PlayerName(seat)} (seat {seat + 1})", token));
-                entries.Add(new TokenEntry(ServerConfig.HashToken(token), Role.Player, seat));
+                _hostTokens.Add(($"{Theme.PlayerName(seat)} (seat {seat + 1})", tokens.AddToken(Role.Player, seat, Theme.PlayerName(seat)).token));
             }
-            if (!_hostOpenToSpectators)
-            {
-                string token = ServerConfig.NewToken();
-                _hostTokens.Add(("Spectators", token));
-                entries.Add(new TokenEntry(ServerConfig.HashToken(token), Role.Spectator, null));
-            }
+            if (!_hostOpenToSpectators) _hostTokens.Add(("Spectators", tokens.AddToken(Role.Spectator, null, "Spectators").token));
 
-            ServerConfig config = new ServerConfig
+            ServerConfig config;
+            try
             {
-                Port = _hostPort,
-                BindAddress = _hostOnNetwork ? "0.0.0.0" : "127.0.0.1",
-                AllowAnonymousSpectators = _hostOpenToSpectators,
-                Tokens = entries
-            };
+                config = new ServerConfig
+                {
+                    Port = _hostPort,
+                    BindAddress = _hostOnNetwork ? "0.0.0.0" : "127.0.0.1",
+                    AllowAnonymousSpectators = _hostOpenToSpectators,
+                    Tokens = tokens.Tokens,
+                    // One certificate per computer, so guests can keep the fingerprint they pinned
+                    Certificate = _hostSecure ? LoadHostCertificate() : null
+                };
+            }
+            catch (Exception e)
+            {
+                _hostTokens.Clear();
+                _networkError = $"The certificate could not be loaded: {e.Message}";
+                return;
+            }
             _hostStarting = SimulationServer.StartAsync(local.Match, config);
         }
 
@@ -155,7 +189,7 @@ namespace Client
         {
             if (_connecting != null) return;
             string address = _joinAddress.Trim();
-            if (!address.Contains("://")) address = "ws://" + address;
+            if (!address.Contains("://")) address = (string.IsNullOrWhiteSpace(_joinFingerprint) ? "ws://" : "wss://") + address;
             if (!Uri.TryCreate(address, UriKind.Absolute, out Uri? uri))
             {
                 _networkError = "That is not an address (like 192.168.1.20:17017).";
@@ -168,13 +202,14 @@ namespace Client
             _lastHello = new Hello(_joinName, string.IsNullOrWhiteSpace(_joinToken) ? null : _joinToken.Trim(), role, role is Role.Player or Role.Agent ? _joinSeat : null, null);
             _lastUri = uri;
             _networkError = null;
-            _connecting = RemoteSimulation.ConnectAsync(uri, _lastHello);
+            _lastFingerprint = string.IsNullOrWhiteSpace(_joinFingerprint) ? null : _joinFingerprint.Trim();
+            _connecting = RemoteSimulation.ConnectAsync(uri, _lastHello, _lastFingerprint);
         }
 
         private void Reconnect()
         {
             if (_lastHello == null || _lastUri == null || _connecting != null) return;
-            _connecting = RemoteSimulation.ConnectAsync(_lastUri, _lastHello with { SessionId = _sim.Session?.Id });
+            _connecting = RemoteSimulation.ConnectAsync(_lastUri, _lastHello with { SessionId = _sim.Session?.Id }, _lastFingerprint);
         }
 
         /// <summary>
@@ -249,8 +284,9 @@ namespace Client
         /// <summary>
         /// Joins a server from the command line (--join ADDRESS with --name, --role, --seat and --token)
         /// </summary>
-        public void JoinFromCommandLine(string address, string? name, string? role, int? seat, string? token)
+        public void JoinFromCommandLine(string address, string? name, string? role, int? seat, string? token, string? fingerprint)
         {
+            if (fingerprint != null) _joinFingerprint = fingerprint;
             _joinAddress = address;
             if (name != null) _joinName = name;
             if (role != null) _joinRole = Math.Max(0, Array.FindIndex(JoinRoleValues, r => r.ToString().Equals(role, StringComparison.OrdinalIgnoreCase)));
@@ -307,6 +343,12 @@ namespace Client
             _hostPort = Math.Clamp(_hostPort, 1024, 65535);
             ImGui.Checkbox("Reachable from other computers", ref _hostOnNetwork);
             ImGui.Checkbox("Anyone may watch without a token", ref _hostOpenToSpectators);
+            ImGui.Checkbox("Encrypt connections (TLS; guests enter the fingerprint)", ref _hostSecure);
+            if (_hostOnNetwork && _hostOpenToSpectators)
+            {
+                using (new ImGuiTextColor(new Color(255, 200, 90)))
+                    ImGui.TextWrapped("Watchers see every hand: hidden cards are only hidden in the client.");
+            }
             ImGui.TextDisabled($"Each human seat gets a token ({HumanCount()} now); set seats to Human first for more players.");
             if (_hostStarting != null) ImGui.TextUnformatted("Starting...");
             else if (ImGui.Button("Start hosting", new Vector2(160, 0))) StartHosting();
@@ -315,51 +357,49 @@ namespace Client
         private void DrawHostingSection(SimulationServer server)
         {
             ImGui.PushFont(Theme.Bold15);
-            ImGui.TextUnformatted($"Hosting on port {server.Port}");
+            ImGui.TextUnformatted($"Hosting on port {server.Port}{(server.Secure ? " with TLS" : "")}");
             ImGui.PopFont();
-            string addresses = server.Config.BindAddress == "0.0.0.0" ? string.Join(", ", LocalAddresses().Select(a => $"{a}:{server.Port}")) : $"localhost:{server.Port}";
-            ImGui.TextWrapped($"Address: {(addresses.Length > 0 ? addresses : $"localhost:{server.Port}")}");
+            string scheme = server.Secure ? "wss://" : "";
+            string addresses = server.Config.BindAddress == "0.0.0.0" ? string.Join(", ", LocalAddresses().Select(a => $"{scheme}{a}:{server.Port}")) : $"{scheme}localhost:{server.Port}";
+            ImGui.TextWrapped($"Address: {(addresses.Length > 0 ? addresses : $"{scheme}localhost:{server.Port}")}");
+            if (server.CertificateFingerprint is string fingerprint) DrawFingerprint(fingerprint);
 
-            ImGui.Spacing();
-            ImGui.TextUnformatted("Tokens (give each player theirs):");
-            foreach ((string label, string token) in _hostTokens)
+            if (_hostTokens.Count > 0)
             {
-                ImGui.TextUnformatted($"{label}:");
-                ImGui.SameLine(190);
-                ImGui.TextUnformatted(token);
-                ImGui.SameLine();
-                if (ImGui.SmallButton($"Copy##{label}")) SFML.Window.Clipboard.Contents = token;
+                ImGui.Spacing();
+                ImGui.TextUnformatted("Tokens from the start (give each player theirs):");
+                foreach ((string label, string token) in _hostTokens)
+                {
+                    ImGui.TextUnformatted($"{label}:");
+                    ImGui.SameLine(190);
+                    ImGui.TextUnformatted(token[..8] + "...");
+                    ImGui.SameLine();
+                    if (ImGui.SmallButton($"Copy##{label}")) SFML.Window.Clipboard.Contents = token;
+                }
             }
             if (server.Config.AllowAnonymousSpectators) ImGui.TextDisabled("Spectators join without a token.");
+            ImGui.TextDisabled($"{server.Sessions.Count} connected. Tokens, connections and options are in the admin panel.");
 
             ImGui.Spacing();
-            DrawSessions(server.Sessions);
-
-            ImGui.Spacing();
+            if (ImGui.Button("Admin panel", new Vector2(160, 0))) _showAdminWindow = true;
+            ImGui.SameLine();
             if (ImGui.Button("Stop hosting", new Vector2(160, 0))) StopHosting();
         }
 
-        private void DrawSessions(IReadOnlyList<SessionInfo> sessions)
+        /// <summary>
+        /// A certificate's fingerprint, shortened, with a button to copy it whole
+        /// </summary>
+        private static void DrawFingerprint(string fingerprint)
         {
-            ImGui.TextUnformatted(sessions.Count == 0 ? "Nobody connected yet." : "Connected:");
-            foreach (SessionInfo session in sessions)
-            {
-                string what = session.Role switch
-                {
-                    Role.Player => $"seat {session.Seat + 1}",
-                    Role.Agent => $"bridge, seat {session.Seat + 1}",
-                    _ => session.Role.ToString().ToLower()
-                };
-                using (new ImGuiTextColor(session.Seat is int seat ? Theme.PlayerTextColor(seat) : Theme.TextSoft))
-                    ImGui.TextUnformatted($"{session.Name}");
-                ImGui.SameLine(160);
-                ImGui.TextDisabled($"{what}  {session.Address}");
-                if (IsAdmin && session.Id != _sim.Session?.Id)
-                {
-                    ImGui.SameLine(440);
-                    if (ImGui.SmallButton($"Kick##{session.Id}")) _sim.Send(new KickSession(session.Id));
-                }
-            }
+            ImGui.TextUnformatted($"Certificate fingerprint: {fingerprint[..16]}...");
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Copy##fingerprint")) SFML.Window.Clipboard.Contents = fingerprint;
+        }
+
+        private static System.Security.Cryptography.X509Certificates.X509Certificate2 LoadHostCertificate()
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(HostCertificatePath)!);
+            return ServerCertificates.LoadOrCreate(HostCertificatePath);
         }
 
         private void DrawJoinSection()
@@ -381,6 +421,8 @@ namespace Client
             }
             ImGui.SetNextItemWidth(260);
             ImGui.InputText("Token", ref _joinToken, 100, ImGuiInputTextFlags.Password);
+            ImGui.SetNextItemWidth(260);
+            ImGui.InputText("Fingerprint (TLS only)", ref _joinFingerprint, 100);
             ImGui.TextDisabled("Watching may work without a token; playing needs the token of your seat.");
             if (_connecting != null) ImGui.TextUnformatted("Connecting...");
             else if (ImGui.Button("Connect", new Vector2(160, 0))) Connect();
@@ -402,7 +444,13 @@ namespace Client
                 return;
             }
 
-            if (remote.Session?.Role == Role.Admin) DrawSessions(remote.Game.Sessions);
+            if (remote.Game.Server?.CertificateFingerprint is string fingerprint) DrawFingerprint(fingerprint);
+            if (remote.Session?.Role == Role.Admin)
+            {
+                ImGui.TextDisabled($"{remote.Game.Sessions.Count} connected. Tokens, connections and options are in the admin panel.");
+                if (ImGui.Button("Admin panel", new Vector2(160, 0))) _showAdminWindow = true;
+                ImGui.SameLine();
+            }
             else ImGui.TextDisabled(remote.Session?.Role == Role.Spectator ? "You are watching: hands stay hidden." : "You play your seat; the admin controls the match.");
             ImGui.Spacing();
             if (ImGui.Button("Leave", new Vector2(160, 0))) Disconnect();

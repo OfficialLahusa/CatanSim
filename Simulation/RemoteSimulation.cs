@@ -46,13 +46,24 @@ namespace Simulation
             _sending = Task.Run(SendLoopAsync);
         }
 
+        // Even a long game with its whole history stays far below this; more is a broken or hostile server
+        private const int MaxMessageBytes = 64 * 1024 * 1024;
+
         /// <summary>
         /// Connects and says hello; throws if the server refuses (with its reason) or can't be reached
         /// </summary>
-        public static async Task<RemoteSimulation> ConnectAsync(Uri uri, Hello hello, CancellationToken cancellation = default)
+        /// <param name="certificateFingerprint">For wss://: the SHA-256 fingerprint of the server's certificate, trusted instead of a
+        /// certificate authority (the server prints it); without it the certificate must be trusted by the system</param>
+        public static async Task<RemoteSimulation> ConnectAsync(Uri uri, Hello hello, string? certificateFingerprint = null, CancellationToken cancellation = default)
         {
             ClientWebSocket socket = new ClientWebSocket();
             socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
+            if (!string.IsNullOrWhiteSpace(certificateFingerprint))
+            {
+                string pin = ServerCertificates.NormalizeFingerprint(certificateFingerprint);
+                socket.Options.RemoteCertificateValidationCallback = (_, certificate, _, _) =>
+                    certificate != null && ServerCertificates.Fingerprint(certificate) == pin;
+            }
             try
             {
                 using CancellationTokenSource timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
@@ -60,7 +71,7 @@ namespace Simulation
                 await socket.ConnectAsync(uri, timeout.Token);
                 await socket.SendAsync(Encoding.UTF8.GetBytes(Protocol.Serialize(hello)), WebSocketMessageType.Text, true, timeout.Token);
 
-                string? first = await SimulationServer.ReceiveAsync(socket, timeout.Token);
+                string? first = await SimulationServer.ReceiveAsync(socket, timeout.Token, MaxMessageBytes);
                 MatchEvent? welcome = first != null ? Protocol.DeserializeEvent(first) : null;
                 return welcome switch
                 {
@@ -106,7 +117,7 @@ namespace Simulation
             {
                 while (!_closing.IsCancellationRequested)
                 {
-                    string? text = await SimulationServer.ReceiveAsync(_socket, _closing.Token);
+                    string? text = await SimulationServer.ReceiveAsync(_socket, _closing.Token, MaxMessageBytes);
                     if (text == null) break;
                     _events.Enqueue(Protocol.DeserializeEvent(text));
                 }

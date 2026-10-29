@@ -174,7 +174,8 @@ namespace Client
         /// </summary>
         private bool ControlsSeat(int seat) => _sim.Session is SessionInfo session && session.Role switch
         {
-            Role.Admin => IsHuman(seat),
+            // An admin plays human seats that no connected player or agent bridge holds
+            Role.Admin => IsHuman(seat) && !_sim.Game.Sessions.Any(s => s.Role is Role.Player or Role.Agent && s.Seat == seat && s.Id != session.Id),
             Role.Player or Role.Agent => session.Seat == seat && IsHuman(seat),
             _ => false
         };
@@ -333,8 +334,24 @@ namespace Client
         /// </summary>
         private void ProcessSimulation()
         {
-            _sim.ProcessEvents(OnSimulationEvent);
+            try
+            {
+                _sim.ProcessEvents(OnSimulationEvent);
+            }
+            catch (Exception e) when (_sim is RemoteSimulation remote)
+            {
+                // The client's copy can't follow the server any more: better disconnected than wrong
+                remote.Dispose();
+                _disconnectReason = $"The server sent something this client can't apply ({e.Message})";
+                _showNetworkWindow = true;
+                _eventLog.WriteLine(new ColoredStrEntry($"Disconnected: {_disconnectReason}", Color.Red));
+            }
         }
+
+        /// <summary>
+        /// An edit's description as the start of a log line (descriptions from a server may be anything, empty too)
+        /// </summary>
+        private static string Capitalized(string text) => text.Length == 0 ? "(no description)" : char.ToUpper(text[0]) + text[1..];
 
         private void OnSimulationEvent(MatchEvent e)
         {
@@ -371,7 +388,7 @@ namespace Client
                     }
                     else if (applied.Entry.Edit is BoardEdit edit)
                     {
-                        _eventLog.WriteLine(new SentenceEntry([("Edit: ", Theme.TextMuted), (char.ToUpper(edit.Description[0]) + edit.Description[1..], Theme.TextSoft)]));
+                        _eventLog.WriteLine(new SentenceEntry([("Edit: ", Theme.TextMuted), (Capitalized(edit.Description), Theme.TextSoft)]));
                         _eventLog.PushSection();
                         _overlay.ClearRoll();
                     }
@@ -458,7 +475,9 @@ namespace Client
         /// </summary>
         private void ApplyPlaybackForMode(bool playing)
         {
-            if (!IsAdmin) return;
+            // With players connected, the admin's own view doesn't pause the match or hand their seats to stand-ins; the admin
+            // panel's playback controls still do
+            if (!IsAdmin || _sim.Game.Sessions.Any(s => s.Role is Role.Player or Role.Agent)) return;
             PlaybackState playback = _mode switch
             {
                 InteractionMode.Play => Playback with { Paused = false, HumanStandIns = false },
@@ -849,7 +868,7 @@ namespace Client
                     else
                     {
                         replay = entry.Edit!.After;
-                        _eventLog.WriteLine(new SentenceEntry([("Edit: ", Theme.TextMuted), (char.ToUpper(entry.Edit.Description[0]) + entry.Edit.Description[1..], Theme.TextSoft)]));
+                        _eventLog.WriteLine(new SentenceEntry([("Edit: ", Theme.TextMuted), (Capitalized(entry.Edit.Description), Theme.TextSoft)]));
                         _eventLog.PushSection();
                     }
                 }

@@ -34,9 +34,20 @@ namespace Simulation
         public event Action<MatchEvent, string?>? Published;
 
         /// <summary>
-        /// Raised for a command the match can't handle itself (kicking a session), after the role check
+        /// Raised for a command the match can't handle itself (kicking a session, tokens, server options), after the role check.
+        /// Without a handler (a match nobody hosts) such commands are refused.
         /// </summary>
         public event Action<SessionInfo, Command>? HostCommand;
+
+        /// <summary>
+        /// The recipient for events only admins get (connections, tokens, the server)
+        /// </summary>
+        public const string Admins = "@admins";
+
+        /// <summary>
+        /// Whether a listener of the given session gets an event for this recipient
+        /// </summary>
+        public static bool IsFor(string? to, SessionInfo session) => to == null || to == session.Id || (to == Admins && session.Role == Role.Admin);
 
         public Match(GameState state, SeatKind[] seats, bool? valueNetAvailable = null)
         {
@@ -125,6 +136,14 @@ namespace Simulation
         private void Publish(MatchEvent e, string? to = null) => Published?.Invoke(e, to);
 
         /// <summary>
+        /// Sends an event from the host (the server) to the match's listeners, in order with the match's own events
+        /// </summary>
+        public void Notify(MatchEvent e, string? to)
+        {
+            lock (_lock) Publish(e, to);
+        }
+
+        /// <summary>
         /// Checks and applies a command from a session
         /// </summary>
         public void Handle(SessionInfo sender, Command command)
@@ -170,6 +189,11 @@ namespace Simulation
 
                     case NewGame newGame:
                         {
+                            if (newGame.Seats.Length != _seats.Length || newGame.Seats.Any(k => !Enum.IsDefined(k)))
+                            {
+                                Publish(new ErrorEvent($"A new game needs {_seats.Length} known seat kinds."), sender.Id);
+                                return;
+                            }
                             GameState state = newGame.ClearBoard ? new GameState(Record.State) : new GameState(MapGenerator.GenerateRandomClassic(newGame.CenterDesert), (uint)Record.State.Players.Length);
                             if (newGame.ClearBoard)
                             {
@@ -192,6 +216,11 @@ namespace Simulation
                         break;
 
                     case SetSeat seat:
+                        if (seat.Seat is < 0 or >= 4 || !Enum.IsDefined(seat.Kind))
+                        {
+                            Publish(new ErrorEvent($"There is no seat {seat.Seat + 1} or seat kind {seat.Kind}."), sender.Id);
+                            return;
+                        }
                         _seats[seat.Seat] = seat.Kind;
                         _agents[seat.Seat] = Simulation.Seats.CreateAgent(seat.Kind, (sbyte)seat.Seat, Record.State, AgentSettings, _valueNetAvailable);
                         Publish(new SeatsEvent((SeatKind[])_seats.Clone()));
@@ -223,8 +252,13 @@ namespace Simulation
                         else _runner?.RequestStep();
                         break;
 
-                    case KickSession:
-                        HostCommand?.Invoke(sender, command);
+                    case KickSession or CreateToken or RevokeToken or SetServerOptions:
+                        if (HostCommand == null)
+                        {
+                            Publish(new ErrorEvent("This match isn't hosted: start hosting it first."), sender.Id);
+                            return;
+                        }
+                        HostCommand.Invoke(sender, command);
                         break;
                 }
             }
@@ -235,13 +269,16 @@ namespace Simulation
 
         private bool PlayLocked(Action action, SessionInfo sender)
         {
-            if (Record.State.HasEnded || !Record.State.CanPlayerAct(action.PlayerIndex) || !action.IsValidFor(Record.State))
+            // The match decides the random outcomes (dice, drawn and stolen cards) and what undo restores: a history that came
+            // with the move is dropped, or a client could pick its own dice
+            Action played = action.Clone();
+            if (played is IReplayAction replay) replay.ClearHistory();
+            if (played.PlayerIndex is < 0 or >= 4 || Record.State.HasEnded || !Record.State.CanPlayerAct(played.PlayerIndex) || !played.IsValidFor(Record.State))
             {
                 Publish(new ErrorEvent($"{action.GetType().Name} is not a legal move now."), sender.Id);
                 return false;
             }
 
-            Action played = action.Clone();
             Record.Apply(HistoryEntry.Of(played));
             NotifyAgentsLocked(played);
             Publish(new AppliedEvent(HistoryEntry.Of(played.Clone()), false));

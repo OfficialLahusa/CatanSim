@@ -45,6 +45,21 @@ namespace Simulation
     public sealed record KickSession(string SessionId) : Command;
 
     /// <summary>
+    /// A new token for a role (admins only); the token goes back to the sender alone, the others see the new list entry
+    /// </summary>
+    public sealed record CreateToken(Role Role, int? Seat, string Label) : Command;
+
+    /// <summary>
+    /// Removes a token and closes the connections that logged in with it (admins only)
+    /// </summary>
+    public sealed record RevokeToken(string Id) : Command;
+
+    /// <summary>
+    /// Server options admins can change while it runs
+    /// </summary>
+    public sealed record SetServerOptions(bool AllowAnonymousSpectators) : Command;
+
+    /// <summary>
     /// What the match tells its clients, in order. Each client's GameRecord follows the match by applying them.
     /// </summary>
     public abstract record MatchEvent;
@@ -77,6 +92,21 @@ namespace Simulation
     /// The connections to the match (sent to admins only)
     /// </summary>
     public sealed record SessionsEvent(List<SessionInfo> Sessions) : MatchEvent;
+
+    /// <summary>
+    /// A token just created, to the admin who asked only: shown once, the server keeps only its hash
+    /// </summary>
+    public sealed record TokenCreatedEvent(TokenInfo Info, string Token) : MatchEvent;
+
+    /// <summary>
+    /// The server's tokens without their secrets (admins only)
+    /// </summary>
+    public sealed record TokensEvent(List<TokenInfo> Tokens) : MatchEvent;
+
+    /// <summary>
+    /// The server the match is hosted on (admins only), or null once it stopped
+    /// </summary>
+    public sealed record ServerInfoEvent(ServerInfo? Info) : MatchEvent;
 
     /// <summary>
     /// A refused command or a failure, to the sender only
