@@ -24,6 +24,7 @@ import glob
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -67,6 +68,15 @@ def save_state(loop_dir, state):
     os.replace(path + ".tmp", path)
 
 
+def command_arguments(template, **values):
+    """The evaluation command as program and arguments, run without a shell: split first, then the placeholders filled in,
+    so a path can neither add arguments nor shell syntax. Windows keeps backslashes in paths; quotes group as in a shell."""
+    parts = shlex.split(template, posix=os.name != "nt")
+    if os.name == "nt":
+        parts = [part[1:-1] if len(part) >= 2 and part[0] == part[-1] == '"' else part for part in parts]
+    return [part.format(**values) for part in parts]
+
+
 def clearly_worse(line):
     """Whether an evaluation line ("... +12 Elo [-30, +55] ...") puts the upper end of the interval below 0"""
     match = re.search(r"([+-]?\d+) Elo \[([+-]?\d+), ([+-]?\d+)\]", line)
@@ -94,7 +104,7 @@ def main(argv=None):
     parser.add_argument("--anchor-every", type=int, default=9, help="generations between evaluations against the anchor, 0 for none")
     parser.add_argument("--anchor-model", default=None, help="the fixed net the anchor evaluations compare with (default: --start-model)")
     parser.add_argument("--eval-command", default=None,
-                        help="command evaluating {new} (ONNX) against {old} (ONNX), {name} names the run; its last output line is logged")
+                        help="command evaluating {new} (ONNX) against {old} (ONNX), {name} names the run, run without a shell; its last output line is logged")
     args = parser.parse_args(argv)
 
     os.makedirs(args.loop_dir, exist_ok=True)
@@ -179,10 +189,10 @@ def main(argv=None):
 
         def evaluate(key, reference, name):
             """Runs the evaluation command, keeps its last line under gen[key]; whether the newest net came out clearly worse"""
-            command = args.eval_command.format(new=gen["model"], old=reference, name=name)
+            command = command_arguments(args.eval_command, new=gen["model"], old=reference, name=name)
             output = os.path.join(gen_dir, f"{key}.log")
             with open(output, "w", encoding="utf-8") as file:
-                subprocess.call(command, shell=True, stdout=file, stderr=subprocess.STDOUT)
+                subprocess.call(command, stdout=file, stderr=subprocess.STDOUT)
             with open(output, encoding="utf-8", errors="replace") as file:
                 lines = [line.strip() for line in file if line.strip()]
             gen[key] = {"against": reference, "result": lines[-1] if lines else "no output"}

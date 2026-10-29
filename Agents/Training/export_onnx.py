@@ -32,7 +32,7 @@ class ExportedValueNet(nn.Module):
 def export(ckpt_path: str, out_path: str, in_dim: int = None):
     # Lightning-Module aus Checkpoint laden, die Inputgröße steht in seinen Hyperparametern
     overrides = {"in_dim": in_dim} if in_dim else {}
-    module = StateValueModule.load_from_checkpoint(ckpt_path, map_location="cpu", **overrides)
+    module = StateValueModule.load_from_checkpoint(ckpt_path, map_location="cpu", weights_only=True, **overrides)
     in_dim = module.hparams.in_dim
 
     # Dropout deaktivieren und freezen

@@ -436,7 +436,8 @@ def main():
     if args.init_from:
         # Gleiche Architektur und Normalisierung wie der Checkpoint, sonst schlägt das Laden fehl; nur der Optimizer startet neu.
         # Ein neuer Policy Head fehlt im Checkpoint und startet zufällig
-        checkpoint = torch.load(args.init_from, map_location="cpu", weights_only=False)
+        # Nur Tensoren und einfache Typen: ein manipulierter Checkpoint kann so keinen Code ausführen
+        checkpoint = torch.load(args.init_from, map_location="cpu", weights_only=True)
         missing, unexpected = model.load_state_dict(checkpoint["state_dict"], strict=False)
         if unexpected or any(not name.startswith("model.policy_") for name in missing):
             raise SystemExit(f"Checkpoint does not fit the model: missing {missing}, unexpected {unexpected}")
