@@ -544,7 +544,7 @@ namespace Client
             Theme.DrawText(dl, Theme.Regular17, min + new Vector2(44 + Theme.TextSize(Theme.Bold20, "Your hand").X, 17), Theme.TextMuted, $"  ·  {player.ResourceCards.Count()} cards");
             BuildingStock stock = player.BuildingStock;
             Theme.TextRight(dl, Theme.Regular13, min + new Vector2(size.X - 16, 21), Theme.TextMuted,
-                $"{stock.RemainingRoads} roads · {stock.RemainingSettlements} settl. · {stock.RemainingCities} cities left");
+                $"{stock.RemainingRoads} roads, {stock.RemainingSettlements} settlements, {stock.RemainingCities} cities left");
 
             float x = min.X + 16;
             float top = min.Y + 56;
