@@ -15,6 +15,7 @@
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
 - Hidden Information (Agents sehen derzeit alle Hände, VP-Karten und die Dev Bank, das Net ist darauf trainiert)
 	- Verdeckt sind nur gestohlene Karten (für Unbeteiligte), gezogene Dev Cards (außer für den Käufer) und VP-Karten bis Spielende, Monopoly macht eine Ressource öffentlich => kleine Information Sets, Determinisierung funktioniert gut (Long et al.)
+	- Zuschauer wählen in der GUI die volle Sicht oder die StateView eines beliebigen Spielers
 	- 1. Observation Filter / StateView + Belief Tracker in Common
 		- Vorher vollständige Test-Suite: jede Regel pro Beobachter, Randfälle (Spielende, Undo, Laden), kein Leck verdeckter Info
 		- StateView(p): fremde Hände als bekannte Karten + Unknown x k, fremde Dev Cards als Unknown
