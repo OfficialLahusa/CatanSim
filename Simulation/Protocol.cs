@@ -26,7 +26,7 @@ namespace Simulation
         /// would read them wrongly (new fields of the state are ignored silently, e.g. an open trade offer): both sides then
         /// refuse each other with a message instead. Messages without a version are version 0.
         /// </summary>
-        public const int Version = 1;
+        public const int Version = 2;
 
         /// <summary>
         /// Why two sides of different protocol versions can't play together, or null if the versions match
@@ -48,6 +48,11 @@ namespace Simulation
             state.Board.Adjacency.Attach(state.Board);
             return state;
         }
+
+        /// <summary>
+        /// A seat's view or the start of its history, sent along with a position event to a player (see Match.SeatView)
+        /// </summary>
+        private static GameState? OptionalState(JsonNode? node) => node == null ? null : State(node);
 
         private static string Yaml(Action action) => SaveFileSerializer.Serialize(new List<Action> { action });
         private static Action Action(JsonNode? node) => SaveFileSerializer.Deserialize<List<Action>>((string)node!)[0];
@@ -227,9 +232,10 @@ namespace Simulation
                     ["seats"] = SeatKinds(s.Seats),
                     ["playback"] = Playback(s.Playback),
                     ["agents"] = Agents(s.Agents),
+                    ["start"] = s.Start is GameState start ? Yaml(start) : null,
                 },
-                AppliedEvent a => new JsonObject { ["entry"] = Entry(a.Entry), ["redo"] = a.IsRedo },
-                UndoneEvent => [],
+                AppliedEvent a => new JsonObject { ["entry"] = Entry(a.Entry), ["redo"] = a.IsRedo, ["view"] = a.View is GameState view ? Yaml(view) : null },
+                UndoneEvent u => new JsonObject { ["view"] = u.View is GameState view ? Yaml(view) : null },
                 SeatsEvent s => new JsonObject { ["seats"] = SeatKinds(s.Seats) },
                 PlaybackEvent p => new JsonObject { ["playback"] = Playback(p.Playback) },
                 AgentsEvent a => new JsonObject { ["settings"] = Agents(a.Settings) },
@@ -262,9 +268,9 @@ namespace Simulation
             {
                 nameof(WelcomeEvent) => new WelcomeEvent(Session(json["session"]), (int?)json["version"] ?? 0),
                 nameof(SnapshotEvent) => new SnapshotEvent(State(json["state"]), Entries(json["history"]), Entries(json["redo"]), SeatKinds(json["seats"]),
-                    Playback(json["playback"]), Agents(json["agents"])),
-                nameof(AppliedEvent) => new AppliedEvent(Entry(json["entry"]), (bool)json["redo"]!),
-                nameof(UndoneEvent) => new UndoneEvent(),
+                    Playback(json["playback"]), Agents(json["agents"]), OptionalState(json["start"])),
+                nameof(AppliedEvent) => new AppliedEvent(Entry(json["entry"]), (bool)json["redo"]!, OptionalState(json["view"])),
+                nameof(UndoneEvent) => new UndoneEvent(OptionalState(json["view"])),
                 nameof(SeatsEvent) => new SeatsEvent(SeatKinds(json["seats"])),
                 nameof(PlaybackEvent) => new PlaybackEvent(Playback(json["playback"])),
                 nameof(AgentsEvent) => new AgentsEvent(Agents(json["settings"])),

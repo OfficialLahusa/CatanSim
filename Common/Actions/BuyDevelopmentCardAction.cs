@@ -83,6 +83,14 @@ namespace Common.Actions
             }
         }
 
+        public override Action RedactedFor(int observer)
+        {
+            // Only the buyer sees the drawn card
+            BuyDevelopmentCardAction copy = (BuyDevelopmentCardAction)Clone();
+            if (History != null && observer != PlayerIndex) copy.History = History with { DrawnType = DevelopmentCardType.Unknown };
+            return copy;
+        }
+
         public override void Revert(GameState state)
         {
             // Ensure action was applied before
@@ -143,7 +151,8 @@ namespace Common.Actions
             bool bankHasDevCards = state.DevelopmentBank.Count() > 0;
 
             // If action has history, ensure it is valid
-            bool historyValid = !HasHistory() || state.DevelopmentBank.Get(History!.DrawnType) > 0;
+            // Contains, so the buyer's own move replays on its view, where the deck is Unknown (see CardSet)
+            bool historyValid = !HasHistory() || state.DevelopmentBank.Contains(History!.DrawnType);
 
             return canAfford && bankHasDevCards && historyValid;
         }
@@ -183,6 +192,8 @@ namespace Common.Actions
             uint bankSize = state.DevelopmentBank.Count();
             foreach (DevelopmentCardType receivedCard in CardSet<DevelopmentCardType>.Values)
             {
+                if (receivedCard == DevelopmentCardType.Unknown) continue;
+
                 BuyDevelopmentCardAction actionCopy = new BuyDevelopmentCardAction(PlayerIndex);
                 BuyDevelopmentCardActionHistory outcome = new BuyDevelopmentCardActionHistory(receivedCard);
                 actionCopy.History = outcome;

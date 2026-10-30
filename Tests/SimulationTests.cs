@@ -65,7 +65,7 @@ namespace Tests
 
             match.Handle(PlayerAt(acting), new PlayMove(move));
             Assert.Single(match.Record.History);
-            Assert.Contains(events, x => x.e is AppliedEvent && x.to == null);
+            Assert.Contains(events, x => x.e is AppliedEvent && x.to == Match.Full);
         }
 
         [Fact]
@@ -176,7 +176,7 @@ namespace Tests
         {
             using Match match = NewMatch(AllHuman, 5);
             ClientGame client = new ClientGame();
-            match.Published += (e, to) => { if (to == null) client.Apply(e); };
+            match.Published += (e, to) => { if (Match.IsFor(to, Admin)) client.Apply(e); };
             client.Apply(match.Snapshot());
 
             Random random = new Random(5);
@@ -212,7 +212,7 @@ namespace Tests
             match.Handle(Admin, new NewGame([SeatKind.Builder, SeatKind.Human, SeatKind.Human, SeatKind.Human], false));
             Assert.Empty(match.Record.History);
             Assert.Equal(SeatKind.Builder, match.Seats[0]);
-            Assert.Contains(events, x => x.e is SnapshotEvent && x.to == null);
+            Assert.Contains(events, x => x.e is SnapshotEvent && x.to == Match.Full);
         }
         #endregion
 
@@ -384,7 +384,8 @@ namespace Tests
             Assert.True(Pump(player, () => player.Game.Record.History.Count == 40));
             Assert.True(Pump(spectator, () => spectator.Game.Record.History.Count == 40));
             Assert.Equal(match.Record.State, admin.Game.Record.State);
-            Assert.Equal(match.Record.State, player.Game.Record.State);
+            // The player follows its seat's view, not the full game
+            Assert.Equal(match.Beliefs.View(match.Record.State, 2), player.Game.Record.State);
             Assert.Equal(match.Record.State, spectator.Game.Record.State);
 
             // Spectators can't move, players can't undo; both get an error and the match stays

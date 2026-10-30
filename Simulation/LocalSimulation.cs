@@ -55,7 +55,7 @@ namespace Simulation
             };
 
             // The snapshot and the listener under one lock, so no event is missed or doubled
-            match.Subscribe(_listener, snapshot => _events.Enqueue(snapshot));
+            match.Subscribe(Session!, _listener, snapshot => _events.Enqueue(snapshot));
         }
 
         public void Send(Command command) => Match.Handle(Session!, command);

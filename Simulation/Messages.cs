@@ -72,13 +72,14 @@ namespace Simulation
     /// <summary>
     /// The whole match: after connecting, a new game or a loaded one
     /// </summary>
-    public sealed record SnapshotEvent(GameState State, List<HistoryEntry> History, List<HistoryEntry> Redo, SeatKind[] Seats, PlaybackState Playback, AgentSettings Agents) : MatchEvent;
+    public sealed record SnapshotEvent(GameState State, List<HistoryEntry> History, List<HistoryEntry> Redo, SeatKind[] Seats, PlaybackState Playback, AgentSettings Agents,
+        GameState? Start = null) : MatchEvent;
 
     /// <summary>
     /// A move was played or an edit made (a redo takes the next entry off the redo list)
     /// </summary>
-    public sealed record AppliedEvent(HistoryEntry Entry, bool IsRedo) : MatchEvent;
-    public sealed record UndoneEvent : MatchEvent;
+    public sealed record AppliedEvent(HistoryEntry Entry, bool IsRedo, GameState? View = null) : MatchEvent;
+    public sealed record UndoneEvent(GameState? View = null) : MatchEvent;
     public sealed record SeatsEvent(SeatKind[] Seats) : MatchEvent;
     public sealed record PlaybackEvent(PlaybackState Playback) : MatchEvent;
     public sealed record AgentsEvent(AgentSettings Settings) : MatchEvent;

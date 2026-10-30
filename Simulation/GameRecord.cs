@@ -21,6 +21,12 @@ namespace Simulation
     {
         public GameState State { get; private set; }
 
+        /// <summary>
+        /// The position before the first history entry, kept by a record that follows a seat's view: its entries can't be
+        /// taken back from the view, so the log is rebuilt forward from here (null for a full record)
+        /// </summary>
+        public GameState? Start { get; private set; }
+
         private readonly List<HistoryEntry> _history = [];
         private readonly List<HistoryEntry> _redo = [];
 
@@ -50,6 +56,7 @@ namespace Simulation
         public void Reset(GameState state, IEnumerable<HistoryEntry>? history = null, IEnumerable<HistoryEntry>? redo = null)
         {
             State = state;
+            Start = null;
             _history.Clear();
             _redo.Clear();
             if (history != null) _history.AddRange(history);
@@ -74,6 +81,46 @@ namespace Simulation
             {
                 _redo.Clear();
             }
+            Version++;
+        }
+
+        /// <summary>
+        /// Starts over from a seat's view: the view's position, the history start and the redacted entries
+        /// </summary>
+        public void ResetView(GameState view, GameState start, IEnumerable<HistoryEntry> history, IEnumerable<HistoryEntry> redo)
+        {
+            Reset(view, history, redo);
+            Start = start;
+        }
+
+        /// <summary>
+        /// Adds a redacted entry as a move of a seat's view: the match sends the resulting view along, the entry itself isn't
+        /// replayed (it can't be, without the hidden outcome)
+        /// </summary>
+        public void ApplyView(HistoryEntry entry, GameState view, bool isRedo = false)
+        {
+            State = view;
+            _history.Add(entry);
+            if (isRedo)
+            {
+                if (_redo.Count > 0) _redo.RemoveAt(_redo.Count - 1);
+            }
+            else
+            {
+                _redo.Clear();
+            }
+            Version++;
+        }
+
+        /// <summary>
+        /// Takes back the last entry of a seat's view, which the match sends along
+        /// </summary>
+        public void UndoView(GameState view)
+        {
+            if (_history.Count == 0) return;
+            _redo.Add(_history[^1]);
+            _history.RemoveAt(_history.Count - 1);
+            State = view;
             Version++;
         }
 

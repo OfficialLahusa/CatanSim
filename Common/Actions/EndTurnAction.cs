@@ -88,7 +88,8 @@ namespace Common.Actions
             }
 
             // Block previous new dev cards
-            state.Players[PlayerIndex].NewDevelopmentCards = History.PrevNewDevelopmentCards;
+            // A copy: later reverts change the hand, and the history must stay as it was for the next undo
+            state.Players[PlayerIndex].NewDevelopmentCards = new CardSet<DevelopmentCardType>(History.PrevNewDevelopmentCards);
 
             // Update turn state
             if (state.Turn.PlayerIndex == 0) state.Turn.RoundCounter--;

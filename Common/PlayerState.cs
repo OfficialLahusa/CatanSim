@@ -70,6 +70,16 @@ namespace Common
             return BuildingStock.RemainingCities > 0 && ResourceCards.Contains(ResourceCardType.Grain, 2) && ResourceCards.Contains(ResourceCardType.Ore, 3);
         }
 
+        /// <summary>
+        /// Whether the player holds a card of the type that wasn't bought this turn (NewDevelopmentCards are among the
+        /// DevelopmentCards). On a view, where another player's cards are Unknown (see BeliefTracker), any old card may be one.
+        /// </summary>
+        public bool HasOldDevelopmentCard(DevelopmentCardType type)
+        {
+            return DevelopmentCards.Get(type) + DevelopmentCards.Get(DevelopmentCardType.Unknown)
+                > NewDevelopmentCards.Get(type) + NewDevelopmentCards.Get(DevelopmentCardType.Unknown);
+        }
+
         public bool CanAffordDevelopmentCard()
         {
             return ResourceCards.Contains(ResourceCardType.Wool) && ResourceCards.Contains(ResourceCardType.Grain) && ResourceCards.Contains(ResourceCardType.Ore);

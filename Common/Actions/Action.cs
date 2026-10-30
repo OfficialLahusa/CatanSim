@@ -71,6 +71,13 @@ namespace Common.Actions
             return properties.Concat(fields).ToArray();
         }
 
+        /// <summary>
+        /// The action as an observer sees it (see BeliefTracker): a steal the observer took no part in and another player's
+        /// drawn development card show the card as Unknown. Everything else about a move is public, so other actions are
+        /// plain copies.
+        /// </summary>
+        public virtual Action RedactedFor(int observer) => Clone();
+
         public virtual void Apply(GameState state)
         {
             if (!IsValidFor(state)) throw new InvalidOperationException();

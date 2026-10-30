@@ -204,7 +204,7 @@ namespace Simulation
             }
 
             // Welcome and snapshot first (an admin also gets the server and its tokens), then the events from that point on
-            _match.Subscribe(listener, snapshot =>
+            _match.Subscribe(session, listener, snapshot =>
             {
                 connection.Outgoing.Writer.TryWrite(Protocol.Serialize(new WelcomeEvent(session)));
                 connection.Outgoing.Writer.TryWrite(Protocol.Serialize(snapshot));

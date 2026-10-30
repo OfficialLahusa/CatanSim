@@ -47,7 +47,9 @@ namespace Common.Actions
             {
                 if (otherPlayerIdx == PlayerIndex) continue;
 
-                uint movedCount = state.Players[otherPlayerIdx].ResourceCards.Get(ChosenType);
+                // A replay moves the recorded cards: the same as the hand's on a full state, and on a view (see BeliefTracker)
+                // also those among the unknown cards
+                uint movedCount = History?.TransferredCards.FirstOrDefault(t => t.Item1 == otherPlayerIdx).Item2 ?? state.Players[otherPlayerIdx].ResourceCards.Get(ChosenType);
 
                 if (movedCount == 0) continue;
 
@@ -102,7 +104,7 @@ namespace Common.Actions
             bool hasCard = state.Players[PlayerIndex].DevelopmentCards.Contains(DevelopmentCardType.Monopoly);
 
             // Check for dev card age
-            bool cardAgeSufficient = state.Players[PlayerIndex].DevelopmentCards.Get(DevelopmentCardType.Monopoly) > state.Players[PlayerIndex].NewDevelopmentCards.Get(DevelopmentCardType.Monopoly);
+            bool cardAgeSufficient = state.Players[PlayerIndex].HasOldDevelopmentCard(DevelopmentCardType.Monopoly);
 
             return hasCard && cardAgeSufficient;
         }

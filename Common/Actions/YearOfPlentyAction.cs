@@ -89,7 +89,7 @@ namespace Common.Actions
             bool hasCard = state.Players[PlayerIndex].DevelopmentCards.Contains(DevelopmentCardType.YearOfPlenty);
 
             // Check for dev card age
-            bool cardAgeSufficient = state.Players[PlayerIndex].DevelopmentCards.Get(DevelopmentCardType.YearOfPlenty) > state.Players[PlayerIndex].NewDevelopmentCards.Get(DevelopmentCardType.YearOfPlenty);
+            bool cardAgeSufficient = state.Players[PlayerIndex].HasOldDevelopmentCard(DevelopmentCardType.YearOfPlenty);
 
             bool bankHasCards = FirstChoice == SecondChoice ? state.ResourceBank.Contains(FirstChoice, 2) : state.ResourceBank.Contains(FirstChoice, 1) && (!SecondChoice.HasValue || state.ResourceBank.Contains(SecondChoice.Value, 1));
 

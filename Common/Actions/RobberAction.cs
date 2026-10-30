@@ -65,7 +65,8 @@ namespace Common.Actions
                     else
                     {
                         drawnCard = History!.StolenCard!.Value;
-                        state.Players[TargetPlayerIndex.Value].ResourceCards.Remove(drawnCard, 1);
+                        if (drawnCard == ResourceCardType.Unknown) StealUnseen(state.Players[TargetPlayerIndex.Value].ResourceCards);
+                        else state.Players[TargetPlayerIndex.Value].ResourceCards.Remove(drawnCard, 1);
                     }
 
                     state.Players[PlayerIndex].ResourceCards.Add(drawnCard, 1);
@@ -79,6 +80,29 @@ namespace Common.Actions
 
             // Update turn state
             state.Turn.MustMoveRobber = false;
+        }
+
+        public override Action RedactedFor(int observer)
+        {
+            // Only the thief and the victim see the stolen card
+            RobberAction copy = (RobberAction)Clone();
+            if (History?.StolenCard != null && observer != PlayerIndex && observer != TargetPlayerIndex)
+                copy.History = History with { StolenCard = ResourceCardType.Unknown };
+            return copy;
+        }
+
+        /// <summary>
+        /// A redacted steal replayed on a view (see RedactedFor): as the observer sees it (see BeliefTracker), every type the
+        /// victim holds may have lost the card, so one card of each becomes unknown, less the stolen one
+        /// </summary>
+        private static void StealUnseen(CardSet<ResourceCardType> victim)
+        {
+            uint target = victim.Count() - 1;
+            foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
+                if (victim.Get(type) > 0) victim.Remove(type, 1);
+            uint count = victim.Count();
+            if (count > target) victim.Remove(ResourceCardType.Unknown, count - target);
+            else victim.Add(ResourceCardType.Unknown, target - count);
         }
 
         public override void Revert(GameState state)
@@ -163,7 +187,8 @@ namespace Common.Actions
             // If stored history exists, ensure it is valid
             bool historyValid = !HasHistory()
                 || !History!.StolenCard.HasValue && (!TargetPlayerIndex.HasValue || TargetPlayerIndex.Value == PlayerIndex || state.Players[TargetPlayerIndex.Value].ResourceCards.Count() == 0)
-                || History.StolenCard.HasValue && TargetPlayerIndex.HasValue && TargetPlayerIndex != PlayerIndex && state.Players[TargetPlayerIndex.Value].ResourceCards.Get(History.StolenCard.Value) > 0;
+                // Contains, so a redacted steal (an Unknown card) replays on a view (see CardSet)
+                || History.StolenCard.HasValue && TargetPlayerIndex.HasValue && TargetPlayerIndex != PlayerIndex && state.Players[TargetPlayerIndex.Value].ResourceCards.Contains(History.StolenCard.Value);
 
             return hasValidTarget && historyValid;
         }
@@ -232,7 +257,7 @@ namespace Common.Actions
 
             // Output randomness: Which resource card was drawn from the target player, proportional to their hand
             // It is possible to not draw a card at all, hence the nullability
-            ResourceCardType?[] stolenCardOptions = [null, .. CardSet<ResourceCardType>.Values];
+            ResourceCardType?[] stolenCardOptions = [null, .. CardTypeExtensions.ResourceTypes];
             CardSet<ResourceCardType>? targetHand = TargetPlayerIndex.HasValue ? state.Players[TargetPlayerIndex.Value].ResourceCards : null;
             uint targetHandSize = targetHand?.Count() ?? 0;
 

@@ -119,26 +119,53 @@ namespace Common
             _cards[ToInt(type)] += amount;
         }
 
+        // A view (see BeliefTracker) holds Unknown cards (index 0) that stand in for any type: a type beyond the known cards
+        // comes out of the unknown ones, and an unknown card taken from a hand without any is one of its known cards. A full
+        // state has no Unknown cards, so for it nothing changes.
+        private const int UnknownIndex = 0;
+
         public void Remove(T type, uint amount)
         {
             if (!Contains(type, amount)) throw new InvalidOperationException("Removal amount exceeds available card count");
 
-            _cards[ToInt(type)] -= amount;
+            int index = ToInt(type);
+            uint fromType = Math.Min(_cards[index], amount);
+            _cards[index] -= fromType;
+            amount -= fromType;
+            if (amount == 0) return;
+
+            if (index != UnknownIndex)
+            {
+                _cards[UnknownIndex] -= amount;
+                return;
+            }
+
+            // Unknown cards from a hand of known ones: the most common type first, so the replay keeps a plausible hand
+            while (amount > 0)
+            {
+                int most = 1;
+                for (int i = 2; i < _cards.Length; i++) if (_cards[i] > _cards[most]) most = i;
+                _cards[most]--;
+                amount--;
+            }
         }
 
         public bool Contains(T type, uint amount = 1)
         {
-            return _cards[ToInt(type)] >= amount;
+            int index = ToInt(type);
+            return index == UnknownIndex ? Count() >= amount : _cards[index] + _cards[UnknownIndex] >= amount;
         }
 
         public bool Contains(CardSet<T> subset)
         {
-            foreach(T cardType in Values)
+            // The cards missing from the known types must fit into the unknown ones, and there must be enough cards in all
+            uint missing = 0;
+            for (int i = 0; i < _cards.Length; i++)
             {
-                if (subset.Get(cardType) > Get(cardType)) return false;
+                if (i != UnknownIndex && subset._cards[i] > _cards[i]) missing += subset._cards[i] - _cards[i];
             }
 
-            return true;
+            return missing <= _cards[UnknownIndex] && subset.Count() <= Count();
         }
 
         public void Add(CardSet<T> subset)
@@ -153,10 +180,12 @@ namespace Common
         {
             if (!Contains(subset)) throw new InvalidOperationException("Removal amount exceeds available card count");
 
-            foreach (T cardType in Values)
+            // Known types first, so on a view the unknown cards cover only what the known ones lack
+            for (int i = 0; i < _cards.Length; i++)
             {
-                _cards[ToInt(cardType)] -= subset.Get(cardType);
+                if (i != UnknownIndex && subset._cards[i] > 0) Remove(Values[i], subset._cards[i]);
             }
+            if (subset._cards[UnknownIndex] > 0) Remove(Values[UnknownIndex], subset._cards[UnknownIndex]);
         }
 
         public override bool Equals(object? obj)

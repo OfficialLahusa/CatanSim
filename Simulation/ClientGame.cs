@@ -46,8 +46,11 @@ namespace Simulation
             switch (e)
             {
                 case SnapshotEvent snapshot:
-                    // Copies, so the record's moves are its own
-                    Record.Reset(new GameState(snapshot.State), snapshot.History.Select(Copy), snapshot.Redo.Select(Copy));
+                    // Copies, so the record's moves are its own; a seat's view comes with the view of its history's start
+                    if (snapshot.Start is GameState start)
+                        Record.ResetView(new GameState(snapshot.State), new GameState(start), snapshot.History.Select(Copy), snapshot.Redo.Select(Copy));
+                    else
+                        Record.Reset(new GameState(snapshot.State), snapshot.History.Select(Copy), snapshot.Redo.Select(Copy));
                     Seats = (SeatKind[])snapshot.Seats.Clone();
                     Playback = snapshot.Playback;
                     AgentSettings = snapshot.Agents;
@@ -55,11 +58,13 @@ namespace Simulation
                     (Evaluation, Search) = (null, null);
                     break;
                 case AppliedEvent applied:
-                    Record.Apply(Copy(applied.Entry), applied.IsRedo);
+                    if (applied.View is GameState view) Record.ApplyView(Copy(applied.Entry), new GameState(view), applied.IsRedo);
+                    else Record.Apply(Copy(applied.Entry), applied.IsRedo);
                     (Evaluation, Search) = (null, null);
                     break;
-                case UndoneEvent:
-                    Record.Undo();
+                case UndoneEvent undone:
+                    if (undone.View is GameState undoneView) Record.UndoView(new GameState(undoneView));
+                    else Record.Undo();
                     (Evaluation, Search) = (null, null);
                     break;
                 case EvaluationEvent evaluation:

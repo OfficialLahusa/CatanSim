@@ -106,7 +106,7 @@ namespace Common.Actions
             bool hasCard = state.Players[PlayerIndex].DevelopmentCards.Contains(DevelopmentCardType.Knight);
 
             // Check for dev card age
-            bool cardAgeSufficient = state.Players[PlayerIndex].DevelopmentCards.Get(DevelopmentCardType.Knight) > state.Players[PlayerIndex].NewDevelopmentCards.Get(DevelopmentCardType.Knight);
+            bool cardAgeSufficient = state.Players[PlayerIndex].HasOldDevelopmentCard(DevelopmentCardType.Knight);
 
             return hasCard && cardAgeSufficient;
         }

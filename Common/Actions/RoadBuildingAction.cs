@@ -70,7 +70,7 @@ namespace Common.Actions
             bool hasCard = state.Players[PlayerIndex].DevelopmentCards.Contains(DevelopmentCardType.RoadBuilding);
 
             // Check for dev card age
-            bool cardAgeSufficient = state.Players[PlayerIndex].DevelopmentCards.Get(DevelopmentCardType.RoadBuilding) > state.Players[PlayerIndex].NewDevelopmentCards.Get(DevelopmentCardType.RoadBuilding);
+            bool cardAgeSufficient = state.Players[PlayerIndex].HasOldDevelopmentCard(DevelopmentCardType.RoadBuilding);
 
             return hasCard && cardAgeSufficient;
         }
