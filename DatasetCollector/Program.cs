@@ -29,6 +29,20 @@
             CollectorSettings settings = commandLine.Settings;
             if (commandLine.RegenerateMaps is (string seeds, string output))
                 return MapRegeneration.Run(seeds, output, settings, Console.Out);
+            if (commandLine.RegenerateViews is (string index, string states, string views))
+            {
+                try
+                {
+                    long rows = ViewRegeneration.Run(index, states, views, settings, Console.Out);
+                    Console.WriteLine($"Views of {rows} entries written to {views}");
+                    return 0;
+                }
+                catch (Exception e) when (e is InvalidOperationException or IOException)
+                {
+                    Console.Error.WriteLine(e.Message);
+                    return 1;
+                }
+            }
 
             if (commandLine.CalibrateThreads)
             {

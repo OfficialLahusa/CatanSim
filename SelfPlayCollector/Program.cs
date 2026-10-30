@@ -23,6 +23,22 @@ namespace SelfPlayCollector
                 }
             }
 
+            // Belief-aware inputs of a run's positions, as each actor saw them: SelfPlayCollector view-features RUN_DIRECTORY
+            if (args.Length == 2 && args[0] == "view-features")
+            {
+                try
+                {
+                    long positions = ViewFeatureWriter.ConvertRun(args[1], Console.Out);
+                    Console.WriteLine($"View features of {positions} positions written to {args[1]}");
+                    return 0;
+                }
+                catch (Exception e) when (e is InvalidOperationException or IOException)
+                {
+                    Console.Error.WriteLine(e.Message);
+                    return 1;
+                }
+            }
+
             CommandLine commandLine;
             try
             {

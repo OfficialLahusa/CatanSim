@@ -114,6 +114,61 @@ namespace Tests
             }
         }
 
+        [Fact]
+        public void ViewFeaturesAreTheActorsViewOfEveryPosition()
+        {
+            string modelPath = TestUtil.FixturePath("ValueNet", "placements_tiny.onnx");
+            string root = Path.Combine(Path.GetTempPath(), "hexfarer-selfplay-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                SelfPlaySettings settings = new()
+                {
+                    Games = 3, ConcurrentGames = 3, LeavesPerBatch = 8, FullIterations = 32, FastIterations = 16, FullSearchProbability = 0.5,
+                    TemperatureMoves = 10, MaxActions = 300, ModelPath = modelPath, Nets = 1, BatchRows = 64, Provider = InferenceProvider.Cpu,
+                    Seed = 12, OutputDirectory = root, Name = "run",
+                };
+                SelfPlayCollector.SelfPlayCollector collector = new(settings, TextWriter.Null);
+                Assert.Equal(0, collector.Collect().Errors);
+                string directory = collector.RunDirectory;
+                var samples = ReadCsv(Path.Combine(directory, "samples.csv"));
+
+                Assert.Equal(samples.Count, ViewFeatureWriter.ConvertRun(directory, TextWriter.Null));
+                byte[] views = File.ReadAllBytes(Path.Combine(directory, ViewFeatureWriter.FileName));
+                Assert.Equal(samples.Count * ViewVectorizer.FeatureDim * sizeof(ushort), views.Length);
+
+                // Row i is the i-th line of samples.csv: the position as its actor sees it, with its tracker's beliefs
+                var lineOf = samples.Select((sample, line) => (sample, line)).ToDictionary(x => (x.sample["game"], int.Parse(x.sample["action"])), x => x.line);
+                foreach (var game in ReadCsv(Path.Combine(directory, "games.csv")))
+                {
+                    SaveFile saved = SelfPlayWriter.ReadRecord(directory, int.Parse(game["record_chunk"]), long.Parse(game["record_offset"]), int.Parse(game["record_length"]));
+                    GameState state = SelfPlayGame.InitialState(ulong.Parse(game["seed"]), settings.CenterDesert);
+                    BeliefTracker[] trackers = Enumerable.Range(0, 4).Select(seat => new BeliefTracker(seat, state)).ToArray();
+                    for (int i = 0; i <= saved.PlayedActions.Count; i++)
+                    {
+                        if (lineOf.TryGetValue((game["game"], i), out int line))
+                        {
+                            int actor = int.Parse(samples[line]["actor"]);
+                            float[] expected = new float[ViewVectorizer.FeatureDim];
+                            ViewVectorizer.VectorizeView(state, trackers[actor], expected);
+                            for (int f = 0; f < expected.Length; f++)
+                                Assert.Equal((Half)expected[f], BinaryPrimitives.ReadHalfLittleEndian(views.AsSpan((line * expected.Length + f) * sizeof(ushort))));
+                        }
+                        if (i == saved.PlayedActions.Count) break;
+                        GameState before = new GameState(state);
+                        Action action = saved.PlayedActions[i];
+                        action.Apply(state);
+                        foreach (BeliefTracker tracker in trackers) tracker.Observe(before, action, state);
+                    }
+                }
+
+                Assert.Throws<InvalidOperationException>(() => ViewFeatureWriter.ConvertRun(directory, TextWriter.Null));
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
         /// <summary>
         /// A recorded position matches the replayed state: its features, round and moves
         /// </summary>

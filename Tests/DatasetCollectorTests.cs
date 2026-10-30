@@ -295,6 +295,90 @@ namespace Tests
         }
 
         [Fact]
+        public void ViewsAreRegeneratedFromTheSeedsAndCheckedAgainstTheStoredRows()
+        {
+            // A small dataset with sibling groups, its vectors in index order as a prepared states.npy
+            var settings = new CollectorSettings { Threads = 1, Matches = 3, SamplesPerMatch = 3, PlayoutsPerSample = 2, SiblingsPerGroup = 3, Seed = 170 };
+            string datasetDirectory = CollectIntoTemporaryDirectory(settings, out _);
+            try
+            {
+                List<SampleRecord> records = ReadSampleRecords(datasetDirectory);
+                Dictionary<string, Half[]> vectors = ReadVectorChunks(Path.Combine(datasetDirectory, "vectors"));
+                string[] names = records.Select(record => record.Name)
+                    .OrderBy(name => int.Parse(name[1..name.IndexOf('_')])).ThenBy(name => name, StringComparer.Ordinal).ToArray();
+                Assert.Contains(names, name => name.Contains("_c"));
+
+                string index = Path.Combine(datasetDirectory, "dataset_index.csv");
+                File.WriteAllLines(index, ["entry_idx,group_idx,subdir_name,entry_name", .. names.Select((name, i) => $"{i},0,.,{name}")]);
+                string states = Path.Combine(datasetDirectory, "states.npy");
+                WriteNpy(states, names.Select(name => vectors[name]).ToArray());
+
+                string views = Path.Combine(datasetDirectory, "views.npy");
+                Assert.Equal(names.Length, ViewRegeneration.Run(index, states, views, settings, TextWriter.Null));
+
+                // Every row is the view of the seat that moves at the sample (for a sibling: that chose its move), replayed
+                // on its own from the sample's save file
+                Half[][] rows = ReadNpy(views, ViewVectorizer.FeatureDim);
+                Assert.Equal(names.Length, rows.Length);
+                for (int i = 0; i < names.Length; i++)
+                {
+                    SaveFile save = SaveFileSerializer.Load(Path.Combine(datasetDirectory, "input", names[i] + ".yaml"));
+                    GameState state = new GameState(save.GameState);
+                    for (int a = save.PlayedActions.Count - 1; a >= 0; a--) save.PlayedActions[a].Revert(state);
+                    BeliefTracker[] trackers = Enumerable.Range(0, 4).Select(seat => new BeliefTracker(seat, state)).ToArray();
+                    foreach (Action action in save.PlayedActions)
+                    {
+                        GameState before = new GameState(state);
+                        action.Clone().Apply(state);
+                        foreach (BeliefTracker tracker in trackers) tracker.Observe(before, action, state);
+                    }
+                    int observer = names[i].Contains("_c") ? save.PlayedActions[^1].PlayerIndex
+                        : state.HasEnded ? 0 : Enumerable.Range(0, 4).First(state.CanPlayerAct);
+                    float[] expected = new float[ViewVectorizer.FeatureDim];
+                    ViewVectorizer.VectorizeView(state, trackers[observer], expected);
+                    Assert.Equal(expected.Select(value => (Half)value), rows[i]);
+                }
+
+                // A stored row that doesn't match the replayed state stops the regeneration
+                Half[][] corrupted = names.Select(name => vectors[name]).ToArray();
+                corrupted[names.Length / 2] = corrupted[names.Length / 2].Select(value => (Half)((float)value + 1)).ToArray();
+                WriteNpy(states, corrupted);
+                File.Delete(views);
+                Assert.Throws<InvalidOperationException>(() => ViewRegeneration.Run(index, states, views, settings, TextWriter.Null));
+            }
+            finally
+            {
+                DeleteTemporaryDirectory(datasetDirectory);
+            }
+        }
+
+        private static void WriteNpy(string path, Half[][] rows)
+        {
+            using FileStream file = File.Create(path);
+            ViewRegeneration.WriteNpyHeader(file, rows.Length, rows.Length == 0 ? 0 : rows[0].Length);
+            byte[] value = new byte[sizeof(ushort)];
+            foreach (Half[] row in rows)
+                foreach (Half feature in row)
+                {
+                    BinaryPrimitives.WriteHalfLittleEndian(value, feature);
+                    file.Write(value);
+                }
+        }
+
+        private static Half[][] ReadNpy(string path, int columns)
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            int headerLength = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(8));
+            string header = System.Text.Encoding.ASCII.GetString(bytes, 10, headerLength);
+            Assert.Contains("'<f2'", header);
+            Assert.Contains($", {columns})", header);
+            int data = 10 + headerLength;
+            int rows = (bytes.Length - data) / (columns * sizeof(ushort));
+            return Enumerable.Range(0, rows).Select(r => Enumerable.Range(0, columns)
+                .Select(c => BinaryPrimitives.ReadHalfLittleEndian(bytes.AsSpan(data + (r * columns + c) * sizeof(ushort)))).ToArray()).ToArray();
+        }
+
+        [Fact]
         public void SampledPositionsAreDistinctAndUniform()
         {
             TestUtil.Seed(153);

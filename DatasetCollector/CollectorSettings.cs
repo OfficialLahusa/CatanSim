@@ -68,7 +68,7 @@ namespace DatasetCollector
     /// What the command line asks for: a run with the settings, after an optional thread calibration
     /// </summary>
     public sealed record CommandLine(CollectorSettings Settings, bool CalibrateThreads, bool CalibrateOnly, TimeSpan CalibrationTime, bool ShowHelp,
-        (string Seeds, string Output)? RegenerateMaps = null)
+        (string Seeds, string Output)? RegenerateMaps = null, (string Index, string States, string Output)? RegenerateViews = null)
     {
         public const string Usage = """
             Usage: DatasetCollector [options]
@@ -103,6 +103,12 @@ namespace DatasetCollector
                                      SEEDS (one per line) and write their ports and tiles to OUT, to extend a
                                      dataset of an older feature layout; needs the run's --agents, --exploration
                                      and --center-desert
+              --regenerate-views INDEX STATES OUT
+                                     Instead of collecting: write the belief-aware inputs (ViewVectorizer) of a
+                                     prepared dataset (its dataset_index.csv and states.npy) to OUT (.npy), playing
+                                     every match again and checking each state against its stored row; needs the
+                                     run's --seed, --agents, --exploration, --samples, --sibling-groups, --siblings
+                                     and --center-desert
               --help                 Show this help
             """;
 
@@ -112,6 +118,7 @@ namespace DatasetCollector
             bool calibrateThreads = false, calibrateOnly = false, showHelp = false;
             TimeSpan calibrationTime = TimeSpan.FromSeconds(20);
             (string, string)? regenerateMaps = null;
+            (string, string, string)? regenerateViews = null;
             string agents = "random=0.3,simple=0.35,builder=0.35", exploration = "0.1-0.2";
 
             for (int i = 0; i < args.Length; i++)
@@ -142,6 +149,7 @@ namespace DatasetCollector
                     case "--calibrate": calibrateThreads = calibrateOnly = true; break;
                     case "--calibration-seconds": calibrationTime = TimeSpan.FromSeconds(double.Parse(Value(), CultureInfo.InvariantCulture)); break;
                     case "--regenerate-maps": regenerateMaps = (Value(), Value()); break;
+                    case "--regenerate-views": regenerateViews = (Value(), Value(), Value()); break;
                     case "--help" or "-h": showHelp = true; break;
                     default: throw new ArgumentException($"Unknown option \"{args[i]}\".");
                 }
@@ -149,7 +157,7 @@ namespace DatasetCollector
 
             settings = settings with { Agents = AgentMix.Parse(agents, exploration) };
             settings.Validate();
-            return new CommandLine(settings, calibrateThreads, calibrateOnly, calibrationTime, showHelp, regenerateMaps);
+            return new CommandLine(settings, calibrateThreads, calibrateOnly, calibrationTime, showHelp, regenerateMaps, regenerateViews);
         }
     }
 }

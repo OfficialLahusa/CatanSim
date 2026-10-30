@@ -137,13 +137,20 @@ namespace DatasetCollector
             _log.Write($"\x000DMatches {_finishedMatches}/{_settings.Matches}, samples {_writtenSamples} ({_writtenSamples / seconds:F1}/s), playouts {Interlocked.Read(ref _playouts) / seconds:F0}/s, {seconds:F0}s          ");
         }
 
-        private void CollectMatch(int matchIdx, VectorChunkWriter vectors, SampleRecordWriter records, CancellationToken cancellation)
+        /// <summary>
+        /// The samples of a match: the states at its sampled positions and the sibling groups of some of them, all decided by
+        /// the match seed, so the same settings always give the same samples (see ViewRegeneration)
+        /// </summary>
+        internal sealed record MatchSamples(GameState BaseState, List<Action> PlayedActions, MatchInfo Match, List<(GameState state, int position)> States,
+            Dictionary<int, List<Sibling>> Groups);
+
+        internal static MatchSamples SampleMatch(int matchIdx, CollectorSettings settings)
         {
-            ulong matchSeed = Seeds.Derive(_settings.Seed, (ulong)matchIdx);
-            (GameState baseState, List<Action> playedActions, MatchInfo match) = PlayMatch(matchSeed, matchIdx, _settings.Agents, _settings.CenterDesert);
+            ulong matchSeed = Seeds.Derive(settings.Seed, (ulong)matchIdx);
+            (GameState baseState, List<Action> playedActions, MatchInfo match) = PlayMatch(matchSeed, matchIdx, settings.Agents, settings.CenterDesert);
 
             // k positions uniformly over 0..N (empty board to ended match), each with the same chance k/(N+1)
-            int[] positions = SamplePositions(playedActions.Count, _settings.SamplesPerMatch);
+            int[] positions = SamplePositions(playedActions.Count, settings.SamplesPerMatch);
 
             // Copy the states at these positions, each with the number of actions played until then
             GameState playState = new GameState(baseState);
@@ -169,14 +176,22 @@ namespace DatasetCollector
             Dictionary<int, List<Sibling>> groups = [];
             foreach (int sampleIdx in Enumerable.Range(0, statesToSample.Count).OrderBy(_ => Utils.Random.Next()).ToList())
             {
-                if (groups.Count == _settings.SiblingGroupsPerMatch) break;
+                if (groups.Count == settings.SiblingGroupsPerMatch) break;
 
                 (GameState state, int position) = statesToSample[sampleIdx];
                 Action? matchMove = position < playedActions.Count ? playedActions[position] : null;
                 ulong groupSeed = Seeds.Derive(SampleSeed(matchSeed, position), GroupSeedIndex);
-                List<Sibling> siblings = SiblingStates(state, matchMove, _settings.SiblingsPerGroup, groupSeed);
+                List<Sibling> siblings = SiblingStates(state, matchMove, settings.SiblingsPerGroup, groupSeed);
                 if (siblings.Count > 0) groups[sampleIdx] = siblings;
             }
+            return new MatchSamples(baseState, playedActions, match, statesToSample, groups);
+        }
+
+        private void CollectMatch(int matchIdx, VectorChunkWriter vectors, SampleRecordWriter records, CancellationToken cancellation)
+        {
+            ulong matchSeed = Seeds.Derive(_settings.Seed, (ulong)matchIdx);
+            (_, List<Action> playedActions, MatchInfo match, List<(GameState state, int position)> statesToSample, Dictionary<int, List<Sibling>> groups) =
+                SampleMatch(matchIdx, _settings);
 
             // The actions of the match are serialized once for the save files of all its samples
             MatchSaveFiles saveFiles = new MatchSaveFiles(playedActions);

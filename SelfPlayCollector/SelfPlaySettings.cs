@@ -122,10 +122,12 @@ namespace SelfPlayCollector
         public const string Usage = """
             Usage: SelfPlayCollector [options]
                    SelfPlayCollector policy-targets RUN_DIRECTORY
+                   SelfPlayCollector view-features RUN_DIRECTORY
 
             Plays games with all four seats searching with MCTS (max^n) on one value net and records the positions of
             full searches with the search's values and visits, plus every game's result and save file.
             policy-targets writes the encoded legal moves of every position for a run collected without them.
+            view-features writes views.f16: every position as its actor saw it, the input of a belief-aware net.
 
               --games N                Games to play (default 1000)
               --first-game I           Number the games from I (default 0), to extend a run with the same seed
