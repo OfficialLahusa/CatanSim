@@ -52,7 +52,8 @@ namespace SelfPlayCollector
             string modelPath = _settings.ModelPath != null ? Path.GetFullPath(_settings.ModelPath) : StateValueNet.DefaultModelPath;
             StateValueNet[] nets = Enumerable.Range(0, _settings.Nets)
                 .Select(_ => new StateValueNet(modelPath, provider: _settings.Provider, fixedBatchSize: _settings.BatchRows)).ToArray();
-            IStateVectorizer vectorizer = StateVectorizer.For(nets[0]);
+            // Under hidden information every position is recorded as its actor's view
+            int featureDim = _settings.HiddenInformation ? ViewVectorizer.FeatureDim : Vectorizers.For(nets[0], 0).FeatureDim;
 
             DateTime started = DateTime.Now;
             WriteMetadata(modelPath, nets[0], started, null, null);
@@ -62,7 +63,7 @@ namespace SelfPlayCollector
 
             var stopwatch = Stopwatch.StartNew();
             using (BatchingEvaluator evaluator = new(nets, _settings.BatchRows))
-            using (SelfPlayWriter writer = new(RunDirectory, vectorizer.FeatureDim))
+            using (SelfPlayWriter writer = new(RunDirectory, featureDim))
             {
                 // Finished games go to one writer thread; the bound holds the players back if writing falls behind
                 Channel<GameRecord> finished = Channel.CreateBounded<GameRecord>(_settings.ConcurrentGames);
@@ -79,7 +80,7 @@ namespace SelfPlayCollector
                 });
 
                 Task[] players = Enumerable.Range(0, Math.Min(_settings.ConcurrentGames, _settings.Games))
-                    .Select(_ => Task.Run(() => PlayGamesAsync(evaluator, vectorizer, finished.Writer, cancellation))).ToArray();
+                    .Select(_ => Task.Run(() => PlayGamesAsync(evaluator, nets[0], finished.Writer, cancellation))).ToArray();
                 while (!Task.WaitAll(players, TimeSpan.FromSeconds(10)))
                     ReportProgress(stopwatch, evaluator);
 
@@ -101,8 +102,10 @@ namespace SelfPlayCollector
             return result;
         }
 
-        private async Task PlayGamesAsync(BatchingEvaluator evaluator, IStateVectorizer vectorizer, ChannelWriter<GameRecord> finished, CancellationToken cancellation)
+        private async Task PlayGamesAsync(BatchingEvaluator evaluator, StateValueNet net, ChannelWriter<GameRecord> finished, CancellationToken cancellation)
         {
+            // Its own encoding: a belief-aware net's seat changes with every decision
+            IStateVectorizer vectorizer = Vectorizers.For(net, 0);
             MCTSSearch search = new(evaluator, vectorizer, _settings.LeavesPerBatch, parallelSelection: false);
             int localIdx;
             while (!cancellation.IsCancellationRequested && (localIdx = Interlocked.Increment(ref _nextGame)) < _settings.Games)
@@ -147,7 +150,7 @@ namespace SelfPlayCollector
                 {
                     file = Path.GetFileName(modelPath),
                     sha256 = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(modelPath))),
-                    feature_dim = net.InputDim,
+                    feature_dim = _settings.HiddenInformation ? ViewVectorizer.FeatureDim : net.InputDim,
                     provider = net.Provider.ToString(),
                 },
                 settings = new
@@ -161,6 +164,7 @@ namespace SelfPlayCollector
                     full_search_probability = _settings.FullSearchProbability,
                     temperature = _settings.Temperature,
                     temperature_moves = _settings.TemperatureMoves,
+                    hidden_information = _settings.HiddenInformation,
                     exploration = _settings.Exploration,
                     root_noise = _settings.RootNoise,
                     noise_concentration = _settings.RootNoiseConcentration,

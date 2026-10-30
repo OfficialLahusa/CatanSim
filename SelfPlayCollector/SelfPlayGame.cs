@@ -1,6 +1,7 @@
 using Agents;
 using Agents.MCTS;
 using Common;
+using Common.Actions;
 using System.Diagnostics;
 using Action = Common.Actions.Action;
 
@@ -59,7 +60,9 @@ namespace SelfPlayCollector
             List<RecordedPosition> positions = [];
             MCTSTree? tree = null;
             int searchedMoves = 0;
-            float[] features = new float[vectorizer.FeatureDim];
+            BeliefTracker[]? trackers = settings.HiddenInformation
+                ? Enumerable.Range(0, state.Players.Length).Select(seat => new BeliefTracker(seat, state)).ToArray() : null;
+            float[] features = new float[trackers != null ? ViewVectorizer.FeatureDim : vectorizer.FeatureDim];
 
             while (!state.HasEnded && actions.Count < settings.MaxActions)
             {
@@ -73,7 +76,15 @@ namespace SelfPlayCollector
                 }
                 else
                 {
-                    if (tree == null || !tree.RootState.Equals(state))
+                    // Under hidden information the seat to act searches a world drawn from its view, new for every decision
+                    int actor = Enumerable.Range(0, state.Players.Length).First(state.CanPlayerAct);
+                    if (trackers != null)
+                    {
+                        GameState world = trackers[actor].Determinize(trackers[actor].View(state), random);
+                        tree = new MCTSTree(world, (sbyte)state.Turn.PlayerIndex, settings.Exploration, model: OpponentModel.MaxN);
+                        if (vectorizer is ViewVectorizer view) view.Observer = actor;
+                    }
+                    else if (tree == null || !tree.RootState.Equals(state))
                         tree = new MCTSTree(new GameState(state), (sbyte)state.Turn.PlayerIndex, settings.Exploration, model: OpponentModel.MaxN);
 
                     bool full = random.NextDouble() < settings.FullSearchProbability;
@@ -87,15 +98,28 @@ namespace SelfPlayCollector
 
                     if (full)
                         positions.Add(Record(state, actions.Count, tree, search.LastSearch.Iterations, vectorizer, features,
-                            settings.PruneTargets ? search.LastRootPolicy : null));
+                            settings.PruneTargets ? search.LastRootPolicy : null, trackers?[actor]));
 
                     action = searchedMoves < settings.TemperatureMoves ? tree.SampleMove(settings.Temperature, random) : tree.GetMostPromisingMove();
                     searchedMoves++;
+
+                    // A move of a drawn world: its outcome (a stolen or drawn card) is the real game's to decide
+                    if (trackers != null && action is IReplayAction)
+                    {
+                        action = action.Clone();
+                        ((IReplayAction)action).ClearHistory();
+                    }
                 }
 
+                GameState? before = trackers != null ? new GameState(state) : null;
                 action.Apply(state);
                 actions.Add(action);
-                tree = Advance(tree, action);
+                if (trackers != null)
+                {
+                    foreach (BeliefTracker tracker in trackers) tracker.Observe(before!, action, state);
+                    tree = null;
+                }
+                else tree = Advance(tree, action);
             }
 
             return new GameRecord(game, seed, state, actions, positions, searchedMoves, stopwatch.Elapsed.TotalSeconds);
@@ -103,10 +127,12 @@ namespace SelfPlayCollector
 
         /// <param name="cleanPriors">The root's priors before the root noise, to record the visits without those the noise
         /// caused (MCTSTree.PrunedRootVisits); null records the visits as they are</param>
+        /// <param name="tracker">Under hidden information the actor's tracker: the position is recorded as its view</param>
         private static RecordedPosition Record(GameState state, int actionIndex, MCTSTree tree, long iterations, IStateVectorizer vectorizer, float[] features,
-            float[]? cleanPriors)
+            float[]? cleanPriors, BeliefTracker? tracker = null)
         {
-            vectorizer.VectorizeInto(state, features);
+            if (tracker != null) ViewVectorizer.VectorizeView(state, tracker, features);
+            else vectorizer.VectorizeInto(state, features);
             Half[] row = new Half[features.Length];
             for (int i = 0; i < features.Length; i++)
                 row[i] = (Half)features[i];

@@ -114,6 +114,74 @@ namespace Tests
             }
         }
 
+        [Theory]
+        [InlineData("view_tiny.onnx")]
+        [InlineData("policy_tiny.onnx")]
+        public void UnderHiddenInformationEveryPositionIsRecordedAsItsActorsView(string model)
+        {
+            // Each seat searches a world drawn from its own view; the run records what the seat saw, whatever the net's layout
+            string modelPath = TestUtil.FixturePath("ValueNet", model);
+            string root = Path.Combine(Path.GetTempPath(), "hexfarer-selfplay-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                SelfPlaySettings settings = new()
+                {
+                    Games = 3, ConcurrentGames = 3, LeavesPerBatch = 8, FullIterations = 32, FastIterations = 16, FullSearchProbability = 0.5,
+                    TemperatureMoves = 10, MaxActions = 400, ModelPath = modelPath, Nets = 1, BatchRows = 64, Provider = InferenceProvider.Cpu,
+                    Seed = 13, OutputDirectory = root, Name = "run", HiddenInformation = true,
+                };
+                SelfPlayCollector.SelfPlayCollector collector = new(settings, TextWriter.Null);
+                Assert.Equal(0, collector.Collect().Errors);
+                string directory = collector.RunDirectory;
+                Assert.Contains($"\"feature_dim\": {ViewVectorizer.FeatureDim}", File.ReadAllText(Path.Combine(directory, "metadata.json")));
+                Assert.Contains("\"hidden_information\": true", File.ReadAllText(Path.Combine(directory, "metadata.json")));
+
+                var samples = ReadCsv(Path.Combine(directory, "samples.csv"));
+                Assert.NotEmpty(samples);
+                byte[] states = File.ReadAllBytes(Path.Combine(directory, "states_c0000.f16"));
+                Assert.Equal(samples.Count * ViewVectorizer.FeatureDim * sizeof(ushort), states.Length);
+
+                foreach (var game in ReadCsv(Path.Combine(directory, "games.csv")))
+                {
+                    SaveFile saved = SelfPlayWriter.ReadRecord(directory, int.Parse(game["record_chunk"]), long.Parse(game["record_offset"]), int.Parse(game["record_length"]));
+                    GameState state = SelfPlayGame.InitialState(ulong.Parse(game["seed"]), settings.CenterDesert);
+                    BeliefTracker[] trackers = Enumerable.Range(0, 4).Select(seat => new BeliefTracker(seat, state)).ToArray();
+                    var positions = samples.Where(sample => sample["game"] == game["game"]).ToDictionary(sample => int.Parse(sample["action"]));
+                    for (int i = 0; i <= saved.PlayedActions.Count; i++)
+                    {
+                        if (positions.TryGetValue(i, out var sample))
+                        {
+                            int actor = int.Parse(sample["actor"]);
+                            Assert.True(state.CanPlayerAct(actor));
+                            float[] expected = new float[ViewVectorizer.FeatureDim];
+                            ViewVectorizer.VectorizeView(state, trackers[actor], expected);
+                            int row = int.Parse(sample["row"]);
+                            for (int f = 0; f < expected.Length; f++)
+                                Assert.Equal((Half)expected[f], BinaryPrimitives.ReadHalfLittleEndian(states.AsSpan((row * expected.Length + f) * sizeof(ushort))));
+
+                            // The searched moves are the true position's
+                            int moves = MCTSTree.GetValidActions(state).Count;
+                            Assert.All(sample["visits"].Split(' ').Select(pair => int.Parse(pair.Split(':')[0])), move => Assert.InRange(move, 0, moves - 1));
+                        }
+                        if (i == saved.PlayedActions.Count) break;
+                        Action action = saved.PlayedActions[i];
+                        Assert.True(action.IsValidFor(state), $"action {i} doesn't replay");
+                        GameState before = new GameState(state);
+                        action.Apply(state);
+                        foreach (BeliefTracker tracker in trackers) tracker.Observe(before, action, state);
+                    }
+                    Assert.True(state.Equals(saved.GameState));
+                }
+
+                // The moves of every position can be encoded afterwards like those of any run
+                Assert.Equal(samples.Count, ViewFeatureWriter.ConvertRun(directory, TextWriter.Null));
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+            }
+        }
+
         [Fact]
         public void ViewFeaturesAreTheActorsViewOfEveryPosition()
         {
