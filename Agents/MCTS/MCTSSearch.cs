@@ -30,7 +30,7 @@ namespace Agents.MCTS
     public sealed class MCTSSearch
     {
         // Leaves of a batch with their features, written by selection so the evaluation only runs the value net
-        private sealed record LeafBatch((MCTSNode leafNode, GameState stateAtLeaf)[] Leaves, DenseTensor<float> Features, List<Action>?[] Moves);
+        private sealed record LeafBatch(SearchLeaf[] Leaves, DenseTensor<float> Features, List<Action>?[] Moves);
 
         // Utilities per leaf and player (flat: leaf * 4 + player) and the policy queries of the leaves (null without policy)
         private sealed record BatchResults(double[] Utilities, float[]? PolicyQueries);
@@ -112,13 +112,13 @@ namespace Agents.MCTS
         /// Searches until the time or iteration limit (0 for none, rounded up to whole batches) or until the token is cancelled
         /// (after the batch in progress)
         /// </summary>
-        public void Run(MCTSTree tree, double timeLimitSeconds, long iterationLimit, CancellationToken cancellation = default)
+        public void Run(ISearchTree tree, double timeLimitSeconds, long iterationLimit, CancellationToken cancellation = default)
         {
             RunAsync(tree, timeLimitSeconds, iterationLimit, cancellation).GetAwaiter().GetResult();
         }
 
         /// <inheritdoc cref="Run"/>
-        public async Task RunAsync(MCTSTree tree, double timeLimitSeconds, long iterationLimit, CancellationToken cancellation = default)
+        public async Task RunAsync(ISearchTree tree, double timeLimitSeconds, long iterationLimit, CancellationToken cancellation = default)
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
             _distinctLeaves = 0;
@@ -129,7 +129,7 @@ namespace Agents.MCTS
 
             tree.UsesPolicy = UsesPolicy || UniformPriors;
             LastRootPolicy = null;
-            if (UsesPolicy && !tree.RootState.HasEnded && (!tree.RootNode.HasPolicyPriors || RootNoiseWeight > 0))
+            if (UsesPolicy && !tree.RootState.HasEnded && (!tree.RootHasPolicyPriors || RootNoiseWeight > 0))
                 await EvaluateRootPriorsAsync(tree).ConfigureAwait(false);
 
             LeafBatch? evaluatedBatch = null;
@@ -173,7 +173,7 @@ namespace Agents.MCTS
         /// <summary>
         /// The root's priors from a policy evaluation of its own, with the root noise mixed in
         /// </summary>
-        private async Task EvaluateRootPriorsAsync(MCTSTree tree)
+        private async Task EvaluateRootPriorsAsync(ISearchTree tree)
         {
             var features = new DenseTensor<float>([1, _vectorizer.FeatureDim]);
             _vectorizer.VectorizeInto(tree.RootState, features.Buffer.Span);
@@ -188,7 +188,7 @@ namespace Agents.MCTS
                 for (int i = 0; i < priors.Length; i++)
                     priors[i] = (float)((1 - RootNoiseWeight) * priors[i] + RootNoiseWeight * noise[i]);
             }
-            tree.ApplyPriors(tree.RootNode, priors);
+            tree.SetRootPriors(priors);
         }
 
         /// <summary>
@@ -243,9 +243,9 @@ namespace Agents.MCTS
             }
         }
 
-        private LeafBatch SelectBatch(MCTSTree tree)
+        private LeafBatch SelectBatch(ISearchTree tree)
         {
-            var leaves = new (MCTSNode leafNode, GameState stateAtLeaf)[LeavesPerBatch];
+            var leaves = new SearchLeaf[LeavesPerBatch];
             var moves = new List<Action>?[LeavesPerBatch];
             bool usesPolicy = UsesPolicy;
             DenseTensor<float> features = _featureBuffers[_nextBuffer];
@@ -255,29 +255,17 @@ namespace Agents.MCTS
 
             void SelectLeaf(int i)
             {
-                // Selection
-                // Find a leaf node to expand, starting from the root node and traversing down the tree using the UCT formula
-                (MCTSNode leafNode, GameState stateAtLeaf) = tree.SelectLeafNode();
-
-                // Expansion
-                // If the selected leaf isn't terminal, expand its children and select a leaf node among them
-                if (!leafNode.IsTerminal)
-                {
-                    tree.ExpandNode(leafNode, stateAtLeaf);
-                    (leafNode, stateAtLeaf) = tree.SelectLeafNode(leafNode, stateAtLeaf, suppressStateCopy: true);
-                }
-
-                tree.MarkPendingPath(leafNode);
-
-                leaves[i] = (leafNode, stateAtLeaf);
+                // Selection and expansion (see ISearchTree.SelectLeaf)
+                SearchLeaf leaf = tree.SelectLeaf();
+                leaves[i] = leaf;
 
                 // Featurize right away, on the same thread (ended matches don't need the value net, their row is left as it is)
-                if (!stateAtLeaf.HasEnded)
+                if (!leaf.State.HasEnded)
                 {
-                    _vectorizer.VectorizeInto(stateAtLeaf, featureBuffer.Span.Slice(i * featureDim, featureDim));
+                    _vectorizer.VectorizeInto(leaf.State, featureBuffer.Span.Slice(i * featureDim, featureDim));
                     // The leaf's moves for its priors, unless it has them already (a leaf can be selected again before)
-                    if (usesPolicy && !leafNode.HasPolicyPriors)
-                        moves[i] = MCTSTree.GetValidActions(stateAtLeaf);
+                    if (usesPolicy && !tree.HasPolicyPriors(leaf))
+                        moves[i] = MCTSTree.GetValidActions(leaf.State);
                 }
             }
 
@@ -287,7 +275,7 @@ namespace Agents.MCTS
             else
                 for (int i = 0; i < LeavesPerBatch; i++) SelectLeaf(i);
             _selectionTime.Stop();
-            _distinctLeaves += leaves.Select(leaf => leaf.leafNode).Distinct().Count();
+            _distinctLeaves += leaves.Select(leaf => leaf.Node).Distinct().Count();
 
             return new LeafBatch(leaves, features, moves);
         }
@@ -308,14 +296,14 @@ namespace Agents.MCTS
 
             LeafValues? values = null;
             bool withPolicy = batch.Moves.Any(moves => moves != null);
-            if (leaves.Any(leaf => !leaf.stateAtLeaf.HasEnded))
+            if (leaves.Any(leaf => !leaf.State.HasEnded))
                 values = await _evaluator.EvaluateAsync(batch.Features, placementWeight > 0, withPolicy).ConfigureAwait(false);
 
             for (int i = 0; i < leaves.Length; i++)
             {
                 Span<double> destination = utilities.AsSpan(i * MCTSNode.PlayerCount, MCTSNode.PlayerCount);
-                if (leaves[i].stateAtLeaf.HasEnded)
-                    TerminalUtilities(leaves[i].stateAtLeaf, placementWeight, destination);
+                if (leaves[i].State.HasEnded)
+                    TerminalUtilities(leaves[i].State, placementWeight, destination);
                 else
                     LeafUtilities(values!.Value.WinProbabilities.AsSpan(i * 4, 4),
                         values.Value.Placements == null ? default : values.Value.Placements.AsSpan(i * 16, 16), placementWeight, destination);
@@ -325,24 +313,18 @@ namespace Agents.MCTS
             return new BatchResults(utilities, withPolicy ? values!.Value.PolicyQueries : null);
         }
 
-        private void BackpropagateBatch(MCTSTree tree, LeafBatch batch, BatchResults results)
+        private void BackpropagateBatch(ISearchTree tree, LeafBatch batch, BatchResults results)
         {
             var leaves = batch.Leaves;
-            sbyte owner = tree.OwnerIndex;
             double[] utilities = results.Utilities;
 
             void Backpropagate(int i)
             {
                 if (results.PolicyQueries is float[] queries && batch.Moves[i] is List<Action> moves)
-                    tree.ApplyPriors(leaves[i].leafNode, Priors(queries, i, moves));
+                    tree.ApplyPriors(leaves[i], Priors(queries, i, moves), moves);
 
-                // Backpropagation
-                // Update the total scores and visit counts for all nodes in the path from the simulated node back to the root;
-                // the opponent models that use every player's values get all four utilities, Random only the owner's
-                if (tree.Model == OpponentModel.Random)
-                    tree.Backpropagate(leaves[i].leafNode, utilities[i * MCTSNode.PlayerCount + owner], pathAlreadyMarked: true);
-                else
-                    tree.Backpropagate(leaves[i].leafNode, utilities.AsSpan(i * MCTSNode.PlayerCount, MCTSNode.PlayerCount), pathAlreadyMarked: true);
+                // Backpropagation: the utilities along the path from the leaf back to the root
+                tree.Backpropagate(leaves[i], utilities.AsSpan(i * MCTSNode.PlayerCount, MCTSNode.PlayerCount));
             }
 
             _backpropagationTime.Start();

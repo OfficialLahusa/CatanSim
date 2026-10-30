@@ -22,7 +22,7 @@ namespace Agents.MCTS
     /// </summary>
     public enum OpponentModel { Random, MaxN, Paranoid }
 
-    public class MCTSTree
+    public class MCTSTree : ISearchTree
     {
         public GameState RootState;
         public MCTSNode RootNode;
@@ -69,6 +69,42 @@ namespace Agents.MCTS
         /// Player the tree searches for (whose result is TotalScore)
         /// </summary>
         public sbyte OwnerIndex => _ownerIdx;
+
+        #region ISearchTree
+        GameState ISearchTree.RootState => RootState;
+
+        bool ISearchTree.RootHasPolicyPriors => RootNode.HasPolicyPriors;
+
+        void ISearchTree.SetRootPriors(float[] priors) => ApplyPriors(RootNode, priors);
+
+        SearchLeaf ISearchTree.SelectLeaf()
+        {
+            // Selection: a leaf down the tree by UCT or PUCT
+            (MCTSNode leafNode, GameState stateAtLeaf) = SelectLeafNode();
+
+            // Expansion: a leaf that isn't terminal gets its children, and selection goes one step further among them
+            if (!leafNode.IsTerminal)
+            {
+                ExpandNode(leafNode, stateAtLeaf);
+                (leafNode, stateAtLeaf) = SelectLeafNode(leafNode, stateAtLeaf, suppressStateCopy: true);
+            }
+
+            MarkPendingPath(leafNode);
+            return new SearchLeaf(leafNode, stateAtLeaf);
+        }
+
+        bool ISearchTree.HasPolicyPriors(SearchLeaf leaf) => ((MCTSNode)leaf.Node).HasPolicyPriors;
+
+        void ISearchTree.ApplyPriors(SearchLeaf leaf, float[] priors, List<Action> moves) => ApplyPriors((MCTSNode)leaf.Node, priors);
+
+        void ISearchTree.Backpropagate(SearchLeaf leaf, ReadOnlySpan<double> utilities)
+        {
+            // The opponent models that use every player's values get all four utilities, Random only the owner's
+            MCTSNode node = (MCTSNode)leaf.Node;
+            if (Model == OpponentModel.Random) Backpropagate(node, utilities[_ownerIdx], pathAlreadyMarked: true);
+            else Backpropagate(node, utilities, pathAlreadyMarked: true);
+        }
+        #endregion
 
         public Action GetMostPromisingMove()
         {
