@@ -279,7 +279,7 @@ namespace Client
                 }
                 uint unknown = player.ResourceCards.Get(ResourceCardType.Unknown);
                 for (uint n = 0; n < unknown; n++, i++)
-                    Theme.CardBack(dl, pos + new Vector2(i * step, 1), new Vector2(15, 22));
+                    Theme.UnknownCard(dl, pos + new Vector2(i * step, 1), new Vector2(15, 22));
                 Theme.DrawText(dl, Theme.Regular15, pos + new Vector2((cards - 1) * step + 20, 2), Theme.TextSoft, cards.ToString());
 
                 if (unknown > 0 && ShownBelief(seat) is HandBelief belief && belief.Unknown > 0

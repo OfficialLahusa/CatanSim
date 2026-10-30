@@ -385,6 +385,16 @@ namespace Client.UI
         }
 
         /// <summary>
+        /// A card of a tracked hand whose type the viewer doesn't know: the card back with a question mark, so it stands
+        /// apart from the closed hand's stack
+        /// </summary>
+        public static void UnknownCard(ImDrawListPtr dl, Vector2 min, Vector2 size, float alpha = 1f)
+        {
+            CardBack(dl, min, size, alpha);
+            TextCentered(dl, Bold13, min + size / 2, WithAlpha(Text, alpha), "?");
+        }
+
+        /// <summary>
         /// A small card per resource of a cost, side by side and centered on a point
         /// </summary>
         public static void CostRow(ImDrawListPtr dl, IEnumerable<ResourceCardType> cost, Vector2 center, float cardWidth = 15, float alpha = 1f)
