@@ -114,6 +114,14 @@ namespace Common
             return sum;
         }
 
+        /// <summary>
+        /// Removes every card
+        /// </summary>
+        public void Clear()
+        {
+            Array.Clear(_cards);
+        }
+
         public void Add(T type, uint amount)
         {
             _cards[ToInt(type)] += amount;

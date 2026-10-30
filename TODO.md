@@ -19,7 +19,7 @@
 		- Server schickt Spielern und Bridges nur ihre Sicht (geschwärzte Züge, Edits als Sichten, Undo/Redo über Tracker-Stapel pro History-Eintrag), Zuschauer und Admins volles Spiel; Protokoll Version 2
 		- Client: Zuschauer wählen alle Hände, keine oder die Sicht eines Sitzes; Tischregel ShowTrackedCards (aus) zeigt fremde sichere Karten plus Unknowns statt nur der Anzahl
 	- 2. Determinized MCTS (PIMC): N Determinisierungen, Root Visits aggregieren, Net bleibt gültig; Benchmark gegen Cheating MCTS; Schwächen Strategy Fusion und Non-Locality
-		- DeterminizedMCTSAgent (Arena-Option dN): d8 bei 5000 Iterationen gegen Cheating MCTS −241 Elo [−362, −156] (30 Paare) => Budget-Split auf 8 Welten vermutlich zu teuer, Kontrollduell d1 läuft
+		- DeterminizedMCTSAgent (Arena-Option dN) gegen Cheating MCTS bei 5000 Iterationen: d8 −241 Elo [−362, −156], d1 −58 [−154, +29] (je 30 Paare) => der Budget-Split auf 8 Welten kostet, die verdeckte Info selbst wenig; mehr Welten nur mit mehr Iterationen
 	- 3. SO-ISMCTS: Knoten = Information Sets des Root-Spielers, Availability Counts statt Parent Visits, Zufall nur branchen, wo der Root-Spieler das Ergebnis sieht
 	- 4. Belief-aware StateValueNet: Training auf StateView-Inputs (Views per Replay der Histories rekonstruierbar), Sichtbarkeits-Augmentation nach der echten Beobachtungsverteilung statt zufällig, erwartete versteckte VP als Feature
 	- 5. Particle MCTS / POMCP erst mit Spielerhandel (Angebote schwer als Constraints)

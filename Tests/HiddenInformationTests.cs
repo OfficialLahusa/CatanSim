@@ -12,13 +12,13 @@ namespace Tests
     /// </summary>
     public class HiddenInformationTests
     {
-        private static readonly int[] Observers = [BeliefTracker.Public, 0, 1, 2, 3];
+        internal static readonly int[] Observers = [BeliefTracker.Public, 0, 1, 2, 3];
 
         #region Helpers
         /// <summary>
         /// A game followed by a tracker per observer, checked after every move
         /// </summary>
-        private sealed class Followed
+        internal sealed class Followed
         {
             public GameState Truth { get; }
             public GameState Start { get; }
@@ -48,7 +48,7 @@ namespace Tests
             }
         }
 
-        private static GameState NewGame(int seed, bool freeTrade = false)
+        internal static GameState NewGame(int seed, bool freeTrade = false)
         {
             TestUtil.Seed(seed);
             GameState state = TestUtil.NewGame();
@@ -59,7 +59,7 @@ namespace Tests
         /// <summary>
         /// Plays a seeded random game until the condition holds for the next move (or the game ends); the move is not played
         /// </summary>
-        private static (Followed game, Action next)? PlayUntilNext(int seed, Func<GameState, Action, bool> condition, bool freeTrade = false, int maxActions = 5000)
+        internal static (Followed game, Action next)? PlayUntilNext(int seed, Func<GameState, Action, bool> condition, bool freeTrade = false, int maxActions = 5000)
         {
             Followed game = new Followed(NewGame(seed, freeTrade));
             Agent[] agents = TestUtil.RandomAgents();
@@ -72,7 +72,7 @@ namespace Tests
             return null;
         }
 
-        private static (Followed game, Action next) FindNext(Func<GameState, Action, bool> condition, bool freeTrade = false)
+        internal static (Followed game, Action next) FindNext(Func<GameState, Action, bool> condition, bool freeTrade = false)
         {
             for (int seed = 1; seed < 400; seed++)
             {
@@ -81,9 +81,9 @@ namespace Tests
             throw new InvalidOperationException("No random game reached the situation");
         }
 
-        private static int DistinctTypes(CardSet<ResourceCardType> cards) => CardTypeExtensions.ResourceTypes.Count(t => cards.Get(t) > 0);
+        internal static int DistinctTypes(CardSet<ResourceCardType> cards) => CardTypeExtensions.ResourceTypes.Count(t => cards.Get(t) > 0);
 
-        private static bool IsSteal(GameState state, Action action) =>
+        internal static bool IsSteal(GameState state, Action action) =>
             action is RobberAction { TargetPlayerIndex: sbyte victim } && victim != action.PlayerIndex && state.Players[victim].ResourceCards.Count() > 0;
 
         private static DevelopmentCardType? PlayedType(Action action) => action switch
@@ -541,7 +541,7 @@ namespace Tests
         /// <summary>
         /// The same position played on with two different hidden outcomes of the next move
         /// </summary>
-        private static (Followed a, Followed b) TwoOutcomes(Followed game, Action next, Func<Action, object?> outcome)
+        internal static (Followed a, Followed b) TwoOutcomes(Followed game, Action next, Func<Action, object?> outcome)
         {
             for (int seed = 1; seed < 200; seed++)
             {
@@ -592,7 +592,7 @@ namespace Tests
             AssertSameForOthers(a, b, next.PlayerIndex);
         }
 
-        private static int DistinctTypesOfDeck(GameState state) => CardSet<DevelopmentCardType>.Values.Count(t => state.DevelopmentBank.Get(t) > 0);
+        internal static int DistinctTypesOfDeck(GameState state) => CardSet<DevelopmentCardType>.Values.Count(t => state.DevelopmentBank.Get(t) > 0);
         #endregion
 
         #region Redacted moves
