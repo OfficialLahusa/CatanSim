@@ -510,6 +510,10 @@ namespace Simulation
             lock (_lock)
             {
                 if (!ReferenceEquals(agent, _busyAgent)) return;
+                // The finished search, which the analysis may not have read in time (a short thinking time): it stays on
+                // screen until the move is played
+                if (!_busyAgentStale && !Record.State.HasEnded && AnalysisRunner.Search(agent, Record.State, MCTSTree.GetValidActions(new GameState(Record.State))) is SearchEvent search)
+                    PublishAnalysis(Record.Version, search);
                 if (_busyAgentStale) ResetAgentLocked(agent);
                 _busyAgent = null;
                 _busyAgentStale = false;

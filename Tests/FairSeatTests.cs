@@ -19,18 +19,20 @@ namespace Tests
         [Fact]
         public void FairSeatsHaveTheirNamesAndTimes()
         {
-            Assert.Equal("Fair MCTS Easy", Seats.Name(SeatKind.PimcEasy));
-            Assert.Equal("Fair MCTS Medium", Seats.Name(SeatKind.PimcMedium));
-            Assert.Equal("Fair MCTS Hard", Seats.Name(SeatKind.PimcHard));
+            Assert.Equal("MCTS Easy", Seats.Name(SeatKind.PimcEasy));
+            Assert.Equal("MCTS Medium", Seats.Name(SeatKind.PimcMedium));
+            Assert.Equal("MCTS Hard", Seats.Name(SeatKind.PimcHard));
+            Assert.Equal("Open-hand MCTS Hard", Seats.Name(SeatKind.MctsHard));
             foreach ((SeatKind fair, SeatKind plain) in new[] { (SeatKind.PimcEasy, SeatKind.MctsEasy), (SeatKind.PimcMedium, SeatKind.MctsMedium), (SeatKind.PimcHard, SeatKind.MctsHard) })
             {
                 Assert.True(Seats.NeedsValueNet(fair));
                 Assert.Equal(Seats.PresetSeconds(plain), Seats.PresetSeconds(fair));
             }
 
-            // The default seats stay as they were
-            Assert.Equal(SeatKind.MctsHard, ServerConsole.ParseKind("hard"));
+            // The presets are the fair ones; the open-hand ones are asked for by name
+            Assert.Equal(SeatKind.PimcHard, ServerConsole.ParseKind("hard"));
             Assert.Equal(SeatKind.PimcHard, ServerConsole.ParseKind("fair-hard"));
+            Assert.Equal(SeatKind.MctsHard, ServerConsole.ParseKind("open-hand-hard"));
             Assert.Equal(SeatKind.PimcEasy, ServerConsole.ParseKind("PimcEasy"));
         }
 

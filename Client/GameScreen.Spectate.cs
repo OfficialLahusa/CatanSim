@@ -134,14 +134,17 @@ namespace Client
                 return;
             }
 
-            // The bar: one segment per player in seat order
+            // The bar: one segment per player in seat order; a segment too narrow to see is left out, and the outer visible ones
+            // get the rounded ends (a rounded segment of no width would still show a sliver)
             Vector2 bar = min + new Vector2(16, 44);
             float width = size.X - 32, offset = 0;
             float total = Math.Max(1e-6f, values.Sum());
+            int first = Array.FindIndex(values, v => width * v / total >= 0.5f), last = Array.FindLastIndex(values, v => width * v / total >= 0.5f);
             for (int seat = 0; seat < PLAYER_COUNT; seat++)
             {
                 float w = width * values[seat] / total;
-                ImDrawCornerFlags corners = seat == 0 ? ImDrawCornerFlags.Left : seat == PLAYER_COUNT - 1 ? ImDrawCornerFlags.Right : ImDrawCornerFlags.None;
+                if (w < 0.5f) continue;
+                ImDrawCornerFlags corners = (seat == first ? ImDrawCornerFlags.Left : ImDrawCornerFlags.None) | (seat == last ? ImDrawCornerFlags.Right : ImDrawCornerFlags.None);
                 dl.RoundRectFilled(bar + new Vector2(offset, 0), bar + new Vector2(offset + w, 26), Theme.U32(Theme.PlayerColor(seat)), 8, corners);
                 if (w > 34) Theme.TextCentered(dl, Theme.Bold15, bar + new Vector2(offset + w / 2, 13), Theme.TextOnPlayer(seat), $"{values[seat] / total * 100:0}%");
                 offset += w;

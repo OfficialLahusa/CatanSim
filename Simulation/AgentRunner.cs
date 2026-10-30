@@ -5,9 +5,10 @@ using Action = Common.Actions.Action;
 namespace Simulation
 {
     /// <summary>
-    /// Plays the agent seats of a match on a background thread: whenever an agent should move (its turn, not paused, the pause
-    /// between moves over) it searches on a copy of the position and plays its move if the position is still the same. A
-    /// change of the position cancels a running search.
+    /// Plays the agent seats of a match on a background thread: whenever an agent should move (its turn, not paused) it searches
+    /// on a copy of the position, waits the pause between moves (so its finished search can be followed meanwhile) and plays
+    /// its move if the position is still the same and the match still wants it. A change of the position cancels a running
+    /// search.
     /// </summary>
     internal sealed class AgentRunner : IDisposable
     {
@@ -18,7 +19,6 @@ namespace Simulation
         private readonly object _lock = new();
         private CancellationTokenSource? _search;
         private bool _stepRequested;
-        private DateTime _lastMove = DateTime.MinValue;
 
         public bool IsThinking { get; private set; }
         public Agent? ThinkingAgent { get; private set; }
@@ -43,11 +43,7 @@ namespace Simulation
         /// </summary>
         public void PositionChanged()
         {
-            lock (_lock)
-            {
-                _search?.Cancel();
-                _lastMove = DateTime.UtcNow;
-            }
+            lock (_lock) _search?.Cancel();
             _wake.Set();
         }
 
@@ -62,14 +58,6 @@ namespace Simulation
                 {
                     lock (_lock) _stepRequested = false;
                     _wake.WaitOne(200);
-                    continue;
-                }
-
-                // The pause between moves, so the game can be followed
-                double wait = _match.Playback.PaceSeconds - (DateTime.UtcNow - _lastMove).TotalSeconds;
-                if (!step && wait > 0)
-                {
-                    _wake.WaitOne(TimeSpan.FromSeconds(Math.Min(wait, 0.2)));
                     continue;
                 }
 
@@ -108,8 +96,28 @@ namespace Simulation
                     if (ReferenceEquals(_search, search)) _search = null;
                 }
                 search.Dispose();
-                if (action != null && !cancelled) _match.PlayAgentMove(agent, action, moveVersion);
+                if (action != null && !cancelled && (step || PauseBeforeMove())) _match.PlayAgentMove(agent, action, moveVersion);
             }
+        }
+
+        /// <summary>
+        /// The pause between moves, after the search so its result stays on screen; false if the match no longer wants the move
+        /// meanwhile (paused, a human's turn without stand-ins), true at once for a step
+        /// </summary>
+        private bool PauseBeforeMove()
+        {
+            DateTime searched = DateTime.UtcNow;
+            while (!_stop.IsCancellationRequested)
+            {
+                bool step;
+                lock (_lock) step = _stepRequested;
+                if (step) return true;
+                if (!_match.WantsAgentMove(false)) return false;
+                double wait = _match.Playback.PaceSeconds - (DateTime.UtcNow - searched).TotalSeconds;
+                if (wait <= 0) return true;
+                _wake.WaitOne(TimeSpan.FromSeconds(Math.Min(wait, 0.2)));
+            }
+            return false;
         }
 
         public void Dispose()

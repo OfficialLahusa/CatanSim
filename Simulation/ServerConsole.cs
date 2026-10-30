@@ -36,7 +36,8 @@ namespace Simulation
               token spectator [LABEL]      a new spectator token
               revoke ID                    removes a token and closes its connections
               spectators on|off            whether anyone may watch without a token
-              seat SEAT KIND               who plays a seat (human, easy, medium, hard, greedy, builder, simple, random)
+              seat SEAT KIND               who plays a seat (human, easy, medium, hard, open-hand-easy, open-hand-medium,
+                                           open-hand-hard, greedy, builder, simple, random)
               newgame KIND KIND KIND KIND  a new game on a new map with these seats (add "desert" for a central desert,
                                            "notrade" for no trading between players)
               pause / resume               stops or restarts the agents
@@ -185,16 +186,17 @@ namespace Simulation
         }
 
         /// <summary>
-        /// A seat kind by its name or its preset (easy, medium, hard)
+        /// A seat kind by its name or its preset: easy, medium, hard for the MCTS presets that see what their seat sees (also
+        /// fair-easy and so on), open-hand-easy and so on for those that see every hand
         /// </summary>
         public static SeatKind? ParseKind(string word) => word.ToLowerInvariant() switch
         {
-            "easy" => SeatKind.MctsEasy,
-            "medium" => SeatKind.MctsMedium,
-            "hard" => SeatKind.MctsHard,
-            "fair-easy" => SeatKind.PimcEasy,
-            "fair-medium" => SeatKind.PimcMedium,
-            "fair-hard" => SeatKind.PimcHard,
+            "easy" or "fair-easy" => SeatKind.PimcEasy,
+            "medium" or "fair-medium" => SeatKind.PimcMedium,
+            "hard" or "fair-hard" => SeatKind.PimcHard,
+            "open-hand-easy" => SeatKind.MctsEasy,
+            "open-hand-medium" => SeatKind.MctsMedium,
+            "open-hand-hard" => SeatKind.MctsHard,
             _ => Enum.TryParse(word, true, out SeatKind kind) ? kind : null
         };
     }

@@ -6,8 +6,9 @@ using Common;
 namespace Simulation
 {
     /// <summary>
-    /// Who plays a seat. The Pimc kinds are the fair MCTS presets: they see only what their seat can know and search its
-    /// information sets (see InformationSetMCTSAgent; the names stay for saved seats); the others see every hand.
+    /// Who plays a seat. The Pimc kinds are the MCTS presets: they see only what their seat can know and search its
+    /// information sets (see InformationSetMCTSAgent); the Mcts kinds are the open-hand presets, which see every hand. The
+    /// names stay as they were for saved seats.
     /// </summary>
     public enum SeatKind { Human, MctsEasy, MctsMedium, MctsHard, Greedy, Builder, Simple, Random, PimcEasy, PimcMedium, PimcHard }
 
@@ -43,8 +44,8 @@ namespace Simulation
     public static class Seats
     {
         /// <summary>
-        /// The seat kinds in the order the pickers list them: the human, the fair MCTS presets (the default bots), the MCTS
-        /// presets that see every hand, then the simpler agents from strong to weak
+        /// The seat kinds in the order the pickers list them: the human, the MCTS presets (the default bots), the open-hand
+        /// MCTS presets that see every hand, then the simpler agents from strong to weak
         /// </summary>
         public static readonly SeatKind[] Ordered =
         [
@@ -53,23 +54,23 @@ namespace Simulation
         ];
 
         /// <summary>
-        /// The bot a new game gets by default: the fair medium preset, or the builder without the value net
+        /// The bot a new game gets by default: the medium MCTS preset, or the builder without the value net
         /// </summary>
         public static SeatKind DefaultBot(bool valueNetAvailable) => valueNetAvailable ? SeatKind.PimcMedium : SeatKind.Builder;
 
         public static string Name(SeatKind kind) => kind switch
         {
             SeatKind.Human => "Human",
-            SeatKind.MctsEasy => "MCTS Easy (sees all hands)",
-            SeatKind.MctsMedium => "MCTS Medium (sees all hands)",
-            SeatKind.MctsHard => "MCTS Hard (sees all hands)",
+            SeatKind.MctsEasy => "Open-hand MCTS Easy",
+            SeatKind.MctsMedium => "Open-hand MCTS Medium",
+            SeatKind.MctsHard => "Open-hand MCTS Hard",
             SeatKind.Greedy => "Greedy",
             SeatKind.Builder => "Builder",
             SeatKind.Simple => "Simple",
             SeatKind.Random => "Random",
-            SeatKind.PimcEasy => "Fair MCTS Easy",
-            SeatKind.PimcMedium => "Fair MCTS Medium",
-            SeatKind.PimcHard => "Fair MCTS Hard",
+            SeatKind.PimcEasy => "MCTS Easy",
+            SeatKind.PimcMedium => "MCTS Medium",
+            SeatKind.PimcHard => "MCTS Hard",
             _ => kind.ToString()
         };
 

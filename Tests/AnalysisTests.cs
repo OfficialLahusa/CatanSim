@@ -107,6 +107,26 @@ namespace Tests
         }
 
         [SkippableFact]
+        public void ShortSearchesStillReachTheWatchers()
+        {
+            // Searches far shorter than the analysis' interval: the finished search is sent when the agent is done, and the
+            // pause between moves comes after it, so every kind of searching seat shows its visits
+            Skip.IfNot(Seats.ValueNetAvailable, "The value net is missing.");
+            Utils.Random.SeedCurrentThread(8);
+            using Match match = new Match(new GameState(MapGenerator.GenerateRandomClassic(), 4),
+                [SeatKind.PimcEasy, SeatKind.MctsEasy, SeatKind.PimcEasy, SeatKind.MctsEasy]);
+            SessionInfo admin = new("admin", "Admin", Role.Admin, null);
+            match.Handle(admin, new ConfigureAgents(new AgentSettings(null, 256, Agents.MCTS.OpponentModel.MaxN)));
+            match.Handle(admin, new SetPlayback(new PlaybackState(false, false, 0.05f)));
+            ConcurrentQueue<MatchEvent> watcher = Listen(match, new SessionInfo("s", "S", Role.Spectator, null));
+            match.Start();
+
+            Assert.True(WaitFor(() => watcher.OfType<SearchEvent>().Select(s => s.Seat).Distinct().Count() == 4, 60000),
+                $"searches only from seats {string.Join(", ", watcher.OfType<SearchEvent>().Select(s => s.Seat).Distinct())}");
+            Assert.All(watcher.OfType<SearchEvent>(), search => Assert.True(search.Visits.Sum(v => (long)v) > 0));
+        }
+
+        [SkippableFact]
         public void TheThinkingAgentsSearchGoesToWatchersOnly()
         {
             Skip.IfNot(Seats.ValueNetAvailable, "The value net is missing.");
