@@ -62,10 +62,10 @@ namespace Arena
             var challengerNet = new StateValueNet(settings.Challenger.ModelPath, provider: settings.Provider);
             var baselineNet = settings.Baseline.ModelPath == settings.Challenger.ModelPath
                 ? challengerNet : new StateValueNet(settings.Baseline.ModelPath, provider: settings.Provider);
-            var nets = new Dictionary<AgentSpec, (StateValueNet net, IStateVectorizer vectorizer)>
+            var nets = new Dictionary<AgentSpec, StateValueNet>
             {
-                [settings.Challenger] = (challengerNet, StateVectorizer.For(challengerNet)),
-                [settings.Baseline] = (baselineNet, StateVectorizer.For(baselineNet)),
+                [settings.Challenger] = challengerNet,
+                [settings.Baseline] = baselineNet,
             };
             bool iterationBudget = settings.Iterations > 0;
             int parallel = iterationBudget ? Math.Max(1, settings.Parallel) : 1;
@@ -114,7 +114,7 @@ namespace Arena
             return Statistics;
         }
 
-        private string? PlayGame(int game, Dictionary<AgentSpec, (StateValueNet net, IStateVectorizer vectorizer)> nets, CancellationToken cancellation,
+        private string? PlayGame(int game, Dictionary<AgentSpec, StateValueNet> nets, CancellationToken cancellation,
             out GameState state, out double seconds)
         {
             AgentSpec[] seats = game % 2 == 0
@@ -126,8 +126,9 @@ namespace Arena
             Agent[] agents = Enumerable.Range(0, 4).Select(seat =>
             {
                 AgentSpec spec = seats[seat];
+                // The agent picks the encoding of its net (see Vectorizers): a belief-aware net sees its seat's view
                 MCTSAgent search = new MCTSAgent((sbyte)seat, start, explorationParameter: spec.Exploration, timeLimitSeconds: settings.Seconds,
-                    valueNet: nets[spec].net, vectorizer: nets[spec].vectorizer, placementWeight: spec.PlacementWeight, opponentModel: spec.OpponentModel,
+                    valueNet: nets[spec], placementWeight: spec.PlacementWeight, opponentModel: spec.OpponentModel,
                     iterationLimit: settings.Iterations, leavesPerBatch: spec.LeavesPerBatch)
                 { UniformPriors = spec.UniformPriors, FirstPlayReduction = spec.FirstPlayReduction };
 

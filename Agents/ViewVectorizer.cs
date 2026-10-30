@@ -3,6 +3,16 @@ using Common;
 namespace Agents
 {
     /// <summary>
+    /// The encoding a net was trained on, for an agent of a seat: a net of the view layout gets the seat's view
+    /// (ViewVectorizer), the others the StateVectorizer of their layout
+    /// </summary>
+    public static class Vectorizers
+    {
+        public static IStateVectorizer For(Inference.StateValueNet net, int seat) =>
+            net.InputDim == ViewVectorizer.FeatureDim ? new ViewVectorizer { Observer = seat } : StateVectorizer.For(net);
+    }
+
+    /// <summary>
     /// The input of a belief-aware value net: a seat's view (see BeliefTracker) in the layout of the StateVectorizer, whose
     /// Unknown slots hold the cards the seat can't see, followed by what the seat's tracker knows beyond the view: per player
     /// and resource type how many of the unknown cards can be of it, and the hidden development cards by type. The net so

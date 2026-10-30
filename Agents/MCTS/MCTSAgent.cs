@@ -41,6 +41,11 @@ namespace Agents.MCTS
         protected readonly object _treeLock = new object();
 
         /// <summary>
+        /// The encoding of the leaves for the agent's net (see Vectorizers)
+        /// </summary>
+        public IStateVectorizer Vectorizer => _stateVectorizer;
+
+        /// <summary>
         /// Statistics of the last search (RunForTime or RunBatchedIterations)
         /// </summary>
         public SearchStatistics? LastSearch => _search.LastSearch;
@@ -127,7 +132,7 @@ namespace Agents.MCTS
             _timeLimitSeconds = timeLimitSeconds;
             IterationLimit = iterationLimit;
             _stateValueNet = valueNet ?? DefaultValueNet.Value;
-            _stateVectorizer = vectorizer ?? StateVectorizer.For(_stateValueNet);
+            _stateVectorizer = vectorizer ?? Vectorizers.For(_stateValueNet, playerIndex);
             _search = new MCTSSearch(new DirectEvaluator(_stateValueNet), _stateVectorizer, leavesPerBatch, parallelSelection: true);
             PlacementWeight = placementWeight;
             _opponentModel = opponentModel;

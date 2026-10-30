@@ -133,6 +133,45 @@ namespace Tests
             Assert.NotEqual(EncodeLeaf(full, 1), EncodeLeaf(swapped, 1));
         }
 
+        private static Agents.Inference.StateValueNet Net(string name) =>
+            new(TestUtil.FixturePath("ValueNet", name), provider: Agents.Inference.InferenceProvider.Cpu);
+
+        [Fact]
+        public void ANetOfTheViewLayoutGetsItsSeatsView()
+        {
+            IStateVectorizer view = Vectorizers.For(Net("view_tiny.onnx"), 2);
+            Assert.Equal(2, Assert.IsType<ViewVectorizer>(view).Observer);
+            Assert.IsType<StateVectorizer>(Vectorizers.For(Net("policy_tiny.onnx"), 2));
+        }
+
+        [Fact]
+        public void AnAgentWithAViewNetSearchesItsSeatsView()
+        {
+            GameState state = NewGame(34);
+            Agents.Inference.StateValueNet net = Net("view_tiny.onnx");
+            Agents.MCTS.MCTSAgent search = new((sbyte)1, state, valueNet: net, iterationLimit: 64, leavesPerBatch: 16);
+            Assert.Equal(1, Assert.IsType<ViewVectorizer>(search.Vectorizer).Observer);
+            Agents.MCTS.DeterminizedMCTSAgent pimc = new(new Agents.MCTS.MCTSAgent((sbyte)0, state, valueNet: net, iterationLimit: 64, leavesPerBatch: 16), state, determinizations: 2, seed: 1);
+            Agent[] agents = TestUtil.RandomAgents();
+            int decisions = 0;
+            while (!state.HasEnded && decisions < 30)
+            {
+                sbyte acting = TestUtil.ActingPlayer(state);
+                Action action = acting switch
+                {
+                    0 => pimc.Act(new GameState(state)),
+                    1 => search.Act(new GameState(state)),
+                    _ => agents[acting].Act(state)
+                };
+                if (acting <= 1) decisions++;
+                Assert.True(action.IsValidFor(state), $"{action} is not legal");
+                action.Apply(state);
+                pimc.HandleAction(action);
+                search.HandleAction(action);
+            }
+            Assert.Equal(30, decisions);
+        }
+
         [Fact]
         public void LeavesAreEncodedFromSeveralThreadsAtOnce()
         {
