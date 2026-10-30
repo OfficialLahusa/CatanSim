@@ -8,7 +8,7 @@ using Action = Common.Actions.Action;
 namespace Tests
 {
     /// <summary>
-    /// The fair seats (Fair MCTS Easy/Medium/Hard): agents that play under hidden information (DeterminizedMCTSAgent) with the
+    /// The fair seats (Fair MCTS Easy/Medium/Hard): agents that play under hidden information (InformationSetMCTSAgent) with the
     /// presets' thinking times, chosen separately from the default seats. The match keeps their beliefs as it keeps its own,
     /// through undo, redo, loading and seat changes.
     /// </summary>
@@ -17,7 +17,7 @@ namespace Tests
         private static readonly SessionInfo Admin = new("admin", "Admin", Role.Admin, null);
 
         [Fact]
-        public void FairSeatsHaveTheirNamesTimesAndWorlds()
+        public void FairSeatsHaveTheirNamesAndTimes()
         {
             Assert.Equal("Fair MCTS Easy", Seats.Name(SeatKind.PimcEasy));
             Assert.Equal("Fair MCTS Medium", Seats.Name(SeatKind.PimcMedium));
@@ -27,9 +27,6 @@ namespace Tests
                 Assert.True(Seats.NeedsValueNet(fair));
                 Assert.Equal(Seats.PresetSeconds(plain), Seats.PresetSeconds(fair));
             }
-            Assert.Equal(1, Seats.Determinizations(SeatKind.PimcEasy));
-            Assert.Equal(1, Seats.Determinizations(SeatKind.PimcMedium));
-            Assert.Equal(4, Seats.Determinizations(SeatKind.PimcHard));
 
             // The default seats stay as they were
             Assert.Equal(SeatKind.MctsHard, ServerConsole.ParseKind("hard"));
@@ -42,17 +39,35 @@ namespace Tests
         {
             TestUtil.SkipWithoutModel();
             GameState state = TestUtil.NewGame();
-            DeterminizedMCTSAgent hard = Assert.IsType<DeterminizedMCTSAgent>(Seats.CreateAgent(SeatKind.PimcHard, 2, state, AgentSettings.Default, true));
+            InformationSetMCTSAgent hard = Assert.IsType<InformationSetMCTSAgent>(Seats.CreateAgent(SeatKind.PimcHard, 2, state, AgentSettings.Default, true));
             Assert.Equal(2, hard.PlayerIndex);
-            Assert.Equal(4, hard.Determinizations);
+            Assert.False(hard.FullKnowledge);
             Assert.Equal(2, hard.Search.TimeLimitSeconds);
 
-            DeterminizedMCTSAgent easy = Assert.IsType<DeterminizedMCTSAgent>(Seats.CreateAgent(SeatKind.PimcEasy, 1, state, new AgentSettings(null, 500, OpponentModel.MaxN), true));
-            Assert.Equal(1, easy.Determinizations);
+            InformationSetMCTSAgent easy = Assert.IsType<InformationSetMCTSAgent>(Seats.CreateAgent(SeatKind.PimcEasy, 1, state, new AgentSettings(null, 500, OpponentModel.MaxN), true));
             Assert.Equal(500, easy.Search.IterationLimit);
 
             // Without the net they fall back to the builder, like the other seats that need it
             Assert.IsType<BuilderAgent>(Seats.CreateAgent(SeatKind.PimcMedium, 0, state, AgentSettings.Default, false));
+        }
+
+        [SkippableFact]
+        public void FairSeatsPlayAWholeMatchAgainstEachOther()
+        {
+            // The client's path: the match runs the four fair agents with its runner until the game ends
+            TestUtil.SkipWithoutModel();
+            TestUtil.Seed(43);
+            SeatKind[] fair = [SeatKind.PimcEasy, SeatKind.PimcMedium, SeatKind.PimcHard, SeatKind.PimcEasy];
+            using Match match = new Match(TestUtil.NewGame(), fair, valueNetAvailable: true);
+            match.Handle(Admin, new ConfigureAgents(new AgentSettings(null, 256, OpponentModel.MaxN)));
+            match.Handle(Admin, new SetPlayback(new PlaybackState(false, false, 0)));
+            match.Start();
+
+            System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+            while (!match.Record.State.HasEnded && watch.Elapsed < TimeSpan.FromMinutes(5)) Thread.Sleep(100);
+            Assert.True(match.Record.State.HasEnded, "the fair seats didn't finish the game");
+            for (int seat = 0; seat < 4; seat++)
+                Assert.IsType<InformationSetMCTSAgent>(match.AgentOf(seat));
         }
 
         [SkippableFact]
@@ -67,7 +82,7 @@ namespace Tests
             {
                 for (int seat = 0; seat < 4; seat++)
                 {
-                    if (match.AgentOf(seat) is DeterminizedMCTSAgent fair)
+                    if (match.AgentOf(seat) is InformationSetMCTSAgent fair)
                         Assert.Equal(match.Beliefs.For(seat), fair.Beliefs);
                 }
             }
@@ -88,7 +103,7 @@ namespace Tests
 
             // A seat that turns fair in the middle of the game knows only what the seat could know
             match.Handle(Admin, new SetSeat(1, SeatKind.PimcHard));
-            Assert.IsType<DeterminizedMCTSAgent>(match.AgentOf(1));
+            Assert.IsType<InformationSetMCTSAgent>(match.AgentOf(1));
             AssertBeliefs();
 
             // Loading a game: the beliefs follow its moves from its start

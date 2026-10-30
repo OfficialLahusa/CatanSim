@@ -433,14 +433,14 @@ namespace Simulation
         /// </summary>
         private void ResetAgentLocked(Agent agent)
         {
-            if (agent is DeterminizedMCTSAgent fair) fair.ResetTo(Record.State, _beliefs.For(fair.PlayerIndex));
+            if (agent is InformationSetMCTSAgent fair) fair.ResetTo(Record.State, _beliefs.For(fair.PlayerIndex));
             else agent.ResetToState(Record.State);
         }
 
         /// <summary>
         /// The MCTS search of an agent, also inside a fair one
         /// </summary>
-        private static MCTSAgent? SearchOf(Agent? agent) => agent as MCTSAgent ?? (agent as DeterminizedMCTSAgent)?.Search;
+        private static MCTSAgent? SearchOf(Agent? agent) => agent as MCTSAgent ?? (agent as InformationSetMCTSAgent)?.Search;
 
         /// <summary>
         /// The agent of a seat, for tests

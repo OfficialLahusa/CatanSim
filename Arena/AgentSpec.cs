@@ -11,13 +11,13 @@ namespace Arena
     /// information sets (see InformationSetMCTSAgent), isfull the same search on the true position (an ablation); without
     /// these the agent sees every hand. Ablations of the search: norm or nonorm selects with or without values scaled to
     /// the range seen in the tree (MCTS normalizes, ISMCTS not), ob lets ISMCTS branch on outcomes its seat can't see,
-    /// noreuse starts MCTS on a new tree every decision (ISMCTS always does), leaf lets MCTS evaluate a leaf on its first
-    /// visit instead of one of its moves (as ISMCTS does).
+    /// noreuse starts MCTS on a new tree every decision (ISMCTS always does), noleaf lets MCTS evaluate one of a new leaf's
+    /// moves instead of the leaf itself (the old search; leaf is the default).
     /// </summary>
     internal sealed record AgentSpec(string Name, string ModelPath, OpponentModel OpponentModel, double Exploration, int LeavesPerBatch,
         double FirstPlayReduction, double PlacementWeight, bool UniformPriors, int Determinizations = 0, bool InformationSets = false,
         bool FullKnowledge = false, bool? NormalizeValues = null, bool BranchHiddenOutcomes = false, bool ReuseTree = true,
-        bool EvaluateNewLeaves = false)
+        bool EvaluateNewLeaves = true)
     {
         public static AgentSpec Parse(string spec)
         {
@@ -39,6 +39,7 @@ namespace Arena
                     "ob" => result with { BranchHiddenOutcomes = true },
                     "noreuse" => result with { ReuseTree = false },
                     "leaf" => result with { EvaluateNewLeaves = true },
+                    "noleaf" => result with { EvaluateNewLeaves = false },
                     _ when Enum.TryParse(option, out OpponentModel model) => result with { OpponentModel = model },
                     ['c', ..] => result with { Exploration = Number() },
                     ['b', ..] => result with { LeavesPerBatch = int.Parse(option[1..], CultureInfo.InvariantCulture) },
@@ -67,7 +68,7 @@ namespace Arena
             if (NormalizeValues is bool normalize) options.Add(normalize ? "norm" : "nonorm");
             if (BranchHiddenOutcomes) options.Add("ob");
             if (!ReuseTree) options.Add("noreuse");
-            if (EvaluateNewLeaves) options.Add("leaf");
+            if (!EvaluateNewLeaves) options.Add("noleaf");
             return $"{Name} {Path.GetFileName(ModelPath)} {string.Join(" ", options)}";
         }
     }

@@ -6,8 +6,8 @@ using Common;
 namespace Simulation
 {
     /// <summary>
-    /// Who plays a seat. The Pimc kinds are the fair MCTS presets: they see only what their seat can know (see
-    /// DeterminizedMCTSAgent); the others see every hand.
+    /// Who plays a seat. The Pimc kinds are the fair MCTS presets: they see only what their seat can know and search its
+    /// information sets (see InformationSetMCTSAgent; the names stay for saved seats); the others see every hand.
     /// </summary>
     public enum SeatKind { Human, MctsEasy, MctsMedium, MctsHard, Greedy, Builder, Simple, Random, PimcEasy, PimcMedium, PimcHard }
 
@@ -74,12 +74,6 @@ namespace Simulation
         };
 
         /// <summary>
-        /// The worlds a fair seat searches per decision when something is hidden: one for the short presets, four for the
-        /// hard one, whose time is enough to search each well (eight at 5000 iterations searched too little, see TODO.md)
-        /// </summary>
-        public static int Determinizations(SeatKind kind) => kind == SeatKind.PimcHard ? 4 : 1;
-
-        /// <summary>
         /// The agent of a seat; a human seat gets a stand-in that plays like the medium preset (the builder without the net)
         /// </summary>
         public static Agent CreateAgent(SeatKind kind, sbyte seat, GameState state, AgentSettings settings, bool valueNetAvailable)
@@ -95,7 +89,7 @@ namespace Simulation
                 SeatKind.Simple => new SimpleAgent(seat),
                 SeatKind.Builder => new BuilderAgent(seat),
                 SeatKind.Greedy => new GreedyAgent(seat),
-                _ when IsFair(kind) => new DeterminizedMCTSAgent(Search(), state, Determinizations(kind)),
+                _ when IsFair(kind) => new InformationSetMCTSAgent(Search(), state),
                 _ => Search()
             };
         }

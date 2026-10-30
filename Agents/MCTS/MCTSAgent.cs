@@ -89,7 +89,7 @@ namespace Agents.MCTS
         /// <summary>
         /// Evaluate a leaf on its first visit instead of one of its moves (see MCTSTree.EvaluateNewLeaves)
         /// </summary>
-        public bool EvaluateNewLeaves { get; set; }
+        public bool EvaluateNewLeaves { get; set; } = true;
 
         /// <summary>
         /// Search by PUCT with uniform priors instead of the policy head's (see MCTSSearch.UniformPriors)

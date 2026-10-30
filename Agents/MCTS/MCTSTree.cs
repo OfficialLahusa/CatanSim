@@ -52,9 +52,10 @@ namespace Agents.MCTS
         /// <summary>
         /// A leaf the search reaches for the first time is evaluated itself, and expanded only when it is reached again (with
         /// the priors of its evaluation). Otherwise every leaf is expanded at once and one of its moves is evaluated instead,
-        /// picked with uniform priors, so a move that wasn't the first one tried under its parent is valued by a random reply.
+        /// picked with uniform priors, so a move that wasn't the first one tried under its parent is valued by a random reply
+        /// (the old search: about 90 Elo weaker at 5000 iterations, 35 at 0.1 s per decision).
         /// </summary>
-        public bool EvaluateNewLeaves { get; set; }
+        public bool EvaluateNewLeaves { get; set; } = true;
 
         public MCTSTree(GameState rootState, sbyte ownerIdx, double explorationParameter, bool normalizeValues = true, OpponentModel model = OpponentModel.Random)
         {

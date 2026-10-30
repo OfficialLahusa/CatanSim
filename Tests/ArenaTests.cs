@@ -63,7 +63,10 @@ namespace Tests
             AgentSpec fresh = AgentSpec.Parse("N=a.onnx=noreuse");
             Assert.False(fresh.ReuseTree);
             Assert.Equal("N a.onnx MaxN noreuse", fresh.ToString());
-            Assert.True(AgentSpec.Parse("L=a.onnx=leaf").EvaluateNewLeaves);
+            Assert.True(AgentSpec.Parse("L=a.onnx").EvaluateNewLeaves);
+            AgentSpec old = AgentSpec.Parse("O=a.onnx=noleaf");
+            Assert.False(old.EvaluateNewLeaves);
+            Assert.Equal("O a.onnx MaxN noleaf", old.ToString());
         }
 
         [Theory]
