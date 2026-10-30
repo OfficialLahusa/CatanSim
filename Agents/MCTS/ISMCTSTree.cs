@@ -388,6 +388,18 @@ namespace Agents.MCTS
         public IReadOnlyList<(Action move, uint visits)> RootVisits() => RootNode.Children.Select(child => (child.Move!, child.Visits)).ToList();
 
         /// <summary>
+        /// The root's moves with their visits, priors and mean values, for showing the search (also while it runs)
+        /// </summary>
+        public IReadOnlyList<MCTSAgent.RootMove> RootMoves()
+        {
+            ISNode[] children = RootNode.Children.ToArray();
+            if (children.Length == 0) return [];
+            float[] priors = Priors(children);
+            return children.Select((child, i) => new MCTSAgent.RootMove(child.Move!, child.Visits, priors[i],
+                Enumerable.Range(0, MCTSNode.PlayerCount).Select(child.MeanValue).ToArray())).ToList();
+        }
+
+        /// <summary>
         /// The mean value of the root for each player
         /// </summary>
         public double[] RootValues() => Enumerable.Range(0, MCTSNode.PlayerCount).Select(RootNode.MeanValue).ToArray();

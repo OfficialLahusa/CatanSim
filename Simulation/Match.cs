@@ -542,11 +542,11 @@ namespace Simulation
         /// <summary>
         /// The position's version, a copy of the position if its version isn't the known one, and the MCTS agent searching it
         /// </summary>
-        internal (int version, GameState? state, MCTSAgent? thinking) AnalysisSnapshot(int knownVersion)
+        internal (int version, GameState? state, Agent? thinking) AnalysisSnapshot(int knownVersion)
         {
             lock (_lock)
             {
-                return (Record.Version, Record.Version != knownVersion ? new GameState(Record.State) : null, SearchOf(_busyAgent));
+                return (Record.Version, Record.Version != knownVersion ? new GameState(Record.State) : null, _busyAgent is IShowsSearch ? _busyAgent : null);
             }
         }
 

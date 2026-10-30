@@ -130,7 +130,9 @@ namespace Client
                 Console.WriteLine($"Value net not found at \"{StateValueNet.DefaultModelPath}\": net evaluation, GreedyAgent and MCTSAgent are unavailable.");
 
             // A local match: three agents and the human on a random seat, so they don't always start last
-            SeatKind bot = _valueNetAvailable ? SeatKind.MctsMedium : SeatKind.Builder;
+            SeatKind bot = Simulation.Seats.DefaultBot(_valueNetAvailable);
+            _menuLocalSeats = [SeatKind.Human, bot, bot, bot];
+            _menuHostSeats = [SeatKind.Human, SeatKind.Human, bot, bot];
             GameState first = new GameState(MapGenerator.GenerateRandomClassic(), PLAYER_COUNT);
             first.Settings.FreeTrade = true;
             SeatKind[] seats = Enumerable.Repeat(bot, PLAYER_COUNT).ToArray();

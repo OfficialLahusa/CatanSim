@@ -10,7 +10,7 @@ namespace Agents.MCTS
     /// time or iteration budget and the settings of the MCTS agent of its seat. Trades between players are decided outside
     /// the tree, on a world drawn from the view. The true state it is given is only used for its public parts.
     /// </summary>
-    public sealed class InformationSetMCTSAgent : Agent
+    public sealed class InformationSetMCTSAgent : Agent, IShowsSearch
     {
         private readonly MCTSAgent _search;
         private readonly Random _random;
@@ -59,6 +59,7 @@ namespace Agents.MCTS
 
         public override Action Act(GameState state, CancellationToken cancellation)
         {
+            _searched = null;
             if (_search.DecideTrade(FullKnowledge ? state : _beliefs.Determinize(_beliefs.View(state), _random)) is Action trade) return trade;
 
             List<Action> legal = MCTSTree.GetValidActions(state);
@@ -71,9 +72,16 @@ namespace Agents.MCTS
                 NormalizeValues = NormalizeValues
             };
             LastTree = tree;
+            _searched = new GameState(state);
             _search.RunSearch(tree, cancellation);
             return tree.GetMostPromisingMove();
         }
+
+        // The position of the last tree, for showing its search
+        private GameState? _searched;
+
+        public (GameState? state, IReadOnlyList<MCTSAgent.RootMove> moves) GetRootMoves() =>
+            LastTree is ISMCTSTree tree && _searched is GameState state ? (state, tree.RootMoves()) : (null, []);
 
         public override void HandleAction(Action action)
         {

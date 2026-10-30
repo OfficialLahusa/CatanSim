@@ -42,12 +42,27 @@ namespace Simulation
 
     public static class Seats
     {
+        /// <summary>
+        /// The seat kinds in the order the pickers list them: the human, the fair MCTS presets (the default bots), the MCTS
+        /// presets that see every hand, then the simpler agents from strong to weak
+        /// </summary>
+        public static readonly SeatKind[] Ordered =
+        [
+            SeatKind.Human, SeatKind.PimcEasy, SeatKind.PimcMedium, SeatKind.PimcHard, SeatKind.MctsEasy, SeatKind.MctsMedium, SeatKind.MctsHard,
+            SeatKind.Greedy, SeatKind.Builder, SeatKind.Simple, SeatKind.Random
+        ];
+
+        /// <summary>
+        /// The bot a new game gets by default: the fair medium preset, or the builder without the value net
+        /// </summary>
+        public static SeatKind DefaultBot(bool valueNetAvailable) => valueNetAvailable ? SeatKind.PimcMedium : SeatKind.Builder;
+
         public static string Name(SeatKind kind) => kind switch
         {
             SeatKind.Human => "Human",
-            SeatKind.MctsEasy => "MCTS Easy",
-            SeatKind.MctsMedium => "MCTS Medium",
-            SeatKind.MctsHard => "MCTS Hard",
+            SeatKind.MctsEasy => "MCTS Easy (sees all hands)",
+            SeatKind.MctsMedium => "MCTS Medium (sees all hands)",
+            SeatKind.MctsHard => "MCTS Hard (sees all hands)",
             SeatKind.Greedy => "Greedy",
             SeatKind.Builder => "Builder",
             SeatKind.Simple => "Simple",

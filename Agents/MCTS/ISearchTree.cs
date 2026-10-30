@@ -9,6 +9,15 @@ namespace Agents.MCTS
     public readonly record struct SearchLeaf(object Node, GameState State);
 
     /// <summary>
+    /// An agent whose search can be shown while it thinks: the root moves of its current tree and the position they belong to
+    /// (empty without a tree, or for a chance node)
+    /// </summary>
+    public interface IShowsSearch
+    {
+        (GameState? state, IReadOnlyList<MCTSAgent.RootMove> moves) GetRootMoves();
+    }
+
+    /// <summary>
     /// What MCTSSearch needs of a tree: a leaf per iteration (selected, expanded and marked as pending), the priors of its
     /// moves, and the backpropagation of its utilities. MCTSTree searches the game itself, ISMCTSTree the information sets of
     /// one seat, a world drawn per iteration.

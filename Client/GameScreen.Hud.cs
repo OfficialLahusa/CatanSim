@@ -1090,7 +1090,7 @@ namespace Client
         private void DrawNewGameDialog()
         {
             ImDrawListPtr dl = BeginDialog("##newgame", new Vector2(520, 436), "New game", "Who plays each seat (seat 1 starts).", null, out Vector2 min);
-            string[] kinds = Enum.GetValues<SeatKind>().Select(Simulation.Seats.Name).ToArray();
+            string[] kinds = Simulation.Seats.Ordered.Select(Simulation.Seats.Name).ToArray();
             for (int seat = 0; seat < PLAYER_COUNT; seat++)
             {
                 Vector2 pos = min + new Vector2(24, 92 + seat * 52);
@@ -1099,10 +1099,10 @@ namespace Client
                 Theme.DrawText(dl, Theme.Bold17, pos + new Vector2(42, 5), Theme.Text, Theme.PlayerName(seat));
                 ImGui.SetCursorScreenPos(pos + new Vector2(150, 2));
                 ImGui.SetNextItemWidth(300);
-                int kind = (int)_newGameSeats[seat];
+                int kind = Array.IndexOf(Simulation.Seats.Ordered, _newGameSeats[seat]);
                 if (ImGui.Combo($"##seatkind{seat}", ref kind, kinds, kinds.Length))
                 {
-                    SeatKind chosen = (SeatKind)kind;
+                    SeatKind chosen = Simulation.Seats.Ordered[kind];
                     if (chosen == SeatKind.Human || !Simulation.Seats.NeedsValueNet(chosen) || _valueNetAvailable) _newGameSeats[seat] = chosen;
                 }
             }
@@ -1248,15 +1248,15 @@ namespace Client
 
             if (ImGui.CollapsingHeader("Agents"))
             {
-                string[] kinds = Enum.GetValues<SeatKind>().Select(Simulation.Seats.Name).ToArray();
+                string[] kinds = Simulation.Seats.Ordered.Select(Simulation.Seats.Name).ToArray();
                 for (int seat = 0; seat < PLAYER_COUNT; seat++)
                 {
                     using (new ImGuiTextColor(Theme.PlayerTextColor(seat)))
                         ImGui.Text($"{Theme.PlayerName(seat)}:");
                     ImGui.SameLine(90);
-                    ImGui.SetNextItemWidth(200);
-                    int kind = (int)Seats[seat];
-                    if (ImGui.Combo($"##devseat{seat}", ref kind, kinds, kinds.Length)) SetSeat(seat, (SeatKind)kind);
+                    ImGui.SetNextItemWidth(240);
+                    int kind = Array.IndexOf(Simulation.Seats.Ordered, Seats[seat]);
+                    if (ImGui.Combo($"##devseat{seat}", ref kind, kinds, kinds.Length)) SetSeat(seat, Simulation.Seats.Ordered[kind]);
                 }
 
                 ImGui.Separator();

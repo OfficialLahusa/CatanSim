@@ -14,7 +14,7 @@ using Action = Common.Actions.Action;
 
 namespace Agents.MCTS
 {
-    public class MCTSAgent : Agent
+    public class MCTSAgent : Agent, IShowsSearch
     {
         public const double TIME_LIMIT_SECONDS = 5;
         // Leaves selected before their evaluation, unless the constructor is given another number

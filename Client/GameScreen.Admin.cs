@@ -40,7 +40,7 @@ namespace Client
         private string _tokenLabel = "";
         private static readonly string[] TokenRoles = ["Player", "Agent bridge", "Spectator", "Admin"];
         private static readonly Role[] TokenRoleValues = [Role.Player, Role.Agent, Role.Spectator, Role.Admin];
-        private static readonly SeatKind[] SeatKinds = Enum.GetValues<SeatKind>();
+        private static readonly SeatKind[] SeatKinds = Simulation.Seats.Ordered;
 
         /// <summary>
         /// Whether this client administers a match that others can join

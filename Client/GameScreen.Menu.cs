@@ -8,8 +8,9 @@ using Color = SFML.Graphics.Color;
 namespace Client
 {
     /// <summary>
-    /// The main menu over the board: a game against agents, several humans at one screen (hot-seat), hosting, joining, loading,
-    /// and the settings. It opens at the start and from the menu button or Escape; a local game waits while it is open.
+    /// The main menu over the board: a game on this computer (a human or an agent on each seat; several humans take turns at
+    /// one screen), hosting, joining, loading, and the settings. It opens at the start and from the menu button or Escape; a
+    /// local game waits while it is open.
     /// </summary>
     public partial class GameScreen
     {
@@ -27,16 +28,13 @@ namespace Client
         private readonly ClientSettings _settings = ClientSettings.Load();
         private string? _settingsError;
 
-        // A new game: humans at this screen (hot-seat with more than one) or over the network, the agents' strength, and
-        // whether the humans get random seats
-        private int _menuHumans = 1;
-        private int _menuHostHumans = 2;
-        private int _menuBotStrength = 1;
+        // A new game: who plays each seat on this computer (several humans take turns) and when hosting (the humans join over
+        // the network), and whether the seats are shuffled
+        private readonly SeatKind[] _menuLocalSeats;
+        private readonly SeatKind[] _menuHostSeats;
         private bool _menuRandomSeats = true;
 
-        private static readonly SeatKind[] BotStrengths = [SeatKind.MctsEasy, SeatKind.MctsMedium, SeatKind.MctsHard];
-
-        private const float MenuWidth = 520, MenuLabelX = 28, MenuFieldX = 230, MenuFieldWidth = 262;
+        private const float MenuWidth = 520, MenuLabelX = 28, MenuFieldX = 230, MenuFieldWidth = 262, MenuSeatRow = 44;
 
         // The match can wait: a local game without connected players
         private bool CanPauseForMenu => IsAdmin && _sim is LocalSimulation && !_sim.Game.Sessions.Any(s => s.Role is Role.Player or Role.Agent);
@@ -89,18 +87,11 @@ namespace Client
             else if (CanPauseForMenu && Playback.PaceSeconds != _settings.BotPace) Send(new SetPlayback(Playback with { PaceSeconds = _settings.BotPace }));
         }
 
-        private SeatKind MenuBot => _valueNetAvailable ? BotStrengths[_menuBotStrength] : SeatKind.Builder;
-
         /// <summary>
-        /// Seats with this many humans, on random seats or the first ones; agents of the chosen strength play the others
+        /// The configured seats, shuffled if asked (otherwise as listed: seat 1 starts)
         /// </summary>
-        private SeatKind[] MenuSeats(int humans)
-        {
-            SeatKind[] seats = Enumerable.Repeat(MenuBot, PLAYER_COUNT).ToArray();
-            IEnumerable<int> humanSeats = _menuRandomSeats ? Enumerable.Range(0, PLAYER_COUNT).OrderBy(_ => Random.Shared.Next()).Take(humans) : Enumerable.Range(0, humans);
-            foreach (int seat in humanSeats) seats[seat] = SeatKind.Human;
-            return seats;
-        }
+        private SeatKind[] MenuSeats(SeatKind[] configured) =>
+            _menuRandomSeats ? configured.OrderBy(_ => Random.Shared.Next()).ToArray() : (SeatKind[])configured.Clone();
 
         /// <summary>
         /// A new game in this process, hosted for others if asked; a server joined before is left, an old hosting stopped
@@ -133,9 +124,9 @@ namespace Client
 
             float height = _menuPage switch
             {
-                MenuPage.Main => 140 + (_menuIsStartScreen ? 7 : 8) * 56,
-                MenuPage.Local => 462,
-                MenuPage.Host => 590,
+                MenuPage.Main => 140 + (_menuIsStartScreen ? 6 : 7) * 56,
+                MenuPage.Local => 534,
+                MenuPage.Host => 662,
                 MenuPage.Join => 486,
                 _ => 356
             };
@@ -170,16 +161,7 @@ namespace Client
             }
 
             if (!_menuIsStartScreen && Item("menucontinue", "Continue", true)) CloseMenu();
-            if (Item("menubots", "Play against bots", _menuIsStartScreen))
-            {
-                _menuHumans = 1;
-                _menuPage = MenuPage.Local;
-            }
-            if (Item("menuhotseat", "Hot-seat"))
-            {
-                _menuHumans = Math.Max(2, _menuHumans);
-                _menuPage = MenuPage.Local;
-            }
+            if (Item("menulocal", "Play on this computer", _menuIsStartScreen)) _menuPage = MenuPage.Local;
             if (Item("menuhost", "Host a game")) _menuPage = MenuPage.Host;
             if (Item("menujoin", "Join a game")) _menuPage = MenuPage.Join;
             if (Item("menuload", "Load game", enabled: IsAdmin)) _openLoadModal = true;
@@ -189,54 +171,43 @@ namespace Client
 
         private void DrawMenuLocal(ImDrawListPtr dl, Vector2 min)
         {
-            int humans = _menuHumans;
-            MenuHeader(dl, min, humans == 1 ? "Play against bots" : "Hot-seat",
-                humans == 1 ? "You against three bots on this computer." : "Players take turns at this screen; a curtain hides the hands.");
+            int humans = _menuLocalSeats.Count(kind => kind == SeatKind.Human);
+            MenuHeader(dl, min, "Play on this computer", humans > 1 ? "The humans take turns; a curtain hides the hands." : "A human or a bot on each seat.");
 
-            MenuLabel(dl, min, 102, "Humans at this screen");
-            int humanIndex = humans - 1;
-            if (DrawSegments(dl, "menuhumans", min + new Vector2(MenuFieldX, 92), MenuFieldWidth, ["1", "2", "3", "4"], ref humanIndex))
-                _menuHumans = humanIndex + 1;
+            DrawMenuSeats(dl, min, 92, "menulocalseat", _menuLocalSeats);
 
-            DrawMenuBotRow(dl, min, 152, humans < PLAYER_COUNT);
+            DrawToggle(dl, "menurandomseats", min + new Vector2(MenuLabelX, 278), "Shuffle the seats (otherwise seat 1 starts)", ref _menuRandomSeats);
+            DrawToggle(dl, "menufreetrade", min + new Vector2(MenuLabelX, 322), "Trading between players", ref _freeTrade);
+            DrawToggle(dl, "menudesert", min + new Vector2(MenuLabelX, 366), "Desert in the center", ref _centerDesert);
+            DrawToggle(dl, "menutracked", min + new Vector2(MenuLabelX, 410), "Show the confirmed cards of the other hands", ref _showTrackedCards);
 
-            DrawToggle(dl, "menurandomseats", min + new Vector2(MenuLabelX, 206), "Random seats (otherwise the humans start)", ref _menuRandomSeats);
-            DrawToggle(dl, "menufreetrade", min + new Vector2(MenuLabelX, 250), "Trading between players", ref _freeTrade);
-            DrawToggle(dl, "menudesert", min + new Vector2(MenuLabelX, 294), "Desert in the center", ref _centerDesert);
-            DrawToggle(dl, "menutracked", min + new Vector2(MenuLabelX, 338), "Show the confirmed cards of the other hands", ref _showTrackedCards);
-
-            if (MenuButtons(dl, min, 392, "Start")) StartGameFromMenu(MenuSeats(humans), host: false);
+            if (MenuButtons(dl, min, 464, "Start")) StartGameFromMenu(MenuSeats(_menuLocalSeats), host: false);
         }
 
         private void DrawMenuHost(ImDrawListPtr dl, Vector2 min)
         {
             MenuHeader(dl, min, "Host a game", "Others join over the network; you play a seat and run the match.");
 
-            MenuLabel(dl, min, 102, "Human players");
-            int humanIndex = _menuHostHumans - 2;
-            if (DrawSegments(dl, "menuhosthumans", min + new Vector2(MenuFieldX, 92), MenuFieldWidth, ["2", "3", "4"], ref humanIndex))
-                _menuHostHumans = humanIndex + 2;
+            DrawMenuSeats(dl, min, 92, "menuhostseat", _menuHostSeats);
 
-            DrawMenuBotRow(dl, min, 152, _menuHostHumans < PLAYER_COUNT);
-
-            MenuLabel(dl, min, 204, "Port");
-            ImGui.SetCursorScreenPos(min + new Vector2(MenuFieldX, 200));
+            MenuLabel(dl, min, 280, "Port");
+            ImGui.SetCursorScreenPos(min + new Vector2(MenuFieldX, 276));
             ImGui.SetNextItemWidth(140);
             ImGui.InputInt("##menuport", ref _hostPort);
             _hostPort = Math.Clamp(_hostPort, 1024, 65535);
 
-            DrawToggle(dl, "menuhostfreetrade", min + new Vector2(MenuLabelX, 246), "Trading between players", ref _freeTrade);
-            DrawToggle(dl, "menuhostnetwork", min + new Vector2(MenuLabelX, 290), "Reachable from other computers", ref _hostOnNetwork);
-            DrawToggle(dl, "menuhostspectators", min + new Vector2(MenuLabelX, 334), "Anyone may watch without a token", ref _hostOpenToSpectators);
-            DrawToggle(dl, "menuhosttls", min + new Vector2(MenuLabelX, 378), "Encrypt connections (TLS)", ref _hostSecure);
-            DrawToggle(dl, "menuhosttracked", min + new Vector2(MenuLabelX, 422), "Show the confirmed cards of the other hands", ref _showTrackedCards);
+            DrawToggle(dl, "menuhostfreetrade", min + new Vector2(MenuLabelX, 318), "Trading between players", ref _freeTrade);
+            DrawToggle(dl, "menuhostnetwork", min + new Vector2(MenuLabelX, 362), "Reachable from other computers", ref _hostOnNetwork);
+            DrawToggle(dl, "menuhostspectators", min + new Vector2(MenuLabelX, 406), "Anyone may watch without a token", ref _hostOpenToSpectators);
+            DrawToggle(dl, "menuhosttls", min + new Vector2(MenuLabelX, 450), "Encrypt connections (TLS)", ref _hostSecure);
+            DrawToggle(dl, "menuhosttracked", min + new Vector2(MenuLabelX, 494), "Show the confirmed cards of the other hands", ref _showTrackedCards);
 
             string note = _hostOnNetwork && _hostOpenToSpectators
                 ? "Watchers see every hand: hidden cards are only hidden in the client."
                 : "Each human seat gets a token to join with, shown after the start.";
-            Theme.DrawText(dl, Theme.Regular15, min + new Vector2(MenuLabelX, 472), _hostOnNetwork && _hostOpenToSpectators ? new Color(255, 200, 90) : Theme.TextMuted, note);
+            Theme.DrawText(dl, Theme.Regular15, min + new Vector2(MenuLabelX, 544), _hostOnNetwork && _hostOpenToSpectators ? new Color(255, 200, 90) : Theme.TextMuted, note);
 
-            if (MenuButtons(dl, min, 520, "Start hosting")) StartGameFromMenu(MenuSeats(_menuHostHumans), host: true);
+            if (MenuButtons(dl, min, 592, "Start hosting")) StartGameFromMenu(MenuSeats(_menuHostSeats), host: true);
         }
 
         private void DrawMenuJoin(ImDrawListPtr dl, Vector2 min)
@@ -320,17 +291,27 @@ namespace Client
         }
 
         /// <summary>
-        /// The strength of the agents on the other seats, or why there is no choice
+        /// Who plays each seat: a human or an agent from the ordered list (agents that need the value net only with it)
         /// </summary>
-        private void DrawMenuBotRow(ImDrawListPtr dl, Vector2 min, float y, bool hasBots)
+        private void DrawMenuSeats(ImDrawListPtr dl, Vector2 min, float y, string id, SeatKind[] seats)
         {
-            MenuLabel(dl, min, y + 10, "Bots");
-            if (!hasBots)
-                Theme.DrawText(dl, Theme.Regular15, min + new Vector2(MenuFieldX, y + 8), Theme.TextMuted, "None: every seat is human");
-            else if (!_valueNetAvailable)
-                Theme.DrawText(dl, Theme.Regular15, min + new Vector2(MenuFieldX, y + 8), Theme.TextMuted, "Builder (the value net is missing)");
-            else
-                DrawSegments(dl, "menubotstrength", min + new Vector2(MenuFieldX, y), MenuFieldWidth, ["Easy", "Medium", "Hard"], ref _menuBotStrength);
+            string[] names = Simulation.Seats.Ordered.Select(Simulation.Seats.Name).ToArray();
+            for (int seat = 0; seat < PLAYER_COUNT; seat++)
+            {
+                Vector2 pos = min + new Vector2(MenuLabelX, y + seat * MenuSeatRow);
+                dl.AddCircleFilled(pos + new Vector2(14, 16), 13, Theme.U32(Theme.PlayerColor(seat)), 24);
+                Theme.TextCentered(dl, Theme.Bold15, pos + new Vector2(14, 16), Theme.TextOnPlayer(seat), (seat + 1).ToString());
+                Theme.DrawText(dl, Theme.SemiBold15, pos + new Vector2(38, 6), Theme.TextSoft, Theme.PlayerName(seat));
+
+                ImGui.SetCursorScreenPos(min + new Vector2(MenuFieldX, y + seat * MenuSeatRow + 2));
+                ImGui.SetNextItemWidth(MenuFieldWidth);
+                int kind = Array.IndexOf(Simulation.Seats.Ordered, seats[seat]);
+                if (ImGui.Combo($"##{id}{seat}", ref kind, names, names.Length))
+                {
+                    SeatKind chosen = Simulation.Seats.Ordered[kind];
+                    if (chosen == SeatKind.Human || !Simulation.Seats.NeedsValueNet(chosen) || _valueNetAvailable) seats[seat] = chosen;
+                }
+            }
         }
 
         private static void MenuHeader(ImDrawListPtr dl, Vector2 min, string title, string subtitle)

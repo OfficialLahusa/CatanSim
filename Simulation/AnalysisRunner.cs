@@ -55,7 +55,7 @@ namespace Simulation
             List<Action> moves = [];
             while (!_stop)
             {
-                MCTSAgent? thinking = null;
+                Agent? thinking = null;
                 try
                 {
                     (int version, GameState? changed, thinking) = _match.AnalysisSnapshot(evaluated);
@@ -114,9 +114,10 @@ namespace Simulation
         /// <summary>
         /// The thinking agent's root moves for the position, or null if its tree is for another one (or a chance node)
         /// </summary>
-        internal static SearchEvent? Search(MCTSAgent agent, GameState state, List<Action> moves)
+        internal static SearchEvent? Search(Agent agent, GameState state, List<Action> moves)
         {
-            (GameState? root, IReadOnlyList<MCTSAgent.RootMove> rootMoves) = agent.GetRootMoves();
+            if (agent is not IShowsSearch shows) return null;
+            (GameState? root, IReadOnlyList<MCTSAgent.RootMove> rootMoves) = shows.GetRootMoves();
             if (root == null || rootMoves.Count == 0 || !root.Equals(state)) return null;
 
             uint[] visits = new uint[moves.Count];
