@@ -414,6 +414,40 @@ namespace Common
         /// </summary>
         public GameState Determinize(GameState view, Random random)
         {
+            // An open offer is only legal with the cards it trades: the offerer holds what it gives, who accepted or
+            // countered holds what the offerer would get. A world must keep the offer legal.
+            if (view.Turn.PendingTrade is TradeOffer offer && !view.HasEnded)
+            {
+                BeliefTracker holding = new BeliefTracker(this);
+                holding.Holds(offer.Offerer, offer.Give);
+                for (int player = 0; player < offer.Responses.Length; player++)
+                    if (offer.Responses[player] == TradeResponse.Accepted) holding.Holds(player, offer.Get);
+                foreach (TradeCounter counter in offer.Counters) holding.Holds(counter.Player, counter.Get);
+                holding.Propagate(view.ResourceBank);
+                return holding.Deal(view, random);
+            }
+            return Deal(view, random);
+        }
+
+        /// <summary>
+        /// The player holds at least these cards: unknown cards become known where the known ones don't cover them
+        /// </summary>
+        private void Holds(int player, CardSet<ResourceCardType> cards)
+        {
+            if (!IsOther(player)) return;
+            HandBelief hand = _hands[player];
+            foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
+            {
+                uint known = hand.Known.Get(type), needed = cards.Get(type);
+                if (needed <= known) continue;
+                if (needed - known > hand.Room(type)) throw new InvalidOperationException($"Observer {Observer} lost track of player {player}: it can't hold {needed} {type}");
+                hand.Known.Add(type, needed - known);
+                hand.Unknown -= needed - known;
+            }
+        }
+
+        private GameState Deal(GameState view, Random random)
+        {
             GameState full = new GameState(view);
             if (view.HasEnded) return full;
 
