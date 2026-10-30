@@ -77,8 +77,8 @@
 			- Nach 26 Generationen (~200k Spiele, 0 Fehler) gestoppt: kein Generationsduell gewonnen (−35 bis +11), gegen 505oscbr nach 18 Generationen +6 [−23, +36], val_loss pendelt 0,217-0,240 => stagniert
 			- Vermutete Ursachen: Labels aus 800 Iterationen kaum besser als das Net (Duelle mit 5000), q als halbes Value-Target; lr 3e-4 lässt die Generationen pendeln; 50% alte Daten (v2, Iteration 3) halten das Net bei 505oscbr; MLP evtl. am Limit
 			- Nächste Schritte: alle 26 Generationen offline auf dem Präzisions-Set messen; dann ein Lauf mit 1600-3200 Iterationen pro voller Suche, λ 0,8-1, lr 1e-4 oder Gewichts-Mittel (EMA/SWA), Sammeln mit dem besten statt dem neuesten Net; Präzisions-Set als schneller Filter, SPRT [0, +20] nur für Kandidaten; bleibt es flach => Netzarchitektur v2
-		- Server-GPU RTX 5060 Ti 16 GB einbauen (1x 8-Pin, oberer x16-Slot): nvidia-driver-580-open, CUDA 12.8+/13, PyTorch cu128; CUDA-Provider (OnnxRuntime.Gpu.Linux) und Arena sind bereit; Server für SPRT-Duelle, Desktop sammelt und trainiert
-			- Nach dem Einbau: ~1 h VRAM-Test (cuda_memtest oder OCCT) und Stresstest, Temperatur unter ~80 °C, keine Treiberfehler
+		- Server-GPU RTX 5060 Ti 16 GB eingebaut (nvidia-driver-580-open, CUDA 13.0): VRAM-Test (memtest_vulkan) und 1 h gpu-burn ohne Fehler, konstant ~16,9 TFLOP/s FP32 bei max. 74 °C; Server für SPRT-Duelle, Desktop sammelt und trainiert
+			- Offen: cuDNN, Arena mit --provider cuda messen (CPU- oder GPU-begrenzt?)
 			- Im Self-Play regelmäßig Stichproben GPU gegen CPU vergleichen (stille Speicherfehler verfälschen sonst die Daten), Luftfeuchte am Server unter 60%
 		- Risiken: Bootstrapping (q vom eigenen Net), Kollaps in einen ausnutzbaren Stil
 	- 7. Netzarchitektur v2 (siehe Graph Transformer)
