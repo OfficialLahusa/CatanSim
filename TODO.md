@@ -13,15 +13,13 @@
 	- Der C#-Client bleibt die Obermenge (Analyse, Eval-Bar, Edit Mode, Playouts), der Web-Client deckt nur das Spielen ab
 	- Web-Client auch als Discord Activity (Embedded App SDK im iframe, z.B. im Voice-Channel): ein Spielraum pro Activity-Instanz, Spieler per Discord-OAuth, leere Sitze übernehmen Agents; Server per HTTPS erreichbar (URL-Mapping über Discords Proxy, für privates Spielen reicht ein Tunnel zum lokalen Server); dafür relative URLs, alles mitgeliefert (CSP), Layout fürs Handy
 - Early Return in weitere Action Validation Checks einbauen, um so früh wie möglich zu failen
-- Hidden Information (Agents sehen derzeit alle Hände, VP-Karten und die Dev Bank, das Net ist darauf trainiert)
+- Hidden Information (bisher sahen Agents alle Hände, VP-Karten und die Dev Bank, die Nets sind darauf trainiert)
 	- Verdeckt sind nur gestohlene Karten (für Unbeteiligte), gezogene Dev Cards (außer für den Käufer) und VP-Karten bis Spielende, Monopoly macht eine Ressource öffentlich => kleine Information Sets, Determinisierung funktioniert gut (Long et al.)
-	- Zuschauer wählen in der GUI die volle Sicht oder die StateView eines beliebigen Spielers
-	- 1. Observation Filter / StateView + Belief Tracker in Common
-		- Vorher vollständige Test-Suite: jede Regel pro Beobachter, Randfälle (Spielende, Undo, Laden), kein Leck verdeckter Info
-		- StateView(p): fremde Hände als bekannte Karten + Unknown x k, fremde Dev Cards als Unknown
-		- Belief Tracker pro Beobachter aus gefilterten Actions (gleiche Schnittstelle für Server, HandleAction und Vectorizer): Unknowns mit Herkunft, Constraint Propagation bei Ausgaben, Sampler unter der 19-pro-Ressource-Constraint, versteckte VP hypergeometrisch
-		- Test: wahrer State liegt immer im Support des Beliefs; Belief-Entropie bestimmt die Anzahl Determinisierungen
+	- 1. Umgesetzt: BeliefTracker in Common (sichere Karten, Obergrenzen pro Typ und Unknowns pro Hand, verdeckte Dev Cards als Ganzes, Propagation über Ausgaben, Monopoly und die öffentliche Bank), StateView, Determinisierung; Tests zuerst: jede Regel pro Beobachter, Support des wahren States in Zufallsspielen, kein Leck (gleiche Sicht und Determinisierung bei anderem verdecktem Ausgang)
+		- Server schickt Spielern und Bridges nur ihre Sicht (geschwärzte Züge, Edits als Sichten, Undo/Redo über Tracker-Stapel pro History-Eintrag), Zuschauer und Admins volles Spiel; Protokoll Version 2
+		- Client: Zuschauer wählen alle Hände, keine oder die Sicht eines Sitzes; Tischregel ShowTrackedCards (aus) zeigt fremde sichere Karten plus Unknowns statt nur der Anzahl
 	- 2. Determinized MCTS (PIMC): N Determinisierungen, Root Visits aggregieren, Net bleibt gültig; Benchmark gegen Cheating MCTS; Schwächen Strategy Fusion und Non-Locality
+		- DeterminizedMCTSAgent (Arena-Option dN): d8 bei 5000 Iterationen gegen Cheating MCTS −241 Elo [−362, −156] (30 Paare) => Budget-Split auf 8 Welten vermutlich zu teuer, Kontrollduell d1 läuft
 	- 3. SO-ISMCTS: Knoten = Information Sets des Root-Spielers, Availability Counts statt Parent Visits, Zufall nur branchen, wo der Root-Spieler das Ergebnis sieht
 	- 4. Belief-aware StateValueNet: Training auf StateView-Inputs (Views per Replay der Histories rekonstruierbar), Sichtbarkeits-Augmentation nach der echten Beobachtungsverteilung statt zufällig, erwartete versteckte VP als Feature
 	- 5. Particle MCTS / POMCP erst mit Spielerhandel (Angebote schwer als Constraints)
@@ -78,7 +76,7 @@
 		- Kontinuierliche Schleife (Agents/Training/selfplay_loop.py) ab 505oscbr: 8k Spiele (~360k Positionen, ~50 min) pro Generation, lr konstant, Fenster 4 Generationen + 20% Iteration 3 + 30% v2, T 2, λ 0,5; SPRT gegen den Vorgänger alle 3, gegen 505oscbr alle 9 Generationen (Arena); 1M Samples bei lr 1e-4: Generation 3 gegen 505oscbr −8 [−46, +30], 6 gegen 3 −24 [−71, +22], offline nur kleine Gewinne => Schritt zu klein, ab Generation 9 2M Samples bei lr 3e-4
 			- Nach 26 Generationen (~200k Spiele, 0 Fehler) gestoppt: kein Generationsduell gewonnen (−35 bis +11), gegen 505oscbr nach 18 Generationen +6 [−23, +36], val_loss pendelt 0,217-0,240 => stagniert
 			- Vermutete Ursachen: Labels aus 800 Iterationen kaum besser als das Net (Duelle mit 5000), q als halbes Value-Target; lr 3e-4 lässt die Generationen pendeln; 50% alte Daten (v2, Iteration 3) halten das Net bei 505oscbr; MLP evtl. am Limit
-			- Nächste Schritte: alle 26 Generationen offline auf dem Präzisions-Set messen; dann ein Lauf mit 1600-3200 Iterationen pro voller Suche, λ 0,8-1, lr 1e-4 oder Gewichts-Mittel (EMA/SWA), Sammeln mit dem besten statt dem neuesten Net; Präzisions-Set als schneller Filter, SPRT [0, +20] nur für Kandidaten; bleibt es flach => Netzarchitektur v2
+			- Offline auf dem Präzisions-Set: keine Generation besser als 505oscbr (bester Zug 55,7-57,2% statt 56,2%, KL schon ab g001 schlechter, kein Trend) => Rezept ist der Engpass; nächster Lauf mit 1600-3200 Iterationen pro voller Suche, λ 0,8-1, lr 1e-4 oder Gewichts-Mittel (EMA/SWA), Sammeln mit dem besten statt dem neuesten Net; Präzisions-Set als schneller Filter, SPRT [0, +20] nur für Kandidaten; bleibt es flach => Netzarchitektur v2
 		- Server-GPU RTX 5060 Ti 16 GB eingebaut (nvidia-driver-580-open, CUDA 13.0): VRAM-Test (memtest_vulkan) und 1 h gpu-burn ohne Fehler, konstant ~16,9 TFLOP/s FP32 bei max. 74 °C; Server für SPRT-Duelle, Desktop sammelt und trainiert
 			- Offen: cuDNN, Arena mit --provider cuda messen (CPU- oder GPU-begrenzt?)
 			- Im Self-Play regelmäßig Stichproben GPU gegen CPU vergleichen (stille Speicherfehler verfälschen sonst die Daten), Luftfeuchte am Server unter 60%
@@ -181,7 +179,7 @@
 ## Future Enhancements
 - Simulation Server: gesamte Spiel- und Simulationslogik im Server, Client nur Darstellung und Eingabe, auch headless (Duelle, Benchmarks, Datensammlung, Self-Play)
 	- Umgesetzt: Bibliothek Simulation (Match mit History/Undo/Edits, AgentRunner, Event-Stream, LocalSimulation/RemoteSimulation), Protokoll JSON über WebSocket (States/Actions als Save-File-YAML), Server-Exe mit Admin-Konsole, Rollen Admin/Player/Agent/Spectator mit gehashten Tokens und Reconnect; Client spielt immer über ISimulation, hostet oder tritt bei; Admin-Panel im Client (Sitze, Playback, Verbindungen, Tokens anlegen/widerrufen, Optionen), TLS mit gepinntem Fingerprint, Login-Sperre nach Fehlversuchen, Admins nur lokal (AllowRemoteAdmins), Origin-Check, Größen- und Verbindungslimits; Server würfelt selbst (Client-History wird verworfen); Analyse des Matches (Win Chances und Priors der Agent-Nets, Live-Suche) nur an Zuschauer und Admins; Protokollversion in Hello und Welcome, andere Versionen werden mit Hinweis abgelehnt
-	- Offen: Events pro Session nach Hidden Information filtern (braucht StateView, s. oben; bis dahin sehen Clients den vollen State), Bench als Headless-Kommandos (Builder-Checks, Statistik), mehrere Matches pro Server und Lobby
+	- Offen: Bench als Headless-Kommandos (Builder-Checks, Statistik), mehrere Matches pro Server und Lobby
 	- Agent Bridge als eigenes Projekt: Konsolen-App verbindet sich mit Agent-Token für einen Sitz und spielt ihn mit lokalem Agent (MCTS mit beliebigem Net) oder reicht die Entscheidungen per JSON über stdin/stdout an externe Bots weiter (Python, Catanatron)
 - Share Links: Klick öffnet direkt ein Replay, eine Position oder ein Match mit gegebener Konfiguration (Sitze, Regeln, Agents), z.B. per URL-Schema im Client oder Web-Client
 - Lobby-Chat für Netzwerkspiele: eigener Tab neben dem Log oder ins Log integriert
