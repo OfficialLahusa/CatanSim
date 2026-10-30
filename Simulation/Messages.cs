@@ -24,7 +24,7 @@ namespace Simulation
     /// <summary>
     /// Starts over on a new map (or a cleared board) with the given seats; with free trade the players trade with each other
     /// </summary>
-    public sealed record NewGame(SeatKind[] Seats, bool CenterDesert, bool ClearBoard = false, bool FreeTrade = true) : Command;
+    public sealed record NewGame(SeatKind[] Seats, bool CenterDesert, bool ClearBoard = false, bool FreeTrade = true, bool ShowTrackedCards = false) : Command;
 
     /// <summary>
     /// Replaces the match with a loaded game: its position and the moves before and after it (oldest first, next to redo last)

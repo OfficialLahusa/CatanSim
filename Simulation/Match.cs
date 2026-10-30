@@ -309,6 +309,7 @@ namespace Simulation
                                 state.Reset();
                             }
                             state.Settings.FreeTrade = newGame.FreeTrade;
+                            state.Settings.ShowTrackedCards = newGame.ShowTrackedCards;
                             _seats = (SeatKind[])newGame.Seats.Clone();
                             Record.Reset(state);
                             _agents = CreateAgents();

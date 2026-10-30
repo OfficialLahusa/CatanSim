@@ -10,6 +10,12 @@ namespace Simulation
     {
         public GameRecord Record { get; private set; } = new GameRecord(new GameState(MapGenerator.GenerateRandomClassic(), 4));
         public SeatKind[] Seats { get; private set; } = [SeatKind.Human, SeatKind.Human, SeatKind.Human, SeatKind.Human];
+
+        /// <summary>
+        /// What every seat knows along the history, for showing the game as a seat sees it; only for the full game (a
+        /// player's client follows its seat's view, null here)
+        /// </summary>
+        public RecordBeliefs? Beliefs { get; private set; }
         public PlaybackState Playback { get; private set; } = PlaybackState.Default;
         public AgentSettings AgentSettings { get; private set; } = AgentSettings.Default;
 
@@ -48,9 +54,15 @@ namespace Simulation
                 case SnapshotEvent snapshot:
                     // Copies, so the record's moves are its own; a seat's view comes with the view of its history's start
                     if (snapshot.Start is GameState start)
+                    {
                         Record.ResetView(new GameState(snapshot.State), new GameState(start), snapshot.History.Select(Copy), snapshot.Redo.Select(Copy));
+                        Beliefs = null;
+                    }
                     else
+                    {
                         Record.Reset(new GameState(snapshot.State), snapshot.History.Select(Copy), snapshot.Redo.Select(Copy));
+                        Beliefs = RecordBeliefs.Of(Record);
+                    }
                     Seats = (SeatKind[])snapshot.Seats.Clone();
                     Playback = snapshot.Playback;
                     AgentSettings = snapshot.Agents;
@@ -59,12 +71,22 @@ namespace Simulation
                     break;
                 case AppliedEvent applied:
                     if (applied.View is GameState view) Record.ApplyView(Copy(applied.Entry), new GameState(view), applied.IsRedo);
-                    else Record.Apply(Copy(applied.Entry), applied.IsRedo);
+                    else
+                    {
+                        GameState before = new GameState(Record.State);
+                        HistoryEntry entry = Copy(applied.Entry);
+                        Record.Apply(entry, applied.IsRedo);
+                        Beliefs?.Apply(before, entry, Record.State);
+                    }
                     (Evaluation, Search) = (null, null);
                     break;
                 case UndoneEvent undone:
                     if (undone.View is GameState undoneView) Record.UndoView(new GameState(undoneView));
-                    else Record.Undo();
+                    else
+                    {
+                        Record.Undo();
+                        Beliefs?.Undo();
+                    }
                     (Evaluation, Search) = (null, null);
                     break;
                 case EvaluationEvent evaluation:

@@ -111,7 +111,13 @@ namespace Tests
                 {
                     AssertSamePosition(truth, record.State, follower.Session.Name);
                     Assert.Equal(match.Record.Redo.Count, record.Redo.Count);
+
+                    // A full client keeps every seat's tracker too, for showing the game as that seat sees it
+                    Assert.NotNull(follower.Game.Beliefs);
+                    foreach (int observer in new[] { BeliefTracker.Public, 0, 1, 2, 3 })
+                        Assert.Equal(match.Beliefs.For(observer), follower.Game.Beliefs!.For(observer));
                 }
+                if (Match.SeesView(follower.Session)) Assert.Null(follower.Game.Beliefs);
             }
         }
 
@@ -247,6 +253,29 @@ namespace Tests
             for (int i = 0; i < 200; i++) match.Handle(Admin, new PlayMove(RandomMove(match, random)));
             AssertInStep(match, followers);
             foreach (Follower follower in followers) AssertNoHiddenOutcome(follower);
+        }
+
+        [Fact]
+        public void ShowingTheConfirmedCardsIsATableRuleOfTheNewGame()
+        {
+            using Match match = NewMatch(7);
+            List<Follower> followers = FollowAll(match);
+            Assert.False(match.Record.State.Settings.ShowTrackedCards);
+
+            match.Handle(Admin, new NewGame(AllHuman, false, ShowTrackedCards: true));
+            Assert.True(match.Record.State.Settings.ShowTrackedCards);
+            foreach (Follower follower in followers) Assert.True(follower.Game.Record.State.Settings.ShowTrackedCards);
+
+            // It survives the protocol, copies and save files, and is part of the settings' equality
+            NewGame command = (NewGame)Protocol.DeserializeCommand(Protocol.Serialize(new NewGame(AllHuman, false, ShowTrackedCards: true)));
+            Assert.True(command.ShowTrackedCards);
+            Assert.True(new GameSettings(match.Record.State.Settings).ShowTrackedCards);
+            Assert.NotEqual(new GameSettings(), match.Record.State.Settings);
+            string yaml = Common.Serialization.SaveFileSerializer.Serialize(match.Record.State);
+            Assert.True(Common.Serialization.SaveFileSerializer.Deserialize<GameState>(yaml).Settings.ShowTrackedCards);
+
+            match.Handle(Admin, new NewGame(AllHuman, false));
+            Assert.False(match.Record.State.Settings.ShowTrackedCards);
         }
 
         [Fact]

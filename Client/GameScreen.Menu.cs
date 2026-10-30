@@ -115,7 +115,7 @@ namespace Client
             // Not SetMode: the new game gets its playback below
             _mode = InteractionMode.Play;
             ClearHumanInput();
-            Send(new Simulation.NewGame(seats, _centerDesert, FreeTrade: _freeTrade));
+            Send(new Simulation.NewGame(seats, _centerDesert, FreeTrade: _freeTrade, ShowTrackedCards: _showTrackedCards));
             Send(new SetPlayback(PlaybackState.Default with { PaceSeconds = _settings.BotPace }));
             _endScreenDismissed = false;
             if (host)
@@ -134,8 +134,8 @@ namespace Client
             float height = _menuPage switch
             {
                 MenuPage.Main => 140 + (_menuIsStartScreen ? 7 : 8) * 56,
-                MenuPage.Local => 418,
-                MenuPage.Host => 546,
+                MenuPage.Local => 462,
+                MenuPage.Host => 590,
                 MenuPage.Join => 486,
                 _ => 356
             };
@@ -203,8 +203,9 @@ namespace Client
             DrawToggle(dl, "menurandomseats", min + new Vector2(MenuLabelX, 206), "Random seats (otherwise the humans start)", ref _menuRandomSeats);
             DrawToggle(dl, "menufreetrade", min + new Vector2(MenuLabelX, 250), "Trading between players", ref _freeTrade);
             DrawToggle(dl, "menudesert", min + new Vector2(MenuLabelX, 294), "Desert in the center", ref _centerDesert);
+            DrawToggle(dl, "menutracked", min + new Vector2(MenuLabelX, 338), "Show the confirmed cards of the other hands", ref _showTrackedCards);
 
-            if (MenuButtons(dl, min, 348, "Start")) StartGameFromMenu(MenuSeats(humans), host: false);
+            if (MenuButtons(dl, min, 392, "Start")) StartGameFromMenu(MenuSeats(humans), host: false);
         }
 
         private void DrawMenuHost(ImDrawListPtr dl, Vector2 min)
@@ -228,13 +229,14 @@ namespace Client
             DrawToggle(dl, "menuhostnetwork", min + new Vector2(MenuLabelX, 290), "Reachable from other computers", ref _hostOnNetwork);
             DrawToggle(dl, "menuhostspectators", min + new Vector2(MenuLabelX, 334), "Anyone may watch without a token", ref _hostOpenToSpectators);
             DrawToggle(dl, "menuhosttls", min + new Vector2(MenuLabelX, 378), "Encrypt connections (TLS)", ref _hostSecure);
+            DrawToggle(dl, "menuhosttracked", min + new Vector2(MenuLabelX, 422), "Show the confirmed cards of the other hands", ref _showTrackedCards);
 
             string note = _hostOnNetwork && _hostOpenToSpectators
                 ? "Watchers see every hand: hidden cards are only hidden in the client."
                 : "Each human seat gets a token to join with, shown after the start.";
-            Theme.DrawText(dl, Theme.Regular15, min + new Vector2(MenuLabelX, 428), _hostOnNetwork && _hostOpenToSpectators ? new Color(255, 200, 90) : Theme.TextMuted, note);
+            Theme.DrawText(dl, Theme.Regular15, min + new Vector2(MenuLabelX, 472), _hostOnNetwork && _hostOpenToSpectators ? new Color(255, 200, 90) : Theme.TextMuted, note);
 
-            if (MenuButtons(dl, min, 476, "Start hosting")) StartGameFromMenu(MenuSeats(_menuHostHumans), host: true);
+            if (MenuButtons(dl, min, 520, "Start hosting")) StartGameFromMenu(MenuSeats(_menuHostHumans), host: true);
         }
 
         private void DrawMenuJoin(ImDrawListPtr dl, Vector2 min)

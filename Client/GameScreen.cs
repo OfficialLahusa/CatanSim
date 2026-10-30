@@ -465,7 +465,7 @@ namespace Client
         /// <summary>
         /// Starts over on a new map (or a cleared board) with the current seats
         /// </summary>
-        private void NewGame(bool clearBoard = false) => Send(new Simulation.NewGame(Seats, _centerDesert, clearBoard, State.Settings.FreeTrade));
+        private void NewGame(bool clearBoard = false) => Send(new Simulation.NewGame(Seats, _centerDesert, clearBoard, State.Settings.FreeTrade, State.Settings.ShowTrackedCards));
 
         private void SetSeat(int seat, SeatKind kind)
         {
@@ -1007,11 +1007,16 @@ namespace Client
 
             try
             {
-                GameState replay = new GameState(State);
-                for (int i = History.Count - 1; i >= 0; i--)
+                GameState replay;
+                if (Record.Start is GameState start) replay = new GameState(start);
+                else
                 {
-                    if (History[i].Action is Action action) action.Clone().Revert(replay);
-                    else replay = History[i].Edit!.Before;
+                    replay = new GameState(State);
+                    for (int i = History.Count - 1; i >= 0; i--)
+                    {
+                        if (History[i].Action is Action action) action.Clone().Revert(replay);
+                        else replay = History[i].Edit!.Before;
+                    }
                 }
 
                 foreach (HistoryEntry entry in History)

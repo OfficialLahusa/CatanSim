@@ -24,6 +24,14 @@ namespace Common
 
         public const int DefaultMaxTradeOffersPerTurn = 10;
 
+        /// <summary>
+        /// Whether the players' screens show the other hands as each player can know them (the cards confirmed by what
+        /// happened in public, see BeliefTracker) instead of only their size. A table rule of the display, not of the game:
+        /// all of it is public, a player could count along.
+        /// </summary>
+        [YamlMember(DefaultValuesHandling = DefaultValuesHandling.OmitDefaults)]
+        public bool ShowTrackedCards { get; set; }
+
         [YamlIgnore]
         public int TradeOfferLimit => MaxTradeOffersPerTurn > 0 ? MaxTradeOffersPerTurn : DefaultMaxTradeOffersPerTurn;
 
@@ -43,6 +51,7 @@ namespace Common
             VictoryPoints = copy.VictoryPoints;
             FreeTrade = copy.FreeTrade;
             MaxTradeOffersPerTurn = copy.MaxTradeOffersPerTurn;
+            ShowTrackedCards = copy.ShowTrackedCards;
         }
 
         public override bool Equals(object? obj)
@@ -51,12 +60,13 @@ namespace Common
                    RobberCardLimit == settings.RobberCardLimit &&
                    VictoryPoints == settings.VictoryPoints &&
                    FreeTrade == settings.FreeTrade &&
-                   MaxTradeOffersPerTurn == settings.MaxTradeOffersPerTurn;
+                   MaxTradeOffersPerTurn == settings.MaxTradeOffersPerTurn &&
+                   ShowTrackedCards == settings.ShowTrackedCards;
         }
 
         public override int GetHashCode()
         {
-            return HashCode.Combine(RobberCardLimit, VictoryPoints, FreeTrade, MaxTradeOffersPerTurn);
+            return HashCode.Combine(RobberCardLimit, VictoryPoints, FreeTrade, MaxTradeOffersPerTurn, ShowTrackedCards);
         }
     }
 }

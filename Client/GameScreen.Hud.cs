@@ -51,7 +51,7 @@ namespace Client
                 return;
             }
 
-            EventLog.Viewer = Viewer;
+            EventLog.Viewer = ShownObserver is int shown ? Math.Max(shown, -1) : null;
             OpenRequiredDialog();
 
             DrawTopBar();
@@ -127,7 +127,7 @@ namespace Client
             // A switch for the mode, then where the match runs
             float x = 340;
             if (_mode == InteractionMode.Spectate)
-                x += 12 + DrawToggle(dl, "hands", o + new Vector2(x, 7), "Hands shown", ref _showHands);
+                x += 12 + DrawViewPicker(dl, o + new Vector2(x, 7));
             else if (_mode == InteractionMode.Edit)
                 x += 12 + DrawToggle(dl, "evalbar", o + new Vector2(x, 7), "Win chances", ref _showEditEval);
             DrawNetworkChip(dl, o + new Vector2(x, 7));
@@ -226,7 +226,7 @@ namespace Client
                 }
 
                 // Victory points: the hidden ones only where they may be seen
-                bool hiddenVisible = viewer == null || viewer == seat;
+                bool hiddenVisible = ShownObserver == null || ShownObserver == seat;
                 int vp = player.VictoryPoints.Total - (hiddenVisible ? 0 : player.VictoryPoints.DevelopmentCardPoints);
                 Theme.TextRight(dl, Theme.ExtraBold36, max + new Vector2(-24, -SeatHeight + 4), Theme.Text, vp.ToString());
                 Theme.TextRight(dl, Theme.Regular13, max + new Vector2(-24, -SeatHeight + 50), Theme.TextMuted, $"/ {State.Settings.VictoryPoints} VP");
@@ -261,17 +261,12 @@ namespace Client
 
         private void DrawSeatStats(ImDrawListPtr dl, int seat, Vector2 pos, int? viewer)
         {
-            PlayerState player = State.Players[seat];
-            bool handVisible = _mode switch
-            {
-                InteractionMode.Play => viewer == null || viewer == seat,
-                InteractionMode.Spectate => _showHands,
-                _ => true
-            };
+            PlayerState player = Shown.Players[seat];
+            (bool fullHand, bool tracked) = HandShown(seat);
 
-            // Hand: mini cards when visible, otherwise a card back with the count
+            // Hand: mini cards when visible (the unknown ones of a tracked hand as card backs), otherwise a card back with the count
             uint cards = player.ResourceCards.Count();
-            if (handVisible && cards > 0)
+            if ((fullHand || tracked) && cards > 0)
             {
                 int i = 0;
                 // Up to 6 cards fanned 9 apart, more squeezed into the same width, so the count after them stays clear of the
@@ -282,7 +277,14 @@ namespace Client
                     for (uint n = 0; n < player.ResourceCards.Get(type); n++, i++)
                         Theme.ResourceCard(dl, type, pos + new Vector2(i * step, 1), new Vector2(15, 22), false);
                 }
+                uint unknown = player.ResourceCards.Get(ResourceCardType.Unknown);
+                for (uint n = 0; n < unknown; n++, i++)
+                    Theme.CardBack(dl, pos + new Vector2(i * step, 1), new Vector2(15, 22));
                 Theme.DrawText(dl, Theme.Regular15, pos + new Vector2((cards - 1) * step + 20, 2), Theme.TextSoft, cards.ToString());
+
+                if (unknown > 0 && ShownBelief(seat) is HandBelief belief && belief.Unknown > 0
+                    && ImGui.IsMouseHoveringRect(pos, pos + new Vector2((cards - 1) * step + 16, 24)))
+                    DrawTooltip(ImGui.GetForegroundDrawList(), pos + new Vector2((cards - 1) * step / 2 + 8, -4), UnknownCardsText(belief));
             }
             else
             {
@@ -1087,7 +1089,7 @@ namespace Client
 
         private void DrawNewGameDialog()
         {
-            ImDrawListPtr dl = BeginDialog("##newgame", new Vector2(520, 400), "New game", "Who plays each seat (seat 1 starts).", null, out Vector2 min);
+            ImDrawListPtr dl = BeginDialog("##newgame", new Vector2(520, 436), "New game", "Who plays each seat (seat 1 starts).", null, out Vector2 min);
             string[] kinds = Enum.GetValues<SeatKind>().Select(Simulation.Seats.Name).ToArray();
             for (int seat = 0; seat < PLAYER_COUNT; seat++)
             {
@@ -1108,15 +1110,17 @@ namespace Client
             ImGui.Checkbox("Desert in the center", ref _centerDesert);
             ImGui.SetCursorScreenPos(min + new Vector2(260, 304));
             ImGui.Checkbox("Trading between players", ref _freeTrade);
+            ImGui.SetCursorScreenPos(min + new Vector2(24, 336));
+            ImGui.Checkbox("Show the confirmed cards of the other hands", ref _showTrackedCards);
 
-            if (DrawButton(dl, "newgameok", min + new Vector2(520 - 24 - 180, 400 - 20 - 44), new Vector2(180, 44), "Start", true, Theme.Accent, Theme.AccentBorder, Theme.Bold17))
+            if (DrawButton(dl, "newgameok", min + new Vector2(520 - 24 - 180, 436 - 20 - 44), new Vector2(180, 44), "Start", true, Theme.Accent, Theme.AccentBorder, Theme.Bold17))
             {
                 _dialog = Dialog.None;
                 SetMode(InteractionMode.Play);
-                Send(new Simulation.NewGame((SeatKind[])_newGameSeats.Clone(), _centerDesert, FreeTrade: _freeTrade));
+                Send(new Simulation.NewGame((SeatKind[])_newGameSeats.Clone(), _centerDesert, FreeTrade: _freeTrade, ShowTrackedCards: _showTrackedCards));
                 _endScreenDismissed = false;
             }
-            if (DrawButton(dl, "newgamecancel", min + new Vector2(24, 400 - 20 - 44), new Vector2(120, 44), "Cancel", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))
+            if (DrawButton(dl, "newgamecancel", min + new Vector2(24, 436 - 20 - 44), new Vector2(120, 44), "Cancel", true, Theme.PanelRaised, Theme.BorderLight, Theme.Bold15))
                 _dialog = Dialog.None;
             ImGui.End();
         }

@@ -126,10 +126,13 @@ namespace Arena
             Agent[] agents = Enumerable.Range(0, 4).Select(seat =>
             {
                 AgentSpec spec = seats[seat];
-                return (Agent)new MCTSAgent((sbyte)seat, start, explorationParameter: spec.Exploration, timeLimitSeconds: settings.Seconds,
+                MCTSAgent search = new MCTSAgent((sbyte)seat, start, explorationParameter: spec.Exploration, timeLimitSeconds: settings.Seconds,
                     valueNet: nets[spec].net, vectorizer: nets[spec].vectorizer, placementWeight: spec.PlacementWeight, opponentModel: spec.OpponentModel,
                     iterationLimit: settings.Iterations, leavesPerBatch: spec.LeavesPerBatch)
                 { UniformPriors = spec.UniformPriors, FirstPlayReduction = spec.FirstPlayReduction };
+
+                // Under hidden information the agent sees only its seat's view; the iterations are split between its determinizations
+                return spec.Determinizations > 0 ? (Agent)new DeterminizedMCTSAgent(search, start, spec.Determinizations) : search;
             }).ToArray();
 
             var stopwatch = Stopwatch.StartNew();

@@ -26,7 +26,6 @@ namespace Client
 
         private HeatSource _heatSource = HeatSource.Visits;
         private EvalSource _evalSource = EvalSource.ValueNet;
-        private bool _showHands = true;
         private bool _showEditEval = true;
 
         /// <summary>

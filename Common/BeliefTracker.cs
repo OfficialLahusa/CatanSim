@@ -1,12 +1,12 @@
-using Common.Actions;
+﻿using Common.Actions;
 using Action = Common.Actions.Action;
 
 namespace Common
 {
     /// <summary>
-    /// What an observer knows about another player's resource cards: cards the player certainly holds, and cards of unknown
-    /// type, each of which is one of the candidate types. Only a steal the observer didn't take part in makes cards unknown;
-    /// every other move changes the hands in public.
+    /// What an observer knows about another player's resource cards: per type the fewest (Known) and the most (Maximum) cards
+    /// the player can hold, and how many of its cards are of unknown type. Only a steal the observer didn't take part in makes
+    /// cards unknown; every other move changes the hands in public.
     /// </summary>
     public sealed class HandBelief
     {
@@ -16,39 +16,60 @@ namespace Common
         public CardSet<ResourceCardType> Known { get; }
 
         /// <summary>
+        /// The most cards of each type the player can hold: after a steal of one of five different cards, at most one of each
+        /// </summary>
+        public CardSet<ResourceCardType> Maximum { get; }
+
+        /// <summary>
         /// Cards whose type the observer doesn't know
         /// </summary>
         public uint Unknown { get; internal set; }
 
-        /// <summary>
-        /// A bit (1 &lt;&lt; type) for each type an unknown card may have
-        /// </summary>
-        public byte Candidates { get; internal set; }
-
         public HandBelief()
         {
             Known = new CardSet<ResourceCardType>();
+            Maximum = new CardSet<ResourceCardType>();
         }
 
         public HandBelief(CardSet<ResourceCardType> known)
         {
             Known = new CardSet<ResourceCardType>(known);
+            Maximum = new CardSet<ResourceCardType>(known);
         }
 
         public HandBelief(HandBelief copy)
         {
             Known = new CardSet<ResourceCardType>(copy.Known);
+            Maximum = new CardSet<ResourceCardType>(copy.Maximum);
             Unknown = copy.Unknown;
-            Candidates = copy.Candidates;
         }
 
-        public bool CanBe(ResourceCardType type) => (Candidates & 1 << (int)type) != 0;
+        /// <summary>
+        /// How many of the unknown cards can be of the type at most
+        /// </summary>
+        public uint Room(ResourceCardType type) => Math.Min(Unknown, Maximum.Get(type) - Known.Get(type));
+
+        /// <summary>
+        /// Whether an unknown card can be of the type
+        /// </summary>
+        public bool CanBe(ResourceCardType type) => Room(type) > 0;
+
+        /// <summary>
+        /// A bit (1 &lt;&lt; type) for each type an unknown card can be
+        /// </summary>
+        public byte Candidates => (byte)CardTypeExtensions.ResourceTypes.Where(CanBe).Aggregate(0, (mask, type) => mask | 1 << (int)type);
 
         public uint Count => Known.Count() + Unknown;
 
-        public override bool Equals(object? obj) => obj is HandBelief other && Known.Equals(other.Known) && Unknown == other.Unknown && Candidates == other.Candidates;
+        internal void Gain(ResourceCardType type, uint amount)
+        {
+            Known.Add(type, amount);
+            Maximum.Add(type, amount);
+        }
 
-        public override int GetHashCode() => HashCode.Combine(Known, Unknown, Candidates);
+        public override bool Equals(object? obj) => obj is HandBelief other && Known.Equals(other.Known) && Maximum.Equals(other.Maximum) && Unknown == other.Unknown;
+
+        public override int GetHashCode() => HashCode.Combine(Known, Maximum, Unknown);
     }
 
     /// <summary>
@@ -170,7 +191,7 @@ namespace Common
                 foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
                     if (change[(int)type] < 0) Spend(player, type, (uint)-change[(int)type]);
                 foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
-                    if (change[(int)type] > 0) _hands[player].Known.Add(type, (uint)change[(int)type]);
+                    if (change[(int)type] > 0) _hands[player].Gain(type, (uint)change[(int)type]);
             }
 
             if (hiddenSteal is (int thiefIdx, int victimIdx, _)) StealUnseen(thiefIdx, victimIdx);
@@ -226,14 +247,13 @@ namespace Common
         {
             HandBelief hand = _hands[player];
             uint fromKnown = Math.Min(hand.Known.Get(type), amount);
-            hand.Known.Remove(type, fromKnown);
             uint fromUnknown = amount - fromKnown;
-            if (fromUnknown == 0) return;
-
-            if (fromUnknown > hand.Unknown || !hand.CanBe(type))
+            if (fromUnknown > hand.Room(type))
                 throw new InvalidOperationException($"Observer {Observer} lost track of player {player}: it spent {type} it can't hold");
+
+            hand.Known.Remove(type, fromKnown);
+            hand.Maximum.Remove(type, amount);
             hand.Unknown -= fromUnknown;
-            if (hand.Unknown == 0) hand.Candidates = 0;
         }
 
         /// <summary>
@@ -242,29 +262,26 @@ namespace Common
         private void StealUnseen(int thief, int victim)
         {
             HandBelief from = _hands[victim];
-            byte possible = from.Unknown > 0 ? from.Candidates : (byte)0;
-            foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
-                if (from.Known.Get(type) > 0) possible |= (byte)(1 << (int)type);
+            List<ResourceCardType> possible = CardTypeExtensions.ResourceTypes.Where(type => from.Known.Get(type) > 0 || from.CanBe(type)).ToList();
 
             // A single possible type is a known card after all
-            if (System.Numerics.BitOperations.PopCount(possible) == 1)
+            if (possible.Count == 1)
             {
-                ResourceCardType type = (ResourceCardType)System.Numerics.BitOperations.TrailingZeroCount(possible);
-                Spend(victim, type, 1);
-                _hands[thief].Known.Add(type, 1);
+                Spend(victim, possible[0], 1);
+                _hands[thief].Gain(possible[0], 1);
                 return;
             }
 
-            // Every known type may have lost a card: one of each becomes unknown, less the stolen card
+            // Every known type may have lost a card: one of each becomes unknown, less the stolen card; the victim gained
+            // nothing, so its maximum stays, and the thief may hold one more of each possible type
             uint count = from.Count;
             foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
                 if (from.Known.Get(type) > 0) from.Known.Remove(type, 1);
             from.Unknown = count - 1 - from.Known.Count();
-            from.Candidates = from.Unknown > 0 ? possible : (byte)0;
 
             HandBelief to = _hands[thief];
             to.Unknown++;
-            to.Candidates |= possible;
+            foreach (ResourceCardType type in possible) to.Maximum.Add(type, 1);
         }
 
         /// <summary>
@@ -274,12 +291,14 @@ namespace Common
         {
             HandBelief hand = _hands[player];
             if (hand.Known.Get(type) > 0) throw new InvalidOperationException($"Observer {Observer} lost track of player {player}: it kept {type} through a monopoly");
-            hand.Candidates &= (byte)~(1 << (int)type);
+            hand.Maximum.Remove(type, hand.Maximum.Get(type));
         }
 
         /// <summary>
-        /// The cards no hand is known to hold are exactly the unknown ones: a type none of them can be is ruled out, a hand
-        /// whose unknown cards can only be one type knows them, and the last hand with unknown cards holds all that remain
+        /// The cards no hand is known to hold are exactly the unknown ones, which narrows the bounds until nothing changes: a
+        /// hand holds no more of a type than remain or than it has unknown cards; unknown cards the other types can't fill are
+        /// of the one left; where the room of all hands for a type is just what remains of it, every hand holds its most; a
+        /// hand without unknown cards is known exactly
         /// </summary>
         private void Propagate(CardSet<ResourceCardType> bank)
         {
@@ -289,46 +308,52 @@ namespace Common
                 changed = false;
                 CardSet<ResourceCardType> remaining = Remaining(bank);
 
-                foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
-                {
-                    if (remaining.Get(type) > 0) continue;
-                    foreach (HandBelief hand in _hands)
-                    {
-                        if (hand.CanBe(type))
-                        {
-                            hand.Candidates &= (byte)~(1 << (int)type);
-                            changed = true;
-                        }
-                    }
-                }
-
                 for (int player = 0; player < _hands.Length; player++)
                 {
                     HandBelief hand = _hands[player];
-                    if (hand.Unknown == 0)
+                    foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
                     {
-                        hand.Candidates = 0;
-                        continue;
+                        uint most = hand.Known.Get(type) + Math.Min(hand.Unknown, Math.Min(remaining.Get(type), hand.Maximum.Get(type) - hand.Known.Get(type)));
+                        if (most < hand.Maximum.Get(type))
+                        {
+                            hand.Maximum.Remove(type, hand.Maximum.Get(type) - most);
+                            changed = true;
+                        }
                     }
-                    if (hand.Candidates == 0) throw new InvalidOperationException($"Observer {Observer} lost track of player {player}: no type is left for its unknown cards");
-                    if (System.Numerics.BitOperations.PopCount(hand.Candidates) == 1)
+                    if (hand.Unknown == 0) continue;
+
+                    uint room = (uint)CardTypeExtensions.ResourceTypes.Sum(type => (long)hand.Room(type));
+                    if (room < hand.Unknown) throw new InvalidOperationException($"Observer {Observer} lost track of player {player}: no room is left for its unknown cards");
+                    foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
                     {
-                        hand.Known.Add((ResourceCardType)System.Numerics.BitOperations.TrailingZeroCount(hand.Candidates), hand.Unknown);
-                        hand.Unknown = 0;
-                        hand.Candidates = 0;
-                        changed = true;
+                        uint others = room - hand.Room(type);
+                        if (hand.Unknown > others)
+                        {
+                            uint certain = hand.Unknown - others;
+                            hand.Known.Add(type, certain);
+                            hand.Unknown -= certain;
+                            changed = true;
+                            break;
+                        }
                     }
                 }
+                if (changed) continue;
 
-                HandBelief[] uncertain = _hands.Where(h => h.Unknown > 0).ToArray();
-                if (uncertain.Length == 1)
+                foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
                 {
-                    HandBelief last = uncertain[0];
-                    if (Remaining(bank).Count() != last.Unknown) throw new InvalidOperationException($"Observer {Observer} lost track of the unknown cards");
-                    last.Known.Add(Remaining(bank));
-                    last.Unknown = 0;
-                    last.Candidates = 0;
+                    uint left = remaining.Get(type);
+                    long room = _hands.Sum(hand => (long)hand.Room(type));
+                    if (room < left) throw new InvalidOperationException($"Observer {Observer} lost track of the unknown {type}");
+                    if (left == 0 || room != left) continue;
+                    foreach (HandBelief hand in _hands)
+                    {
+                        uint certain = hand.Room(type);
+                        if (certain == 0) continue;
+                        hand.Known.Add(type, certain);
+                        hand.Unknown -= certain;
+                    }
                     changed = true;
+                    break;
                 }
             }
         }
@@ -449,12 +474,15 @@ namespace Common
             ResourceCardType[] dealt = new ResourceCardType[slots.Count];
             uint[] left = new uint[CardSet<ResourceCardType>.Values.Count];
             foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes) left[(int)type] = remaining.Get(type);
+            uint[,] room = new uint[_hands.Length, left.Length];
+            for (int player = 0; player < _hands.Length; player++)
+                foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes) room[player, (int)type] = _hands[player].Room(type);
 
             bool Deal(int slot)
             {
                 if (slot == slots.Count) return true;
-                HandBelief hand = _hands[slots[slot]];
-                List<ResourceCardType> options = CardTypeExtensions.ResourceTypes.Where(t => left[(int)t] > 0 && hand.CanBe(t)).ToList();
+                int player = slots[slot];
+                List<ResourceCardType> options = CardTypeExtensions.ResourceTypes.Where(t => left[(int)t] > 0 && room[player, (int)t] > 0).ToList();
                 while (options.Count > 0)
                 {
                     long total = options.Sum(t => (long)left[(int)t]);
@@ -466,9 +494,11 @@ namespace Common
                         pick -= left[(int)type];
                     }
                     left[(int)chosen]--;
+                    room[player, (int)chosen]--;
                     dealt[slot] = chosen;
                     if (Deal(slot + 1)) return true;
                     left[(int)chosen]++;
+                    room[player, (int)chosen]++;
                     options.Remove(chosen);
                 }
                 return false;

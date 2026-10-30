@@ -115,6 +115,7 @@ namespace Tests
                 foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
                 {
                     Assert.True(hand.Get(type) >= belief.Known.Get(type), $"Observer {tracker.Observer} believes player {player} holds more {type} than it does");
+                    Assert.True(hand.Get(type) <= belief.Maximum.Get(type), $"Observer {tracker.Observer} believes player {player} holds fewer {type} than it does");
                     if (hand.Get(type) > belief.Known.Get(type))
                         Assert.True(belief.CanBe(type), $"Observer {tracker.Observer} rules out {type} for an unknown card of player {player}");
                 }
@@ -206,6 +207,7 @@ namespace Tests
                 foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
                 {
                     Assert.True(f.ResourceCards.Get(type) >= belief.Known.Get(type));
+                    Assert.True(f.ResourceCards.Get(type) <= belief.Maximum.Get(type));
                     if (f.ResourceCards.Get(type) > belief.Known.Get(type)) Assert.True(belief.CanBe(type));
                 }
                 Assert.Equal(v.DevelopmentCards.Count(), f.DevelopmentCards.Count());
@@ -292,6 +294,41 @@ namespace Tests
                     Assert.True(tracker.HasHiddenInformation);
                 }
             }
+        }
+
+        [Fact]
+        public void AStealFromOneCardOfEachTypeLeavesAtMostOneOfEach()
+        {
+            // The victim holds one card of every type: after the steal a third party knows none of its cards for sure, but
+            // that it holds at most one of each type (four of the five), and that the thief got one of them
+            (Followed game, Action next) = FindNext((state, action) => IsSteal(state, action));
+            RobberAction steal = (RobberAction)next;
+            int thief = steal.PlayerIndex, victim = steal.TargetPlayerIndex!.Value;
+            int third = Enumerable.Range(0, 4).First(p => p != thief && p != victim);
+            game.Edit(state =>
+            {
+                state.ResourceBank.Add(state.Players[victim].ResourceCards);
+                state.Players[victim].ResourceCards = new CardSet<ResourceCardType>();
+                foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
+                {
+                    state.ResourceBank.Remove(type, 1);
+                    state.Players[victim].ResourceCards.Add(type, 1);
+                }
+            });
+            CardSet<ResourceCardType> thiefBefore = new CardSet<ResourceCardType>(game.Trackers[third].Hand(thief).Known);
+            game.Play(steal);
+
+            HandBelief victimBelief = game.Trackers[third].Hand(victim), thiefBelief = game.Trackers[third].Hand(thief);
+            Assert.Equal(0u, victimBelief.Known.Count());
+            Assert.Equal(4u, victimBelief.Unknown);
+            foreach (ResourceCardType type in CardTypeExtensions.ResourceTypes)
+            {
+                Assert.Equal(1u, victimBelief.Maximum.Get(type));
+                Assert.Equal(thiefBefore.Get(type), thiefBelief.Known.Get(type));
+                Assert.Equal(thiefBefore.Get(type) + 1, thiefBelief.Maximum.Get(type));
+            }
+            Assert.Equal(1u, thiefBelief.Unknown);
+            foreach (int observer in Observers) AssertSupports(game.Trackers[observer], game.Truth);
         }
 
         [Fact]
