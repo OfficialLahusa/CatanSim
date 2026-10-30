@@ -29,7 +29,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "DatasetProcessing"))
-from state_to_vector import _PLAYER_SIZE, _PLAYER_START  # noqa: E402
+from state_to_vector import VIEW_FEATURE_DIM, _PLAYER_SIZE, _PLAYER_START  # noqa: E402
 
 PLAYER_COUNT = 4
 PHASES = ((0, 4, "leader 0-4 VP"), (5, 6, "leader 5-6 VP"), (7, 8, "leader 7-8 VP"), (9, 99, "leader 9+ VP"))
@@ -126,18 +126,27 @@ def paired_difference(values: np.ndarray, reference: np.ndarray, clusters: np.nd
     return float(mean), float(1.96 * np.sqrt(variance))
 
 
-def run_model(path: str, states: np.ndarray, batch: int = 4096) -> np.ndarray:
+def model_inputs(width: int, data: Dict[str, np.ndarray]) -> np.ndarray:
+    """The features of a net of the given input width: a belief-aware net (the view layout) gets the views (views.npy,
+    DatasetCollector --regenerate-views), nets of an older layout the start of the states (later blocks are appended)"""
+    if width == VIEW_FEATURE_DIM:
+        if "views" not in data:
+            raise ValueError(f"A net of {width} features needs the views of the precision set (views.npy, DatasetCollector --regenerate-views).")
+        return data["views"]
+    if width > data["states"].shape[1]:
+        raise ValueError(f"A net of {width} features doesn't fit the precision set's {data['states'].shape[1]}.")
+    return data["states"][:, :width]
+
+
+def run_model(path: str, data: Dict[str, np.ndarray], batch: int = 4096) -> np.ndarray:
     """Win probabilities of an ONNX value net (softmax of its "logits" output)"""
     import onnxruntime as ort
 
     session = ort.InferenceSession(path, providers=["CPUExecutionProvider"])
     width = session.get_inputs()[0].shape[1]
-    width = width if isinstance(width, int) else states.shape[1]
-    # Nets of an older layout take the start of the vectors (later feature blocks are appended)
-    if width > states.shape[1]:
-        raise ValueError(f"{path} expects {width} features, the precision set has {states.shape[1]}.")
-    logits = np.concatenate([session.run(["logits"], {"state": np.asarray(states[i:i + batch, :width], dtype=np.float32)})[0]
-                             for i in range(0, len(states), batch)])
+    inputs = model_inputs(width if isinstance(width, int) else data["states"].shape[1], data)
+    logits = np.concatenate([session.run(["logits"], {"state": np.asarray(inputs[i:i + batch], dtype=np.float32)})[0]
+                             for i in range(0, len(inputs), batch)])
     exp = np.exp(logits - logits.max(axis=1, keepdims=True))
     return exp / exp.sum(axis=1, keepdims=True)
 
@@ -159,6 +168,10 @@ def load_precision_set(data: str, exclude_seeds: Optional[str]) -> Dict[str, np.
         excluded = len(np.unique(seeds[overlap]))
         keep &= ~overlap
 
+    # The belief-aware inputs, if the set has them (the metrics keep using the full states)
+    views_path = os.path.join(data, "views.npy")
+    if os.path.exists(views_path):
+        arrays["views"] = np.load(views_path, mmap_mode="r")
     result = {name: np.asarray(array)[keep] for name, array in arrays.items()}
     result["states"] = result["states"].astype(np.float32)
     result["win_rates"] = result["win_rates"].astype(np.float64)
@@ -218,7 +231,7 @@ def main(argv=None) -> int:
     models = []
     for spec in args.models:
         name, path = spec.split("=", 1)
-        models.append((name, run_model(path, data["states"])))
+        models.append((name, run_model(path, data)))
     evaluate(data, models)
     return 0
 

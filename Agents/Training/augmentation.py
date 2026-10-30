@@ -33,6 +33,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "DatasetProcessing"))
 from state_to_vector import (BASE_FEATURE_DIM, CLASSIC_EDGE_TILES, CLASSIC_INTERSECTION_ALL_TILES,  # noqa: E402
                              CLASSIC_MAP_WIDTH, COASTAL_INTERSECTIONS, FEATURE_DIM, LEGACY_FEATURE_DIM, PLAYER_BLOCK_SIZE,
+                             VIEW_FEATURE_DIM,
                              PLAYER_BLOCK_STARTS, PLAYER_COUNT, PORT_FEATURE_DIM, PORT_TYPES, ROUND_VOCAB,
                              _INTERSECTION_SIZE, _INTERSECTION_START, _TILE_COUNT, _TILE_SIZE, _TILE_START)
 
@@ -50,9 +51,14 @@ _ENDGAME_PER_PLAYER = 5
 _ROTATABLE_ROUNDS = [ROUND_VOCAB.index["Normal"], ROUND_VOCAB.index["MatchEnded"]]
 
 
+# The belief block of the view layout: per player the room of each resource type, then the hidden development cards
+_BELIEF_PER_PLAYER = 5
+
+
 def rotation_index(k: int) -> np.ndarray:
-    """Source index per feature for the rotation by k players: rotated = features[..., rotation_index(k)]"""
-    source = np.arange(FEATURE_DIM)
+    """Source index per feature for the rotation by k players (over the view layout, whose start is the current one):
+    rotated = features[..., rotation_index(k)]"""
+    source = np.arange(VIEW_FEATURE_DIM)
     for new in range(PLAYER_COUNT):
         old = (new - k) % PLAYER_COUNT
 
@@ -81,6 +87,10 @@ def rotation_index(k: int) -> np.ndarray:
         for j in range(_ENDGAME_PER_PLAYER):
             move(start + new * _ENDGAME_PER_PLAYER + j, start + old * _ENDGAME_PER_PLAYER + j)
         assert start + PLAYER_COUNT * _ENDGAME_PER_PLAYER + 1 == FEATURE_DIM
+
+        # The belief block's rooms move with their player; the hidden development cards belong to nobody
+        for j in range(_BELIEF_PER_PLAYER):
+            move(FEATURE_DIM + new * _BELIEF_PER_PLAYER + j, FEATURE_DIM + old * _BELIEF_PER_PLAYER + j)
     return source
 
 
@@ -223,11 +233,13 @@ def move_token_symmetries(layout: dict) -> np.ndarray:
 
 
 def transform_board(features: np.ndarray, t: int) -> np.ndarray:
-    """The vectors (current layout) of the same situations on the board rotated and mirrored by symmetry t"""
+    """The vectors (current or view layout) of the same situations on the board rotated and mirrored by symmetry t; the
+    belief block of the view layout holds nothing on the board and stays"""
     features = np.asarray(features)
-    if features.shape[-1] != FEATURE_DIM:
-        raise ValueError(f"board symmetries need the ports as features ({FEATURE_DIM} features), not {features.shape[-1]}")
-    transformed = features[..., BOARD_INDEX[t]]
+    if features.shape[-1] not in (FEATURE_DIM, VIEW_FEATURE_DIM):
+        raise ValueError(f"board symmetries need the ports as features ({FEATURE_DIM} or {VIEW_FEATURE_DIM} features), not {features.shape[-1]}")
+    index = BOARD_INDEX[t] if features.shape[-1] == FEATURE_DIM else np.concatenate([BOARD_INDEX[t], np.arange(FEATURE_DIM, VIEW_FEATURE_DIM)])
+    transformed = features[..., index]
     robber = (np.rint(features[..., _ROBBER_Y].astype(np.float64)) * CLASSIC_MAP_WIDTH
               + np.rint(features[..., _ROBBER_X].astype(np.float64))).astype(np.int64)
     moved = BOARD_TILE_TARGET[t][robber]

@@ -18,9 +18,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "DatasetP
 from augmentation import (BOARD_SYMMETRY_COUNT, BOARD_TILE_TARGET, NUMBER_PAIR_COUNT, _LAST_ROLL,  # noqa: E402
                           _NUMBERS, _element_symmetry, is_rotatable, rotate_features, rotate_player_index,
                           rotate_players, swap_number_pairs, transform_board)
-from state_to_vector import (CLASSIC_EDGE_TILES, CLASSIC_INTERSECTION_ALL_TILES, CLASSIC_MAP_WIDTH,  # noqa: E402
-                             CLASSIC_PORT_POSITIONS, FEATURE_DIM, LEGACY_FEATURE_DIM, load_state_yaml,
-                             state_to_feature_vector)
+from state_to_vector import (BELIEF_FEATURE_DIM, CLASSIC_EDGE_TILES, CLASSIC_INTERSECTION_ALL_TILES,  # noqa: E402
+                             CLASSIC_MAP_WIDTH, CLASSIC_PORT_POSITIONS, FEATURE_DIM, LEGACY_FEATURE_DIM, VIEW_FEATURE_DIM,
+                             load_state_yaml, state_to_feature_vector)
 
 FIXTURES = os.path.join(os.path.dirname(__file__), "..", "Fixtures", "Vectorizer")
 
@@ -241,6 +241,43 @@ class AugmentedDatasetTest(unittest.TestCase):
                 np.testing.assert_array_equal(item["y"].numpy(), labels[0])
             self.assertEqual(set(range(BOARD_SYMMETRY_COUNT)), symmetries)
             del dataset, dataset_numbers, dataset_board
+
+
+class ViewAugmentationTest(unittest.TestCase):
+    """The belief-aware layout (ViewVectorizer in C#): a vector of the current layout, then per player and resource type
+    how many unknown cards can be of it, then the hidden development cards by type"""
+
+    def setUp(self):
+        self.views = np.random.default_rng(5).integers(0, 9, size=(3, VIEW_FEATURE_DIM)).astype(np.float32)
+        # Valid robber coordinates, which the board symmetries move
+        base = np.asarray([state_to_feature_vector(load_state_yaml(os.path.join(FIXTURES, "midgame.yaml"))["GameState"])] * 3, dtype=np.float32)
+        self.views[:, :FEATURE_DIM] = base
+
+    def test_the_layout_appends_the_belief_block(self):
+        self.assertEqual(FEATURE_DIM + 4 * 5 + 5, VIEW_FEATURE_DIM)
+        self.assertEqual(VIEW_FEATURE_DIM - FEATURE_DIM, BELIEF_FEATURE_DIM)
+
+    def test_the_belief_block_rotates_with_its_player(self):
+        block = self.views[:, FEATURE_DIM:FEATURE_DIM + 20].reshape(3, 4, 5)
+        for k in range(4):
+            rotated = rotate_features(self.views, k)
+            np.testing.assert_array_equal(rotated[:, :FEATURE_DIM], rotate_features(self.views[:, :FEATURE_DIM], k))
+            rotated_block = rotated[:, FEATURE_DIM:FEATURE_DIM + 20].reshape(3, 4, 5)
+            for player in range(4):
+                np.testing.assert_array_equal(rotated_block[:, (player + k) % 4], block[:, player])
+            # The hidden development cards belong to nobody
+            np.testing.assert_array_equal(rotated[:, FEATURE_DIM + 20:], self.views[:, FEATURE_DIM + 20:])
+
+    def test_board_symmetries_leave_the_belief_block(self):
+        for t in range(BOARD_SYMMETRY_COUNT):
+            transformed = transform_board(self.views, t)
+            np.testing.assert_array_equal(transformed[:, :FEATURE_DIM], transform_board(self.views[:, :FEATURE_DIM], t))
+            np.testing.assert_array_equal(transformed[:, FEATURE_DIM:], self.views[:, FEATURE_DIM:])
+
+    def test_number_swaps_leave_the_belief_block(self):
+        swapped = swap_number_pairs(self.views, np.full(3, 2 ** NUMBER_PAIR_COUNT - 1))
+        np.testing.assert_array_equal(swapped[:, :FEATURE_DIM], swap_number_pairs(self.views[:, :FEATURE_DIM], np.full(3, 2 ** NUMBER_PAIR_COUNT - 1)))
+        np.testing.assert_array_equal(swapped[:, FEATURE_DIM:], self.views[:, FEATURE_DIM:])
 
 
 if __name__ == "__main__":

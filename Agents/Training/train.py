@@ -11,7 +11,7 @@ from state_value_net import StateValueModule, PLAYER_COUNT
 from augmentation import (BOARD_SYMMETRY_COUNT, NUMBER_PAIR_COUNT, is_rotatable, move_token_symmetries, rotate_features,
                           rotate_player_index, rotate_players, swap_number_pairs, transform_board)
 # augmentation legt DatasetProcessing in den Suchpfad
-from state_to_vector import FEATURE_DIM  # noqa: E402
+from state_to_vector import FEATURE_DIM, VIEW_FEATURE_DIM  # noqa: E402
 
 # Zusätzliche Label-Arrays aus DatasetProcessing/playout_results.py (gleiche Zeilenreihenfolge wie die States), alle optional
 AUX_ARRAYS = ("placements", "vp_shares", "rounds_left", "sibling_groups", "actors")
@@ -259,6 +259,27 @@ class MixSampler(Sampler):
         return iter(rng.permutation(np.concatenate(drawn)).tolist())
 
 
+def widen_state_dict(state_dict, in_dim, new_mean=None, new_scale=None):
+    """Ein Checkpoint mit weniger Input-Features für ein Modell mit in_dim (das Sicht-Layout hängt Features an das aktuelle
+    an): die erste Schicht bekommt Gewicht 0 für die neuen Spalten, das Net rechnet auf den alten Features also wie vorher, die
+    Input-Normalisierung bekommt für sie den gegebenen Mittelwert und die Skala (sonst 0 und 1). Gleich breit bleibt er, wie er ist."""
+    weight = state_dict["model.net.0.weight"]
+    old_dim = weight.shape[1]
+    if old_dim > in_dim:
+        raise ValueError(f"The checkpoint has {old_dim} input features, more than the model's {in_dim}")
+    if old_dim == in_dim:
+        return state_dict
+    added = in_dim - old_dim
+    widened = dict(state_dict)
+    widened["model.net.0.weight"] = torch.cat([weight, torch.zeros(weight.shape[0], added, dtype=weight.dtype)], dim=1)
+    if "model.input_mean" in state_dict:
+        mean = torch.zeros(added) if new_mean is None else torch.as_tensor(new_mean, dtype=torch.float32)
+        scale = torch.ones(added) if new_scale is None else torch.as_tensor(new_scale, dtype=torch.float32)
+        widened["model.input_mean"] = torch.cat([state_dict["model.input_mean"], mean.to(state_dict["model.input_mean"].dtype)])
+        widened["model.input_scale"] = torch.cat([state_dict["model.input_scale"], scale.to(state_dict["model.input_scale"].dtype)])
+    return widened
+
+
 def parse_source(spec):
     """'DIR' oder 'DIR@ANTEIL': ein vorbereitetes Verzeichnis (states.npy, win_rates.npy, idx_*.npy, Aux-Arrays)"""
     directory, share = spec, 1.0
@@ -317,9 +338,32 @@ class GroupBatchSampler(Sampler):
             yield indices[start:end].tolist()
 
 
+def set_normalization(model, full_ds, train_idx, args):
+    """Input-Normalisierung aus bis zu 200.000 Trainings-States, über die Sichten, die das Training durch die Augmentierung sieht"""
+    in_dim = full_ds.states.shape[1]
+    sample = np.sort(np.random.default_rng(0).choice(train_idx, min(len(train_idx), 200_000), replace=False))
+    states = np.asarray(full_ds.states[sample], dtype=np.float32)
+    if args.augment_rotation:
+        # Statistik über die Sichten, die das Training sieht: jede rotierbare Zeile um ein zufälliges k gedreht
+        ks = np.random.default_rng(1).integers(PLAYER_COUNT, size=len(states))
+        ks[~is_rotatable(states)] = 0
+        for k in range(1, PLAYER_COUNT):
+            states[ks == k] = rotate_features(states[ks == k], k)
+    if args.augment_numbers:
+        states = swap_number_pairs(states, np.random.default_rng(2).integers(2 ** NUMBER_PAIR_COUNT, size=len(states)))
+    if args.augment_board:
+        ts = np.random.default_rng(3).integers(BOARD_SYMMETRY_COUNT, size=len(states))
+        for t in range(1, BOARD_SYMMETRY_COUNT):
+            states[ts == t] = transform_board(states[ts == t], t)
+    scaled = model.set_input_normalization(states)
+    print(f"Input normalization: {scaled} of {in_dim} features standardized, the binary ones unchanged")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--states", default="dataset/states.npy")
+    # Die Feature-Datei der --data-Verzeichnisse: states.npy oder views.npy (Sicht des Sitzes mit Belief-Block, ViewVectorizer)
+    parser.add_argument("--features", default="states.npy")
     parser.add_argument("--labels", default="dataset/win_rates.npy")
     parser.add_argument("--train-idx", default="dataset/idx_train.npy")
     parser.add_argument("--val-idx", default="dataset/idx_val.npy")
@@ -371,7 +415,7 @@ def main():
     sources = [parse_source(spec) for spec in args.data] if args.data else []
     if sources:
         first = sources[0][0]
-        args.states, args.labels = os.path.join(first, "states.npy"), os.path.join(first, "win_rates.npy")
+        args.states, args.labels = os.path.join(first, args.features), os.path.join(first, "win_rates.npy")
         args.train_idx, args.val_idx, args.aux_dir = os.path.join(first, "idx_train.npy"), os.path.join(first, "idx_val.npy"), first
         if args.ranking_weight > 0 and len(sources) > 1:
             raise SystemExit("--ranking-weight works with a single data source only")
@@ -386,8 +430,8 @@ def main():
         # Das Ranking trainiert nur Unterschiede innerhalb der Gruppen, das absolute Niveau kommt vom Platzierungs-Loss
         raise SystemExit("--ranking-placement-weight needs --placement-weight > 0")
     print(f"Aux labels: {', '.join(full_ds.aux_paths) or 'none'}")
-    if args.augment_board and full_ds.states.shape[1] != FEATURE_DIM:
-        raise SystemExit(f"--augment-board needs states with the ports as features ({FEATURE_DIM} features, see migrate_states_1764_to_1965.py)")
+    if args.augment_board and full_ds.states.shape[1] not in (FEATURE_DIM, VIEW_FEATURE_DIM):
+        raise SystemExit(f"--augment-board needs states with the ports as features ({FEATURE_DIM} or {VIEW_FEATURE_DIM} features, see migrate_states_1764_to_1965.py)")
 
     train_idx, val_idx = np.load(args.train_idx), np.load(args.val_idx)
     augment = args.augment_rotation or args.augment_numbers or args.augment_board
@@ -396,7 +440,7 @@ def main():
                             target_lambda=args.target_lambda, policy_temperature=args.policy_temperature) if augment else full_ds
     loader_args = dict(num_workers=args.num_workers, pin_memory=True, persistent_workers=True, collate_fn=keep_batch)
     if len(sources) > 1:
-        datasets = [train_ds] + [StateDataset(os.path.join(directory, "states.npy"), os.path.join(directory, "win_rates.npy"), directory,
+        datasets = [train_ds] + [StateDataset(os.path.join(directory, args.features), os.path.join(directory, "win_rates.npy"), directory,
                                               augment_rotation=args.augment_rotation, augment_numbers=args.augment_numbers,
                                               augment_board=args.augment_board, target_lambda=args.target_lambda,
                                               policy_temperature=args.policy_temperature)
@@ -438,27 +482,24 @@ def main():
         # Ein neuer Policy Head fehlt im Checkpoint und startet zufällig
         # Nur Tensoren und einfache Typen: ein manipulierter Checkpoint kann so keinen Code ausführen
         checkpoint = torch.load(args.init_from, map_location="cpu", weights_only=True)
-        missing, unexpected = model.load_state_dict(checkpoint["state_dict"], strict=False)
+        state_dict = checkpoint["state_dict"]
+        old_dim = state_dict["model.net.0.weight"].shape[1]
+        if old_dim < in_dim:
+            # Mehr Features als der Checkpoint (Sicht-Layout): die neuen Spalten starten mit Gewicht 0, ihre Normalisierung
+            # kommt aus den Daten wie ohne Checkpoint
+            new_mean = new_scale = None
+            if "model.input_mean" in state_dict:
+                set_normalization(model, full_ds, train_idx, args)
+                new_mean = model.model.input_mean[old_dim:].numpy().copy()
+                new_scale = model.model.input_scale[old_dim:].numpy().copy()
+            state_dict = widen_state_dict(state_dict, in_dim, new_mean, new_scale)
+            print(f"Widened the checkpoint from {old_dim} to {in_dim} input features")
+        missing, unexpected = model.load_state_dict(state_dict, strict=False)
         if unexpected or any(not name.startswith("model.policy_") for name in missing):
             raise SystemExit(f"Checkpoint does not fit the model: missing {missing}, unexpected {unexpected}")
         print(f"Weights and input normalization from {args.init_from}" + (f" (new: {', '.join(missing)})" if missing else ""))
     elif args.normalize_inputs:
-        sample = np.sort(np.random.default_rng(0).choice(train_idx, min(len(train_idx), 200_000), replace=False))
-        states = np.asarray(full_ds.states[sample], dtype=np.float32)
-        if args.augment_rotation:
-            # Statistik über die Sichten, die das Training sieht: jede rotierbare Zeile um ein zufälliges k gedreht
-            ks = np.random.default_rng(1).integers(PLAYER_COUNT, size=len(states))
-            ks[~is_rotatable(states)] = 0
-            for k in range(1, PLAYER_COUNT):
-                states[ks == k] = rotate_features(states[ks == k], k)
-        if args.augment_numbers:
-            states = swap_number_pairs(states, np.random.default_rng(2).integers(2 ** NUMBER_PAIR_COUNT, size=len(states)))
-        if args.augment_board:
-            ts = np.random.default_rng(3).integers(BOARD_SYMMETRY_COUNT, size=len(states))
-            for t in range(1, BOARD_SYMMETRY_COUNT):
-                states[ts == t] = transform_board(states[ts == t], t)
-        scaled = model.set_input_normalization(states)
-        print(f"Input normalization: {scaled} of {in_dim} features standardized, the binary ones unchanged")
+        set_normalization(model, full_ds, train_idx, args)
 
     logger = L.pytorch.loggers.WandbLogger(project="colonysim")
     callbacks = [

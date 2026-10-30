@@ -24,7 +24,7 @@ try:
     import torch
     from export_onnx import export_model
     from state_value_net import StateValueModule, masked_kl, policy_cross_entropy, sibling_ranking
-    from train import GroupBatchSampler, MixedDataset, MixSampler, StateDataset
+    from train import GroupBatchSampler, MixedDataset, MixSampler, StateDataset, widen_state_dict
 except ImportError as error:  # pragma: no cover - depends on the environment
     IMPORT_ERROR = error
 else:
@@ -44,6 +44,41 @@ def write_source(directory, rows, features, label_dtype, self_play):
 
 @unittest.skipIf(IMPORT_ERROR is not None, f"training dependencies missing: {IMPORT_ERROR}")
 class TrainingTest(unittest.TestCase):
+    def test_a_widened_checkpoint_computes_the_same_on_the_old_features(self):
+        # The view layout appends features: the old net's weights go on, the new columns start at 0
+        old = StateValueModule(in_dim=8, hidden=16, normalize_inputs=True, placement_weight=0.1)
+        old.model.input_mean.copy_(torch.arange(8, dtype=torch.float32))
+        old.model.input_scale.copy_(torch.full((8,), 0.5))
+        wide = StateValueModule(in_dim=11, hidden=16, normalize_inputs=True, placement_weight=0.1)
+        widened = widen_state_dict(old.state_dict(), 11, new_mean=np.array([1.0, 2.0, 3.0]), new_scale=np.array([0.1, 0.2, 0.3]))
+        wide.load_state_dict(widened, strict=True)
+        np.testing.assert_allclose(wide.model.input_mean[8:].numpy(), [1, 2, 3])
+        np.testing.assert_allclose(wide.model.input_scale[8:].numpy(), [0.1, 0.2, 0.3], rtol=1e-6)
+
+        old.eval()
+        wide.eval()
+        x = torch.rand(5, 11) * 4
+        with torch.no_grad():
+            torch.testing.assert_close(wide.model(x), old.model(x[:, :8]))
+
+        # A checkpoint of the same width stays as it is, a wider one can't be narrowed
+        self.assertIs(old.state_dict()["model.net.0.weight"].shape[1], 8)
+        same = widen_state_dict(old.state_dict(), 8)
+        torch.testing.assert_close(same["model.net.0.weight"], old.state_dict()["model.net.0.weight"])
+        with self.assertRaises(ValueError):
+            widen_state_dict(wide.state_dict(), 8)
+
+    def test_a_source_can_give_another_feature_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            write_source(directory, 6, 5, np.float32, self_play=False)
+            np.save(os.path.join(directory, "views.npy"), np.ones((6, 7), dtype=np.float16))
+            dataset = StateDataset(os.path.join(directory, "views.npy"), os.path.join(directory, "win_rates.npy"), directory)
+            self.assertEqual((6, 7), dataset.states.shape)
+            # Windows keeps memory-mapped files open until the arrays are gone
+            del dataset
+            import gc
+            gc.collect()
+
     def test_batches_keep_sibling_groups_together(self):
         groups = np.array([-1, 0, 0, 0, -1, 1, 1, -1, 2, 2, 2, 2, -1, -1, 3, 3])
         indices = np.arange(1, 16)  # sample 0 is not in this split

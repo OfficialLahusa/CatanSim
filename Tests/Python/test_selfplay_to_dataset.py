@@ -108,6 +108,26 @@ class SelfPlayToDatasetTest(unittest.TestCase):
         np.testing.assert_allclose(load("policy_targets"), [0.75, 0, 0.25, 0, 1])
         self.assertTrue(os.path.exists(os.path.join(output, "policy_layout.json")))
 
+    def test_view_features_follow_the_positions(self):
+        # views.f16 (SelfPlayCollector view-features) holds one row per line of samples.csv, of its own width
+        run = os.path.join(self.base, "run")
+        write_run(run, ["1,5,1,0,10,2,2,2,20,100,2,50,1.0,0,0,1", "2,6,0,-1,4,4,4,4,90,3000,1,900,99.0,0,1,1"],
+                  ["1,0,5,2,0,800,800,1,0,0,0,0,0,0:800", "2,0,7,3,1,800,800,0.25,0.25,0.25,0.25,0,1,1:800",
+                   "1,1,9,4,1,800,800,0,1,0,0,0,2,1:800"], [np.zeros((3, FEATURES))])
+        views = np.arange(3 * 7, dtype=np.float32).reshape(3, 7)
+        views.astype("<f2").tofile(os.path.join(run, "views.f16"))
+
+        output = os.path.join(self.base, "prepared")
+        self.assertEqual(2, convert([run], output, val=0.0))
+        np.testing.assert_array_equal(np.load(os.path.join(output, "views.npy")), views[[0, 2]].astype(np.float16))
+
+        # A run without them gives no views for the mix
+        other = os.path.join(self.base, "other")
+        write_run(other, ["3,7,1,0,10,2,2,2,20,100,1,50,1.0,0,0,1"], ["3,0,5,2,0,800,800,1,0,0,0,0,0,0:800"], [np.zeros((1, FEATURES))])
+        mixed = os.path.join(self.base, "mixed")
+        convert([run, other], mixed, val=0.0)
+        self.assertFalse(os.path.exists(os.path.join(mixed, "views.npy")))
+
     def test_runs_of_different_feature_layouts_are_rejected(self):
         write_run(os.path.join(self.base, "a"), ["1,5,1,0,10,2,2,2,20,100,1,50,1.0,0,0,1"],
                   ["1,0,5,2,0,800,800,1,0,0,0,0,0,0:800"], [np.zeros((1, FEATURES))])

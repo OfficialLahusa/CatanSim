@@ -50,8 +50,10 @@ def read_run(run_dir: str):
                 games[game["game"]] = game
 
     columns = {name: [] for name in ("seed", "winner", "vp", "rounds_left", "actor", "q", "chunk", "row", "line", "visits")}
+    lines = 0
     with open(os.path.join(run_dir, "samples.csv"), newline="") as file:
         for line, sample in enumerate(csv.DictReader(file)):
+            lines += 1
             game = games.get(sample["game"])
             if game is None:
                 continue
@@ -76,12 +78,15 @@ def read_run(run_dir: str):
         "chunk": np.array(columns["chunk"], dtype=np.int64),
         "row": np.array(columns["row"], dtype=np.int64),
         "line": np.array(columns["line"], dtype=np.int64),
+        "lines": lines,
         "visits": columns["visits"],
     }
     return feature_dim, arrays, len(games)
 
 
 POLICY_FILES = ("policy_counts.i32", "policy_tokens.i16", "policy_weights.u8", "policy_layout.json")
+VIEWS_FILE = "views.f16"
+
 
 
 def read_policy(run_dir: str, arrays: dict, max_tokens: int):
@@ -134,6 +139,26 @@ def convert(runs, output_dir: str, target_lambda: float = 0.5, val: float = 0.1,
         start += len(arrays["seed"])
     states.flush()
     del states
+
+    # The belief-aware inputs (SelfPlayCollector view-features), one row per line of samples.csv, if every run has them
+    if all(os.path.exists(os.path.join(run, VIEWS_FILE)) for run, *_ in parts):
+        widths = set()
+        for run, _, arrays, _ in parts:
+            size = os.path.getsize(os.path.join(run, VIEWS_FILE)) // 2
+            if arrays["lines"] == 0 or size % arrays["lines"]:
+                raise ValueError(f"{run}: {VIEWS_FILE} doesn't hold one row per line of samples.csv")
+            widths.add(size // arrays["lines"])
+        if len(widths) != 1:
+            raise ValueError(f"The runs' view features have different widths: {sorted(widths)}")
+        view_dim = widths.pop()
+        views = np.lib.format.open_memmap(os.path.join(output_dir, "views.npy"), mode="w+", dtype=np.float16, shape=(n, view_dim))
+        start = 0
+        for run, _, arrays, _ in parts:
+            rows = np.memmap(os.path.join(run, VIEWS_FILE), dtype="<f2", mode="r").reshape(-1, view_dim)
+            views[start:start + len(arrays["line"])] = rows[arrays["line"]]
+            start += len(arrays["line"])
+        views.flush()
+        del views
 
     def joined(name):
         return np.concatenate([arrays[name] for _, _, arrays, _ in parts])

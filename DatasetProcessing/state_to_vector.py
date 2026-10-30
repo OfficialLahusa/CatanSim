@@ -59,6 +59,11 @@ LEGACY_FEATURE_DIM = BASE_FEATURE_DIM + DERIVED_FEATURE_DIM
 
 # Total size of the final GameState feature vector
 FEATURE_DIM = LEGACY_FEATURE_DIM + PORT_FEATURE_DIM + ENDGAME_FEATURE_DIM
+# The belief-aware layout of C#'s ViewVectorizer: a seat's view in the layout above (the cards it can't see in the Unknown
+# slots), then per player and resource type how many of the unknown cards can be of it, then the hidden development cards
+# by type. Only C# writes it (SelfPlayCollector view-features, DatasetCollector --regenerate-views).
+BELIEF_FEATURE_DIM = 4 * 5 + 5
+VIEW_FEATURE_DIM = FEATURE_DIM + BELIEF_FEATURE_DIM
 
 # The setup rounds count the round counter up to 2, so the first normal round is 2
 FIRST_NORMAL_ROUND = 2

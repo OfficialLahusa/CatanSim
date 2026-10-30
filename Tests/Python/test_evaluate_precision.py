@@ -10,8 +10,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "Agents",
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "DatasetProcessing"))
 
 try:
-    from evaluate_precision import (calibration, effective_seeds, kl_divergence, noise_floor, paired_difference,  # noqa: E402
-                                    ranking_metrics, sibling_pairs, victory_points)
+    from evaluate_precision import (calibration, effective_seeds, kl_divergence, model_inputs, noise_floor,  # noqa: E402
+                                    paired_difference, ranking_metrics, sibling_pairs, victory_points)
+    from state_to_vector import FEATURE_DIM, LEGACY_FEATURE_DIM, VIEW_FEATURE_DIM  # noqa: E402
     from playout_results import effective_match_seed  # noqa: E402
     from state_to_vector import _PLAYER_SIZE, _PLAYER_START  # noqa: E402
     IMPORT_ERROR = None
@@ -81,6 +82,21 @@ class EvaluatePrecisionTest(unittest.TestCase):
         # Two clusters that disagree completely: a wide interval, much wider than for six independent samples
         _, independent = paired_difference(values, reference, np.arange(6))
         self.assertGreater(half, independent)
+
+
+@unittest.skipIf(IMPORT_ERROR is not None, f"dependencies missing: {IMPORT_ERROR}")
+class ModelInputTest(unittest.TestCase):
+    def test_each_net_gets_the_features_of_its_layout(self):
+        data = {"states": np.zeros((3, FEATURE_DIM), dtype=np.float32), "views": np.ones((3, VIEW_FEATURE_DIM), dtype=np.float32)}
+        # A belief-aware net gets the views, the others the start of the states
+        self.assertIs(data["views"], model_inputs(VIEW_FEATURE_DIM, data))
+        self.assertEqual((3, FEATURE_DIM), model_inputs(FEATURE_DIM, data).shape)
+        self.assertEqual((3, LEGACY_FEATURE_DIM), model_inputs(LEGACY_FEATURE_DIM, data).shape)
+        self.assertEqual(0, model_inputs(FEATURE_DIM, data).sum())
+        with self.assertRaises(ValueError):
+            model_inputs(VIEW_FEATURE_DIM, {"states": data["states"]})
+        with self.assertRaises(ValueError):
+            model_inputs(VIEW_FEATURE_DIM + 1, data)
 
 
 if __name__ == "__main__":
