@@ -1,5 +1,4 @@
 ## Simulator
-- Herkunft fehlender Assets/Sounds klären und herausfinden, welche Sounds noch ergänzt werden sollten
 - Projekt in Hexfarer umbenannt (CATAN ist Marke der CATAN GmbH; Hexfarer frei: keine Marke in TMview, kein Spiel, Domains, GitHub, HF frei): Repo-Inhalt, Solution, Texte, Repo-Ordner, GitHub-Repo, HF-Modell und Model Card, Datenordner Hexfarer-data, Domains hexfarer.dev (.com leitet weiter), HEXFARER_*-Variablen (CATANSIM_* noch akzeptiert), %AppData%\Hexfarer übernimmt das Host-Zertifikat
 	- Domains (Cloudflare): DNSSEC an und Transfer-Lock prüfen; hexfarer.com per Redirect Rule (301, Pfad und Query bleiben) auf hexfarer.dev, dafür Platzhalter-Records proxied (A @, CNAME www); hexfarer.dev bis zur Website auf das GitHub-Repo oder eine Pages-Seite; Email Routing (contact@hexfarer.dev, Catch-all für .com)
 	- Später: Cloudflare Tunnel vom Server für Web-Client und Match-Server (wss mit Cloudflare-Zertifikat, kein Fingerprint, keine offenen Ports)
@@ -27,6 +26,7 @@
 	- 4. Belief-aware StateValueNet: Training auf StateView-Inputs (Views per Replay der Histories rekonstruierbar), Sichtbarkeits-Augmentation nach der echten Beobachtungsverteilung statt zufällig, erwartete versteckte VP als Feature
 	- 5. Particle MCTS / POMCP erst mit Spielerhandel (Angebote schwer als Constraints)
 - Client
+	- Herkunft fehlender Assets/Sounds klären und herausfinden, welche Sounds noch ergänzt werden sollten
 	- Linux-Port: RenderDataImpl.dll (nur Windows, ohne Quellcode) ersetzen, ShowWindow nur unter Windows (Ressourcen kommen schon aus res/ neben der Exe)
 
 ## Agents
