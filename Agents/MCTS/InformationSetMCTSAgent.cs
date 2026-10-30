@@ -38,6 +38,12 @@ namespace Agents.MCTS
         public MCTSAgent Search => _search;
 
         /// <summary>
+        /// Searches the true position instead of worlds drawn from the beliefs (an ablation: the same search without hidden
+        /// information)
+        /// </summary>
+        public bool FullKnowledge { get; init; }
+
+        /// <summary>
         /// The tree of the last decision, for showing the search
         /// </summary>
         public ISMCTSTree? LastTree { get; private set; }
@@ -46,12 +52,12 @@ namespace Agents.MCTS
 
         public override Action Act(GameState state, CancellationToken cancellation)
         {
-            if (_search.DecideTrade(_beliefs.Determinize(_beliefs.View(state), _random)) is Action trade) return trade;
+            if (_search.DecideTrade(FullKnowledge ? state : _beliefs.Determinize(_beliefs.View(state), _random)) is Action trade) return trade;
 
             List<Action> legal = MCTSTree.GetValidActions(state);
             if (legal.Count == 1) return legal[0].Clone();
 
-            ISMCTSTree tree = new ISMCTSTree(state, _beliefs, _search.ExplorationParameter, _random.Next()) { FirstPlayReduction = _search.FirstPlayReduction };
+            ISMCTSTree tree = new ISMCTSTree(state, _beliefs, _search.ExplorationParameter, _random.Next(), FullKnowledge) { FirstPlayReduction = _search.FirstPlayReduction };
             LastTree = tree;
             _search.RunSearch(tree, cancellation);
             return tree.GetMostPromisingMove();

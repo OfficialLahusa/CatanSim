@@ -50,6 +50,10 @@ namespace Tests
             AgentSpec spec = AgentSpec.Parse("S=a.onnx=is");
             Assert.True(spec.InformationSets);
             Assert.Equal("S a.onnx MaxN is", spec.ToString());
+            Assert.False(spec.FullKnowledge);
+            AgentSpec full = AgentSpec.Parse("F=a.onnx=isfull");
+            Assert.True(full.InformationSets && full.FullKnowledge);
+            Assert.Equal("F a.onnx MaxN isfull", full.ToString());
         }
 
         [Theory]

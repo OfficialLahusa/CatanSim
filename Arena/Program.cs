@@ -54,8 +54,10 @@ namespace Arena
 
             An AGENT is NAME=MODEL.onnx[=OPTION...] with the options MaxN, Paranoid or Random (opponent model, default MaxN),
             cX (exploration constant, default 1.414), bN (leaves per batch, default 256), fX (first play reduction, default
-            0.1), pX (placement weight, default 0), u (uniform priors instead of the policy head's) and dN (hidden information:
-            only its seat's view, searched as N determinizations; without it the agent sees every hand).
+            0.1), pX (placement weight, default 0), u (uniform priors instead of the policy head's), dN (hidden information:
+            only its seat's view, searched as N determinizations), is (hidden information searched as one tree over the seat's
+            information sets) and isfull (that search on the true position, an ablation); without dN or is the agent sees
+            every hand.
 
               --challenger AGENT     The agent tested
               --baseline AGENT       The agent it is compared with

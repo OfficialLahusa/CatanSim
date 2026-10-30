@@ -174,6 +174,7 @@ namespace Agents.MCTS
     {
         private readonly BeliefTracker _beliefs;
         private readonly GameState _view;
+        private readonly bool _fullKnowledge;
         private readonly int _seed;
         private readonly double _exploration;
         private long _iterations;
@@ -196,15 +197,19 @@ namespace Agents.MCTS
 
         /// <param name="truth">The true position; only its view through the beliefs is used</param>
         /// <param name="beliefs">What the searching seat knows</param>
-        public ISMCTSTree(GameState truth, BeliefTracker beliefs, double exploration = 1.414, int seed = 0)
+        /// <param name="fullKnowledge">Every world is the true position (an ablation: the same search without hidden information)</param>
+        public ISMCTSTree(GameState truth, BeliefTracker beliefs, double exploration = 1.414, int seed = 0, bool fullKnowledge = false)
         {
             _beliefs = new BeliefTracker(beliefs);
-            _view = _beliefs.View(truth);
+            _fullKnowledge = fullKnowledge;
+            _view = fullKnowledge ? new GameState(truth) : _beliefs.View(truth);
             _seed = seed;
             _exploration = exploration;
             OwnerIndex = (sbyte)beliefs.Observer;
-            RootState = _beliefs.Determinize(_view, new Random(seed));
+            RootState = DrawWorld(new Random(seed));
         }
+
+        private GameState DrawWorld(Random random) => _fullKnowledge ? new GameState(_view) : _beliefs.Determinize(_view, random);
 
         public bool RootHasPolicyPriors => RootNode.HasLogits;
 
@@ -215,7 +220,7 @@ namespace Agents.MCTS
             // A world of its own and random numbers of its own per iteration, so the search repeats with the seed
             long iteration = Interlocked.Increment(ref _iterations);
             Random random = new Random(HashCode.Combine(_seed, iteration));
-            GameState world = _beliefs.Determinize(_view, random);
+            GameState world = DrawWorld(random);
 
             ISNode node = RootNode;
             while (!world.HasEnded && node.Visits > 0)

@@ -134,7 +134,7 @@ namespace Arena
 
                 // Under hidden information the agent sees only its seat's view: one tree over its information sets, or the
                 // iterations split between its determinizations
-                if (spec.InformationSets) return new InformationSetMCTSAgent(search, start);
+                if (spec.InformationSets) return new InformationSetMCTSAgent(search, start) { FullKnowledge = spec.FullKnowledge };
                 return spec.Determinizations > 0 ? (Agent)new DeterminizedMCTSAgent(search, start, spec.Determinizations) : search;
             }).ToArray();
 

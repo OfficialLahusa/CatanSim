@@ -152,6 +152,24 @@ namespace Tests
         }
 
         [Fact]
+        public void AFullKnowledgeTreeSearchesTheTruePosition()
+        {
+            int hidden = 0;
+            foreach ((GameState truth, BeliefTracker beliefs) in Decisions(3, 4))
+            {
+                if (beliefs.HasHiddenInformation) hidden++;
+                ISMCTSTree tree = new ISMCTSTree(truth, beliefs, seed: 1, fullKnowledge: true);
+                for (int p = 0; p < 4; p++)
+                {
+                    Assert.Equal(truth.Players[p].ResourceCards, tree.RootState.Players[p].ResourceCards);
+                    Assert.Equal(truth.Players[p].DevelopmentCards, tree.RootState.Players[p].DevelopmentCards);
+                }
+                Assert.Equal(truth.DevelopmentBank, tree.RootState.DevelopmentBank);
+            }
+            Assert.True(hidden > 0, "seat 3 never missed anything in the positions");
+        }
+
+        [Fact]
         public void TheSameSeedSearchesTheSame()
         {
             (GameState truth, BeliefTracker beliefs) = Decisions(0, 1).First();
