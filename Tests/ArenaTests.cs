@@ -43,6 +43,15 @@ namespace Tests
             Assert.Equal("c1 a.onnx Paranoid c1 b64 f0.25 p0.5 u", spec.ToString());
         }
 
+        [Fact]
+        public void AnAgentSpecReadsItsHiddenInformationSearch()
+        {
+            Assert.Equal(4, AgentSpec.Parse("P=a.onnx=d4").Determinizations);
+            AgentSpec spec = AgentSpec.Parse("S=a.onnx=is");
+            Assert.True(spec.InformationSets);
+            Assert.Equal("S a.onnx MaxN is", spec.ToString());
+        }
+
         [Theory]
         [InlineData("a.onnx")]
         [InlineData("=a.onnx")]

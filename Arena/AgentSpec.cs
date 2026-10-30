@@ -7,10 +7,11 @@ namespace Arena
     /// An MCTS agent of a duel, given as "NAME=MODEL.onnx[=OPTION...]". Options: an opponent model (MaxN, Paranoid, Random;
     /// MaxN if none), cX exploration constant, bN leaves per batch, fX first play reduction, pX placement weight, u PUCT
     /// with uniform priors instead of the policy head's, dN hidden information: only its seat's view, searched as N
-    /// determinizations (PIMC, see DeterminizedMCTSAgent); without it the agent sees every hand.
+    /// determinizations (PIMC, see DeterminizedMCTSAgent), is hidden information searched as one tree over the seat's
+    /// information sets (see InformationSetMCTSAgent); without either the agent sees every hand.
     /// </summary>
     internal sealed record AgentSpec(string Name, string ModelPath, OpponentModel OpponentModel, double Exploration, int LeavesPerBatch,
-        double FirstPlayReduction, double PlacementWeight, bool UniformPriors, int Determinizations = 0)
+        double FirstPlayReduction, double PlacementWeight, bool UniformPriors, int Determinizations = 0, bool InformationSets = false)
     {
         public static AgentSpec Parse(string spec)
         {
@@ -25,6 +26,7 @@ namespace Arena
                 result = option switch
                 {
                     "u" => result with { UniformPriors = true },
+                    "is" => result with { InformationSets = true },
                     _ when Enum.TryParse(option, out OpponentModel model) => result with { OpponentModel = model },
                     ['c', ..] => result with { Exploration = Number() },
                     ['b', ..] => result with { LeavesPerBatch = int.Parse(option[1..], CultureInfo.InvariantCulture) },
@@ -49,6 +51,7 @@ namespace Arena
             if (PlacementWeight != 0) options.Add($"p{PlacementWeight.ToString(CultureInfo.InvariantCulture)}");
             if (UniformPriors) options.Add("u");
             if (Determinizations > 0) options.Add($"d{Determinizations}");
+            if (InformationSets) options.Add("is");
             return $"{Name} {Path.GetFileName(ModelPath)} {string.Join(" ", options)}";
         }
     }

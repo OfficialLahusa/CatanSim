@@ -45,6 +45,23 @@ namespace Agents.MCTS
         /// </summary>
         public IStateVectorizer Vectorizer => _stateVectorizer;
 
+        public double ExplorationParameter => _explorationParameter;
+
+        /// <summary>
+        /// Searches another tree (an information set tree, see InformationSetMCTSAgent) with this agent's net, budget and
+        /// settings
+        /// </summary>
+        public void RunSearch(ISearchTree tree, CancellationToken cancellation = default)
+        {
+            if (_iterationLimit > 0) _search.Run(tree, double.PositiveInfinity, _iterationLimit, cancellation);
+            else _search.Run(tree, _timeLimitSeconds, 0, cancellation);
+        }
+
+        /// <summary>
+        /// The agent's answer or pick in an open trade between players, decided outside the tree (see TradeDecisions), or null
+        /// </summary>
+        public Action? DecideTrade(GameState state) => TradeDecisions.Decide(state, PlayerIndex, TradeUtility);
+
         /// <summary>
         /// Statistics of the last search (RunForTime or RunBatchedIterations)
         /// </summary>
