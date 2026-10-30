@@ -116,7 +116,10 @@ namespace Client.Logging
                         Line(Name(player), Plain(" moved the robber" + where));
 
                         RobberAction.RobberActionHistory outcome = robberAction.History!;
-                        if (outcome.StolenCard.HasValue && robberAction.TargetPlayerIndex is sbyte victim)
+                        // A move the match redacted (see Action.RedactedFor) has only the public sentence
+                        if (outcome.StolenCard == ResourceCardType.Unknown && robberAction.TargetPlayerIndex is sbyte unseenVictim)
+                            Line(Name(player), Plain(" stole a card from "), Name(unseenVictim));
+                        else if (outcome.StolenCard.HasValue && robberAction.TargetPlayerIndex is sbyte victim)
                         {
                             _log.WriteLine(new SentenceEntry(
                                 [Name(player), Plain($" stole {Article(Card(outcome.StolenCard.Value))} from "), Name(victim)],
@@ -156,6 +159,10 @@ namespace Client.Logging
 
                 case CityAction:
                     Line(Name(player), Plain(" upgraded a settlement to a city"));
+                    break;
+
+                case BuyDevelopmentCardAction buyAction when buyAction.History!.DrawnType == DevelopmentCardType.Unknown:
+                    Line(Name(player), Plain(" bought a development card"));
                     break;
 
                 case BuyDevelopmentCardAction buyAction:

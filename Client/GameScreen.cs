@@ -614,14 +614,16 @@ namespace Client
                     {
                         Pay(Bank, ResourceCardType.Wool, ResourceCardType.Grain, ResourceCardType.Ore);
                         delay += 0.15f;
-                        FlyingCard drawn = Sees(player) ? buy.History!.DrawnType : FlyingCard.HiddenDevelopment;
+                        // Face down for whoever may not see it, also where the match sent the move redacted (an Unknown card)
+                        FlyingCard drawn = Sees(player) && buy.History!.DrawnType != DevelopmentCardType.Unknown ? buy.History.DrawnType : FlyingCard.HiddenDevelopment;
                         Fly(drawn, Bank(drawn), Hand(player, drawn));
                         break;
                     }
 
                 case RobberAction robber when robber.History!.StolenCard is ResourceCardType stolen && robber.TargetPlayerIndex is sbyte victim:
                     {
-                        FlyingCard card = Sees(player, victim) ? stolen : FlyingCard.Hidden;
+                        // A card back for a steal the viewer didn't take part in, also where the match sent it redacted
+                        FlyingCard card = Sees(player, victim) && stolen != ResourceCardType.Unknown ? stolen : FlyingCard.Hidden;
                         delay = 0.2f;
                         Fly(card, Hand(victim, card), Hand(player, card));
                         break;
