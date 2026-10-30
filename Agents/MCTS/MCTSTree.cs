@@ -49,6 +49,13 @@ namespace Agents.MCTS
         /// </summary>
         public double FirstPlayReduction { get; set; } = 0.1;
 
+        /// <summary>
+        /// A leaf the search reaches for the first time is evaluated itself, and expanded only when it is reached again (with
+        /// the priors of its evaluation). Otherwise every leaf is expanded at once and one of its moves is evaluated instead,
+        /// picked with uniform priors, so a move that wasn't the first one tried under its parent is valued by a random reply.
+        /// </summary>
+        public bool EvaluateNewLeaves { get; set; }
+
         public MCTSTree(GameState rootState, sbyte ownerIdx, double explorationParameter, bool normalizeValues = true, OpponentModel model = OpponentModel.Random)
         {
             RootState = rootState;
@@ -82,8 +89,9 @@ namespace Agents.MCTS
             // Selection: a leaf down the tree by UCT or PUCT
             (MCTSNode leafNode, GameState stateAtLeaf) = SelectLeafNode();
 
-            // Expansion: a leaf that isn't terminal gets its children, and selection goes one step further among them
-            if (!leafNode.IsTerminal)
+            // Expansion: a leaf that isn't terminal gets its children, and selection goes one step further among them (with
+            // EvaluateNewLeaves only a leaf that was visited before; a new one is evaluated itself)
+            if (!leafNode.IsTerminal && (!EvaluateNewLeaves || leafNode.VisitCount > 0))
             {
                 ExpandNode(leafNode, stateAtLeaf);
                 (leafNode, stateAtLeaf) = SelectLeafNode(leafNode, stateAtLeaf, suppressStateCopy: true);

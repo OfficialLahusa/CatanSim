@@ -195,6 +195,22 @@ namespace Agents.MCTS
         /// </summary>
         public double FirstPlayReduction { get; set; } = 0.1;
 
+        /// <summary>
+        /// Branches on every outcome of a random move, also those the seat can't see (an ablation: MCTSTree branches so)
+        /// </summary>
+        public bool BranchHiddenOutcomes { get; init; }
+
+        /// <summary>
+        /// Selects by each player's values scaled to the range seen in the tree (an ablation: MCTSTree normalizes so)
+        /// </summary>
+        public bool NormalizeValues
+        {
+            get => _playerBounds != null;
+            init => _playerBounds = value ? Enumerable.Range(0, MCTSNode.PlayerCount).Select(_ => new MinMaxStats()).ToArray() : null;
+        }
+
+        private readonly MinMaxStats[]? _playerBounds;
+
         /// <param name="truth">The true position; only its view through the beliefs is used</param>
         /// <param name="beliefs">What the searching seat knows</param>
         /// <param name="fullKnowledge">Every world is the true position (an ablation: the same search without hidden information)</param>
@@ -234,7 +250,7 @@ namespace Agents.MCTS
                 // repeats and the game's own random numbers stay untouched); the tree follows it as the seat sees it
                 Action move = chosen.IsChance ? DrawOutcome(chosen.Move!, world, random) : chosen.Move!.Clone();
                 move.Apply(world);
-                node = chosen.IsChance ? chosen.Outcome(move.RedactedFor(OwnerIndex)) : chosen;
+                node = chosen.IsChance ? chosen.Outcome(BranchHiddenOutcomes ? move : move.RedactedFor(OwnerIndex)) : chosen;
             }
 
             for (ISNode? pending = node; pending != null; pending = pending.Parent) pending.MarkPendingVisit();
@@ -289,7 +305,9 @@ namespace Agents.MCTS
             if (available.Length == 1) return available[0];
 
             uint parentResolved = parent.ResolvedVisits;
-            double parentMean = parentResolved == 0 ? 0.5 : parent.MeanValue(decider);
+            MinMaxStats.Range? range = _playerBounds?[decider].GetRange();
+            double Mean(ISNode node) => range is MinMaxStats.Range bounds ? bounds.Normalize(node.MeanValue(decider)) : node.MeanValue(decider);
+            double parentMean = parentResolved == 0 ? 0.5 : Mean(parent);
             float[]? priors = UsesPolicy ? Priors(available) : null;
 
             ISNode best = available[0];
@@ -301,13 +319,13 @@ namespace Agents.MCTS
                 double score;
                 if (priors != null)
                 {
-                    double value = resolved == 0 ? parentMean - FirstPlayReduction : child.MeanValue(decider);
+                    double value = resolved == 0 ? parentMean - FirstPlayReduction : Mean(child);
                     score = value + _exploration * priors[i] * Math.Sqrt(Math.Max(child.Availability, 1)) / (1 + visits);
                 }
                 else
                 {
                     score = visits == 0 ? double.MaxValue / 2
-                        : (resolved == 0 ? parentMean : child.MeanValue(decider)) + _exploration * Math.Sqrt(Math.Log(Math.Max(child.Availability, 1)) / visits);
+                        : (resolved == 0 ? parentMean : Mean(child)) + _exploration * Math.Sqrt(Math.Log(Math.Max(child.Availability, 1)) / visits);
                 }
                 score += random.NextDouble() * 1e-6;
                 if (score > bestScore)
@@ -357,7 +375,11 @@ namespace Agents.MCTS
 
         public void Backpropagate(SearchLeaf leaf, ReadOnlySpan<double> utilities)
         {
-            for (ISNode? node = (ISNode)leaf.Node; node != null; node = node.Parent) node.AddResults(utilities);
+            for (ISNode? node = (ISNode)leaf.Node; node != null; node = node.Parent)
+            {
+                node.AddResults(utilities);
+                for (int player = 0; _playerBounds != null && player < MCTSNode.PlayerCount; player++) _playerBounds[player].Update(node.MeanValue(player));
+            }
         }
 
         /// <summary>

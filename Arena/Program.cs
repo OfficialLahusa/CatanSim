@@ -57,7 +57,9 @@ namespace Arena
             0.1), pX (placement weight, default 0), u (uniform priors instead of the policy head's), dN (hidden information:
             only its seat's view, searched as N determinizations), is (hidden information searched as one tree over the seat's
             information sets) and isfull (that search on the true position, an ablation); without dN or is the agent sees
-            every hand.
+            every hand. Ablations of the search: norm/nonorm (values scaled to the range seen in the tree or not; MCTS
+            scales, ISMCTS not), ob (ISMCTS branches on outcomes its seat can't see), noreuse (MCTS starts on a new
+            tree every decision) and leaf (MCTS evaluates a leaf on its first visit instead of one of its moves).
 
               --challenger AGENT     The agent tested
               --baseline AGENT       The agent it is compared with

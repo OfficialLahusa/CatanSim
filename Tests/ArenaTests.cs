@@ -54,6 +54,16 @@ namespace Tests
             AgentSpec full = AgentSpec.Parse("F=a.onnx=isfull");
             Assert.True(full.InformationSets && full.FullKnowledge);
             Assert.Equal("F a.onnx MaxN isfull", full.ToString());
+            AgentSpec ablation = AgentSpec.Parse("A=a.onnx=isfull=ob=norm");
+            Assert.True(ablation.BranchHiddenOutcomes);
+            Assert.True(ablation.NormalizeValues);
+            Assert.Equal("A a.onnx MaxN isfull norm ob", ablation.ToString());
+            Assert.False(AgentSpec.Parse("M=a.onnx=nonorm").NormalizeValues);
+            Assert.Null(AgentSpec.Parse("M=a.onnx").NormalizeValues);
+            AgentSpec fresh = AgentSpec.Parse("N=a.onnx=noreuse");
+            Assert.False(fresh.ReuseTree);
+            Assert.Equal("N a.onnx MaxN noreuse", fresh.ToString());
+            Assert.True(AgentSpec.Parse("L=a.onnx=leaf").EvaluateNewLeaves);
         }
 
         [Theory]

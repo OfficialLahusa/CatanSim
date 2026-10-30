@@ -170,6 +170,44 @@ namespace Tests
         }
 
         [Fact]
+        public void TheAblationsBranchOnHiddenOutcomesAndNormalize()
+        {
+            // Outcome branching splits another seat's development card draw by the drawn card; both still play legal moves
+            int branched = 0;
+            foreach ((GameState truth, BeliefTracker beliefs) in Decisions(2, 8))
+            {
+                ISMCTSTree tree = new ISMCTSTree(truth, beliefs, seed: 5, fullKnowledge: true) { BranchHiddenOutcomes = true, NormalizeValues = true };
+                new MCTSSearch(new FixedEvaluator(), new StateVectorizer(), 16, parallelSelection: false).Run(tree, double.PositiveInfinity, 3000);
+                Assert.Contains(MCTSTree.GetValidActions(truth), move => move.IsSameDecision(tree.GetMostPromisingMove()));
+                branched += Nodes(tree.RootNode).Count(node => node.IsChance && node.Move is BuyDevelopmentCardAction && node.Move.PlayerIndex != 2 && node.Children.Count > 1);
+            }
+            Assert.True(branched > 0, "no hidden draw was branched on");
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void TheFullViewTreeEvaluatesNewLeavesLikeISMCTSOnlyWhenAsked(bool evaluateNewLeaves)
+        {
+            // With the switch a node is expanded only on a visit after the one that evaluated it, so every expanded decision
+            // node has two visits or more; without it a new leaf is expanded at once and one of its moves evaluated instead
+            (GameState truth, BeliefTracker beliefs) = Decisions(0, 1).First();
+            MCTSTree tree = new MCTSTree(new GameState(truth), 0, 1.414, model: OpponentModel.MaxN) { EvaluateNewLeaves = evaluateNewLeaves };
+            new MCTSSearch(new FixedEvaluator(), new StateVectorizer(), 16, parallelSelection: false).Run(tree, double.PositiveInfinity, 2000);
+
+            List<MCTSNode> expanded = [];
+            void Walk(MCTSNode node)
+            {
+                if (node.IsExpanded && !node.IsOutputRandomnessGroup) expanded.Add(node);
+                foreach (MCTSNode child in node.Children) Walk(child);
+            }
+            Walk(tree.RootNode);
+            Assert.NotEmpty(expanded);
+            if (evaluateNewLeaves) Assert.All(expanded, node => Assert.True(node.VisitCount >= 2, $"a node was expanded on its first visit ({node.LastAction})"));
+            else Assert.Contains(expanded, node => node.VisitCount == 1);
+        }
+
+        [Fact]
         public void TheSameSeedSearchesTheSame()
         {
             (GameState truth, BeliefTracker beliefs) = Decisions(0, 1).First();

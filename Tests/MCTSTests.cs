@@ -356,6 +356,29 @@ namespace Tests
         }
 
         [SkippableFact]
+        public void WithoutTreeReuseEveryDecisionStartsANewTree()
+        {
+            TestUtil.SkipWithoutModel();
+            TestUtil.Seed(146);
+
+            GameState state = TestUtil.NewGame();
+            ProbeAgent mcts = new(0, state) { ReuseTree = false };
+            Agent[] agents = [mcts, new RandomAgent(1), new RandomAgent(2), new RandomAgent(3)];
+            int decisions = 0;
+            while (!state.HasEnded && decisions < 8)
+            {
+                sbyte acting = TestUtil.ActingPlayer(state);
+                Action action = agents[acting].Act(state);
+                if (acting == 0) decisions++;
+                action.Apply(state);
+                foreach (Agent agent in agents)
+                    agent.HandleAction(action);
+                Assert.Null(mcts.Tree);
+            }
+            Assert.Equal(8, decisions);
+        }
+
+        [SkippableFact]
         public void ResettingOrDivergingStatesStartANewTree()
         {
             TestUtil.SkipWithoutModel();

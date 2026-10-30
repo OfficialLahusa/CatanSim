@@ -130,11 +130,20 @@ namespace Arena
                 MCTSAgent search = new MCTSAgent((sbyte)seat, start, explorationParameter: spec.Exploration, timeLimitSeconds: settings.Seconds,
                     valueNet: nets[spec], placementWeight: spec.PlacementWeight, opponentModel: spec.OpponentModel,
                     iterationLimit: settings.Iterations, leavesPerBatch: spec.LeavesPerBatch)
-                { UniformPriors = spec.UniformPriors, FirstPlayReduction = spec.FirstPlayReduction };
+                { UniformPriors = spec.UniformPriors, FirstPlayReduction = spec.FirstPlayReduction, NormalizeValues = spec.NormalizeValues ?? true, ReuseTree = spec.ReuseTree,
+                    EvaluateNewLeaves = spec.EvaluateNewLeaves };
 
                 // Under hidden information the agent sees only its seat's view: one tree over its information sets, or the
                 // iterations split between its determinizations
-                if (spec.InformationSets) return new InformationSetMCTSAgent(search, start) { FullKnowledge = spec.FullKnowledge };
+                if (spec.InformationSets)
+                {
+                    return new InformationSetMCTSAgent(search, start)
+                    {
+                        FullKnowledge = spec.FullKnowledge,
+                        BranchHiddenOutcomes = spec.BranchHiddenOutcomes,
+                        NormalizeValues = spec.NormalizeValues ?? false
+                    };
+                }
                 return spec.Determinizations > 0 ? (Agent)new DeterminizedMCTSAgent(search, start, spec.Determinizations) : search;
             }).ToArray();
 

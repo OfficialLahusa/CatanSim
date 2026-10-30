@@ -77,6 +77,21 @@ namespace Agents.MCTS
         public double FirstPlayReduction { get; set; } = 0.1;
 
         /// <summary>
+        /// Whether selection scales each player's values to the range seen in the tree (see MCTSTree, MinMaxStats)
+        /// </summary>
+        public bool NormalizeValues { get; set; } = true;
+
+        /// <summary>
+        /// Whether the next decision goes on with the subtree of the moves played since (see HandleAction) instead of a new tree
+        /// </summary>
+        public bool ReuseTree { get; set; } = true;
+
+        /// <summary>
+        /// Evaluate a leaf on its first visit instead of one of its moves (see MCTSTree.EvaluateNewLeaves)
+        /// </summary>
+        public bool EvaluateNewLeaves { get; set; }
+
+        /// <summary>
         /// Search by PUCT with uniform priors instead of the policy head's (see MCTSSearch.UniformPriors)
         /// </summary>
         public bool UniformPriors
@@ -142,7 +157,7 @@ namespace Agents.MCTS
 
         public MCTSAgent(sbyte playerIndex, GameState initialState, double explorationParameter = 1.414, double timeLimitSeconds = TIME_LIMIT_SECONDS,
             StateValueNet? valueNet = null, IStateVectorizer? vectorizer = null, double placementWeight = 0, OpponentModel opponentModel = OpponentModel.MaxN,
-            long iterationLimit = 0, int leavesPerBatch = DefaultLeavesPerBatch)
+            long iterationLimit = 0, int leavesPerBatch = DefaultLeavesPerBatch, bool parallelSelection = true)
             : base(playerIndex)
         {
             _explorationParameter = explorationParameter;
@@ -150,7 +165,8 @@ namespace Agents.MCTS
             IterationLimit = iterationLimit;
             _stateValueNet = valueNet ?? DefaultValueNet.Value;
             _stateVectorizer = vectorizer ?? Vectorizers.For(_stateValueNet, playerIndex);
-            _search = new MCTSSearch(new DirectEvaluator(_stateValueNet), _stateVectorizer, leavesPerBatch, parallelSelection: true);
+            // Selection on one thread repeats a search exactly (for tests), on all cores it is faster
+            _search = new MCTSSearch(new DirectEvaluator(_stateValueNet), _stateVectorizer, leavesPerBatch, parallelSelection);
             PlacementWeight = placementWeight;
             _opponentModel = opponentModel;
 
@@ -174,9 +190,10 @@ namespace Agents.MCTS
             // Otherwise (first move, missed or manual actions, undo, another opponent model) start over on a private copy of the state.
             if (_tree == null || _tree.Model != _opponentModel || !_tree.RootState.Equals(state))
             {
-                _tree = new MCTSTree(new GameState(state), PlayerIndex, _explorationParameter, model: _opponentModel);
+                _tree = new MCTSTree(new GameState(state), PlayerIndex, _explorationParameter, NormalizeValues, _opponentModel);
             }
             _tree.FirstPlayReduction = FirstPlayReduction;
+            _tree.EvaluateNewLeaves = EvaluateNewLeaves;
 
             if (_iterationLimit > 0) RunBatchedIterations(_iterationLimit, cancellation);
             else RunForTime(_timeLimitSeconds, cancellation);
@@ -187,6 +204,7 @@ namespace Agents.MCTS
         public override void HandleAction(Action action)
         {
             // Called after the action was applied to the real game, so its output randomness is resolved in its history
+            if (!ReuseTree) _tree = null;
             if (_tree == null) return;
 
             MCTSNode? nextRoot = _tree.FindChildForAction(action);

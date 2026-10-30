@@ -9,11 +9,15 @@ namespace Arena
     /// with uniform priors instead of the policy head's, dN hidden information: only its seat's view, searched as N
     /// determinizations (PIMC, see DeterminizedMCTSAgent), is hidden information searched as one tree over the seat's
     /// information sets (see InformationSetMCTSAgent), isfull the same search on the true position (an ablation); without
-    /// these the agent sees every hand.
+    /// these the agent sees every hand. Ablations of the search: norm or nonorm selects with or without values scaled to
+    /// the range seen in the tree (MCTS normalizes, ISMCTS not), ob lets ISMCTS branch on outcomes its seat can't see,
+    /// noreuse starts MCTS on a new tree every decision (ISMCTS always does), leaf lets MCTS evaluate a leaf on its first
+    /// visit instead of one of its moves (as ISMCTS does).
     /// </summary>
     internal sealed record AgentSpec(string Name, string ModelPath, OpponentModel OpponentModel, double Exploration, int LeavesPerBatch,
         double FirstPlayReduction, double PlacementWeight, bool UniformPriors, int Determinizations = 0, bool InformationSets = false,
-        bool FullKnowledge = false)
+        bool FullKnowledge = false, bool? NormalizeValues = null, bool BranchHiddenOutcomes = false, bool ReuseTree = true,
+        bool EvaluateNewLeaves = false)
     {
         public static AgentSpec Parse(string spec)
         {
@@ -30,6 +34,11 @@ namespace Arena
                     "u" => result with { UniformPriors = true },
                     "is" => result with { InformationSets = true },
                     "isfull" => result with { InformationSets = true, FullKnowledge = true },
+                    "norm" => result with { NormalizeValues = true },
+                    "nonorm" => result with { NormalizeValues = false },
+                    "ob" => result with { BranchHiddenOutcomes = true },
+                    "noreuse" => result with { ReuseTree = false },
+                    "leaf" => result with { EvaluateNewLeaves = true },
                     _ when Enum.TryParse(option, out OpponentModel model) => result with { OpponentModel = model },
                     ['c', ..] => result with { Exploration = Number() },
                     ['b', ..] => result with { LeavesPerBatch = int.Parse(option[1..], CultureInfo.InvariantCulture) },
@@ -55,6 +64,10 @@ namespace Arena
             if (UniformPriors) options.Add("u");
             if (Determinizations > 0) options.Add($"d{Determinizations}");
             if (InformationSets) options.Add(FullKnowledge ? "isfull" : "is");
+            if (NormalizeValues is bool normalize) options.Add(normalize ? "norm" : "nonorm");
+            if (BranchHiddenOutcomes) options.Add("ob");
+            if (!ReuseTree) options.Add("noreuse");
+            if (EvaluateNewLeaves) options.Add("leaf");
             return $"{Name} {Path.GetFileName(ModelPath)} {string.Join(" ", options)}";
         }
     }

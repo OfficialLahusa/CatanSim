@@ -44,6 +44,13 @@ namespace Agents.MCTS
         public bool FullKnowledge { get; init; }
 
         /// <summary>
+        /// Ablations of the tree (see ISMCTSTree): branching on outcomes the seat can't see, normalized values
+        /// </summary>
+        public bool BranchHiddenOutcomes { get; init; }
+
+        public bool NormalizeValues { get; init; }
+
+        /// <summary>
         /// The tree of the last decision, for showing the search
         /// </summary>
         public ISMCTSTree? LastTree { get; private set; }
@@ -57,7 +64,12 @@ namespace Agents.MCTS
             List<Action> legal = MCTSTree.GetValidActions(state);
             if (legal.Count == 1) return legal[0].Clone();
 
-            ISMCTSTree tree = new ISMCTSTree(state, _beliefs, _search.ExplorationParameter, _random.Next(), FullKnowledge) { FirstPlayReduction = _search.FirstPlayReduction };
+            ISMCTSTree tree = new ISMCTSTree(state, _beliefs, _search.ExplorationParameter, _random.Next(), FullKnowledge)
+            {
+                FirstPlayReduction = _search.FirstPlayReduction,
+                BranchHiddenOutcomes = BranchHiddenOutcomes,
+                NormalizeValues = NormalizeValues
+            };
             LastTree = tree;
             _search.RunSearch(tree, cancellation);
             return tree.GetMostPromisingMove();

@@ -24,7 +24,10 @@
 	- 3. SO-ISMCTS: Knoten = Information Sets des Root-Spielers, Availability Counts statt Parent Visits, Zufall nur branchen, wo der Root-Spieler das Ergebnis sieht
 		- InformationSetMCTSAgent (Arena-Option is) bei 5000 Iterationen: gegen Cheating MCTS +51 Elo [+11, +92] (505oscbr, 137 Paare), gegen PIMC d1 +70 [−19, +171] (P1, 30 Paare)
 		- Ablation isfull (gleiche Suche auf dem wahren State) gegen Cheating MCTS +97 [+31, +171] (44 Paare, gleiche Karten) => die IS-Baumstruktur ist besser als MCTSTree, verdeckte Info kostet nur ~45 Elo, kein Hinweis auf ein Leck
-		- Offen: warum MCTSTree schwächer sucht (verdeckte Zufallsausgänge zusammengelegt? Batching/Virtual Loss?), Duell mit Zeitbudget (Kosten pro Iteration), Fair Seats und Self-Play --hidden auf ISMCTS umstellen
+		- Gleiche Denkzeit (0,1 s): ISMCTS gegen Cheating MCTS +5 [−18, +28] (288 Paare) => fair ohne Stärkeverlust; ISMCTS ~1,5x langsamer pro Iteration
+		- Leck-Tests (ISMCTSLeakTests): Baum, Agent, Handel, geforkte Partien und PIMC entscheiden in ununterscheidbaren Welten gleich, 5 eingebaute Lecks werden erkannt; dabei Absturz bei offenen Angeboten behoben (Welten halten das Angebot legal)
+		- MCTSTree bewertete neue Knoten nie selbst, sondern einen zufälligen Folgezug (uniforme Priors): Schalter EvaluateNewLeaves (Arena leaf) +93 [+26, +168] bei 5k, gegen ISMCTS mit voller Info noch −58 [−121, +2]; bei 0,1 s und 15k offen; ohne Effekt: Normalisierung, Tree Reuse, zusammengelegte verdeckte Ausgänge => betrifft auch die Self-Play-Labels
+		- Offen: Fair Seats und Self-Play --hidden auf ISMCTS umstellen
 	- 4. Belief-aware StateValueNet: Training auf StateView-Inputs (Views per Replay der Histories rekonstruierbar), Sichtbarkeits-Augmentation nach der echten Beobachtungsverteilung statt zufällig, erwartete versteckte VP als Feature
 	- 5. Particle MCTS / POMCP erst mit Spielerhandel (Angebote schwer als Constraints)
 - Client
