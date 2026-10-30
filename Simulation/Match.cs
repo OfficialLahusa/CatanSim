@@ -200,7 +200,6 @@ namespace Simulation
         /// </summary>
         private void PublishSnapshotsLocked()
         {
-            _beliefs = RecordBeliefs.Of(Record);
             Publish(SnapshotLocked(), Full);
             for (int seat = 0; seat < _seats.Length; seat++) Publish(SeatSnapshotLocked(seat), SeatView(seat));
         }
@@ -312,6 +311,7 @@ namespace Simulation
                             state.Settings.ShowTrackedCards = newGame.ShowTrackedCards;
                             _seats = (SeatKind[])newGame.Seats.Clone();
                             Record.Reset(state);
+                            _beliefs = RecordBeliefs.Of(Record);
                             _agents = CreateAgents();
                             PublishSnapshotsLocked();
                             positionChanged = true;
@@ -320,6 +320,7 @@ namespace Simulation
 
                     case LoadGame load:
                         Record.Reset(new GameState(load.State), load.Played.Select(HistoryEntry.Of), load.Redo.Select(HistoryEntry.Of));
+                        _beliefs = RecordBeliefs.Of(Record);
                         ResetAgentsLocked();
                         PublishSnapshotsLocked();
                         positionChanged = true;
@@ -333,6 +334,7 @@ namespace Simulation
                         }
                         _seats[seat.Seat] = seat.Kind;
                         _agents[seat.Seat] = Simulation.Seats.CreateAgent(seat.Kind, (sbyte)seat.Seat, Record.State, AgentSettings, _valueNetAvailable);
+                        ResetAgentLocked(_agents[seat.Seat]);
                         Publish(new SeatsEvent((SeatKind[])_seats.Clone()));
                         positionChanged = true;
                         break;
@@ -347,7 +349,7 @@ namespace Simulation
                         AgentSettings = configure.Settings;
                         foreach (Agent agent in _agents)
                         {
-                            if (agent is MCTSAgent mcts)
+                            if (SearchOf(agent) is MCTSAgent mcts)
                             {
                                 mcts.TimeLimitSeconds = AgentSettings.SecondsForAll ?? Simulation.Seats.PresetSeconds(_seats[mcts.PlayerIndex]);
                                 mcts.IterationLimit = AgentSettings.IterationsForAll;
@@ -418,15 +420,42 @@ namespace Simulation
             return true;
         }
 
-        private Agent[] CreateAgents() => Enumerable.Range(0, _seats.Length)
-            .Select(seat => Simulation.Seats.CreateAgent(_seats[seat], (sbyte)seat, Record.State, AgentSettings, _valueNetAvailable)).ToArray();
+        private Agent[] CreateAgents()
+        {
+            Agent[] agents = Enumerable.Range(0, _seats.Length)
+                .Select(seat => Simulation.Seats.CreateAgent(_seats[seat], (sbyte)seat, Record.State, AgentSettings, _valueNetAvailable)).ToArray();
+            foreach (Agent agent in agents) ResetAgentLocked(agent);
+            return agents;
+        }
+
+        /// <summary>
+        /// An agent starts over at the current position; a fair one with what its seat knows there
+        /// </summary>
+        private void ResetAgentLocked(Agent agent)
+        {
+            if (agent is DeterminizedMCTSAgent fair) fair.ResetTo(Record.State, _beliefs.For(fair.PlayerIndex));
+            else agent.ResetToState(Record.State);
+        }
+
+        /// <summary>
+        /// The MCTS search of an agent, also inside a fair one
+        /// </summary>
+        private static MCTSAgent? SearchOf(Agent? agent) => agent as MCTSAgent ?? (agent as DeterminizedMCTSAgent)?.Search;
+
+        /// <summary>
+        /// The agent of a seat, for tests
+        /// </summary>
+        internal Agent AgentOf(int seat)
+        {
+            lock (_lock) return _agents[seat];
+        }
 
         private void ResetAgentsLocked()
         {
             foreach (Agent agent in _agents)
             {
                 if (ReferenceEquals(agent, _busyAgent)) _busyAgentStale = true;
-                else agent.ResetToState(Record.State);
+                else ResetAgentLocked(agent);
             }
         }
 
@@ -481,7 +510,7 @@ namespace Simulation
             lock (_lock)
             {
                 if (!ReferenceEquals(agent, _busyAgent)) return;
-                if (_busyAgentStale) agent.ResetToState(Record.State);
+                if (_busyAgentStale) ResetAgentLocked(agent);
                 _busyAgent = null;
                 _busyAgentStale = false;
                 Publish(new ThinkingEvent(agent.PlayerIndex, false));
@@ -517,7 +546,7 @@ namespace Simulation
         {
             lock (_lock)
             {
-                return (Record.Version, Record.Version != knownVersion ? new GameState(Record.State) : null, _busyAgent as MCTSAgent);
+                return (Record.Version, Record.Version != knownVersion ? new GameState(Record.State) : null, SearchOf(_busyAgent));
             }
         }
 

@@ -192,6 +192,9 @@ namespace Simulation
             "easy" => SeatKind.MctsEasy,
             "medium" => SeatKind.MctsMedium,
             "hard" => SeatKind.MctsHard,
+            "fair-easy" => SeatKind.PimcEasy,
+            "fair-medium" => SeatKind.PimcMedium,
+            "fair-hard" => SeatKind.PimcHard,
             _ => Enum.TryParse(word, true, out SeatKind kind) ? kind : null
         };
     }

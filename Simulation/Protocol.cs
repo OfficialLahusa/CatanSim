@@ -26,7 +26,7 @@ namespace Simulation
         /// would read them wrongly (new fields of the state are ignored silently, e.g. an open trade offer): both sides then
         /// refuse each other with a message instead. Messages without a version are version 0.
         /// </summary>
-        public const int Version = 2;
+        public const int Version = 3;
 
         /// <summary>
         /// Why two sides of different protocol versions can't play together, or null if the versions match

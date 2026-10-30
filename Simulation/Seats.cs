@@ -6,9 +6,10 @@ using Common;
 namespace Simulation
 {
     /// <summary>
-    /// Who plays a seat
+    /// Who plays a seat. The Pimc kinds are the fair MCTS presets: they see only what their seat can know (see
+    /// DeterminizedMCTSAgent); the others see every hand.
     /// </summary>
-    public enum SeatKind { Human, MctsEasy, MctsMedium, MctsHard, Greedy, Builder, Simple, Random }
+    public enum SeatKind { Human, MctsEasy, MctsMedium, MctsHard, Greedy, Builder, Simple, Random, PimcEasy, PimcMedium, PimcHard }
 
     /// <summary>
     /// What a connection may do: an admin controls the match (seats, undo, edits, playback), a player and an agent (bridge)
@@ -51,20 +52,32 @@ namespace Simulation
             SeatKind.Builder => "Builder",
             SeatKind.Simple => "Simple",
             SeatKind.Random => "Random",
+            SeatKind.PimcEasy => "Fair MCTS Easy",
+            SeatKind.PimcMedium => "Fair MCTS Medium",
+            SeatKind.PimcHard => "Fair MCTS Hard",
             _ => kind.ToString()
         };
 
         /// <summary>
         /// Whether the seat's agent evaluates states with the value net (a human seat's stand-in does)
         /// </summary>
-        public static bool NeedsValueNet(SeatKind kind) => kind is SeatKind.MctsEasy or SeatKind.MctsMedium or SeatKind.MctsHard or SeatKind.Greedy or SeatKind.Human;
+        public static bool NeedsValueNet(SeatKind kind) => kind is SeatKind.MctsEasy or SeatKind.MctsMedium or SeatKind.MctsHard or SeatKind.Greedy or SeatKind.Human
+            or SeatKind.PimcEasy or SeatKind.PimcMedium or SeatKind.PimcHard;
+
+        public static bool IsFair(SeatKind kind) => kind is SeatKind.PimcEasy or SeatKind.PimcMedium or SeatKind.PimcHard;
 
         public static double PresetSeconds(SeatKind kind) => kind switch
         {
-            SeatKind.MctsEasy => 0.1,
-            SeatKind.MctsHard => 2,
+            SeatKind.MctsEasy or SeatKind.PimcEasy => 0.1,
+            SeatKind.MctsHard or SeatKind.PimcHard => 2,
             _ => 0.5
         };
+
+        /// <summary>
+        /// The worlds a fair seat searches per decision when something is hidden: one for the short presets, four for the
+        /// hard one, whose time is enough to search each well (eight at 5000 iterations searched too little, see TODO.md)
+        /// </summary>
+        public static int Determinizations(SeatKind kind) => kind == SeatKind.PimcHard ? 4 : 1;
 
         /// <summary>
         /// The agent of a seat; a human seat gets a stand-in that plays like the medium preset (the builder without the net)
@@ -74,14 +87,16 @@ namespace Simulation
             if (kind == SeatKind.Human) kind = valueNetAvailable ? SeatKind.MctsMedium : SeatKind.Builder;
             if (NeedsValueNet(kind) && !valueNetAvailable) kind = SeatKind.Builder;
 
+            MCTSAgent Search() => new MCTSAgent(seat, state, timeLimitSeconds: settings.SecondsForAll ?? PresetSeconds(kind), opponentModel: settings.OpponentModel,
+                iterationLimit: settings.IterationsForAll);
             return kind switch
             {
                 SeatKind.Random => new RandomAgent(seat),
                 SeatKind.Simple => new SimpleAgent(seat),
                 SeatKind.Builder => new BuilderAgent(seat),
                 SeatKind.Greedy => new GreedyAgent(seat),
-                _ => new MCTSAgent(seat, state, timeLimitSeconds: settings.SecondsForAll ?? PresetSeconds(kind), opponentModel: settings.OpponentModel,
-                    iterationLimit: settings.IterationsForAll)
+                _ when IsFair(kind) => new DeterminizedMCTSAgent(Search(), state, Determinizations(kind)),
+                _ => Search()
             };
         }
 

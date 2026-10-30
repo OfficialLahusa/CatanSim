@@ -123,6 +123,18 @@ namespace Agents.MCTS
             _beliefs.Observe(before, replayed, _mirror);
         }
 
+        /// <summary>
+        /// Goes on from a position with what the seat knows there (the match keeps the beliefs along its history, so after an
+        /// undo, a load or a seat change the agent knows no more than the seat could)
+        /// </summary>
+        public void ResetTo(GameState state, BeliefTracker beliefs)
+        {
+            if (beliefs.Observer != PlayerIndex) throw new ArgumentException($"The beliefs are seat {beliefs.Observer}'s, not seat {PlayerIndex}'s.", nameof(beliefs));
+            _mirror = new GameState(state);
+            _beliefs = new BeliefTracker(beliefs);
+            _search.ResetToState(state);
+        }
+
         public override void ResetToState(GameState state)
         {
             // After an undo or an edit the agent knows the hands of the given position (see BeliefTracker's constructor)
